@@ -317,13 +317,12 @@
         return s;
     }
 
-    MakeProgram(gl, vshaderTransform, fshaderTransform) {
+    MakeProgram(gl, vshaderTransform, fshaderTransform, varyings) {
         var prg = gl.createProgram();
         gl.attachShader(prg, vshaderTransform);
         gl.attachShader(prg, fshaderTransform);
 
-        var varyings = ['dot_val'];
-        gl.transformFeedbackVaryings(prg, varyings, gl.SEPARATE_ATTRIBS);   // gl.INTERLEAVED_ATTRIBS
+        gl.transformFeedbackVaryings(prg, varyings, gl.INTERLEAVED_ATTRIBS);   //  gl.SEPARATE_ATTRIBS
         gl.linkProgram(prg);
 
         // check
@@ -354,8 +353,8 @@
     }
 
     MakeIdxBuffer(gl, gpu, element_count) {
-        var buffer_2 = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, buffer_2);
+        var idx_buffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, idx_buffer);
         gpu.vidx = this.MakeFloat32Array(element_count);
         for (var i = 0; i < element_count; i++) {
             gpu.vidx[i] = i;
@@ -364,7 +363,7 @@
 //        gl.vertexAttribPointer(0, 1, gl.FLOAT, false, 0, 0);
         gl.bindBuffer(gl.ARRAY_BUFFER, null);
 
-        return buffer_2;
+        return idx_buffer;
     }
 
     MakeShader(gl, type, source) {
@@ -431,12 +430,12 @@
             var fsrc = Mat.prototype.Shader['fs-transform'];
             var vshader = this.MakeShader(gl, gl.VERTEX_SHADER, vsrc);
             var fshader = this.MakeShader(gl, gl.FRAGMENT_SHADER, fsrc);
-            gpu.program = this.MakeProgram(gl, vshader, fshader);
+            gpu.program = this.MakeProgram(gl, vshader, fshader, ['dot_val']);
             gl.useProgram(gpu.program);
 
             gpu.loc_B_Cols = gl.getUniformLocation(gpu.program, 'B_Cols');
 
-            gpu.buffer_2 = this.MakeIdxBuffer(gl, gpu, element_count);
+            gpu.idxBuffer = this.MakeIdxBuffer(gl, gpu, element_count);
             gpu.array_buffer = new ArrayBuffer(gpu.buf_out_len);
 
             if (use_tex){
@@ -473,9 +472,7 @@
         gl.bufferData(gl.ARRAY_BUFFER, gpu.buf_out_len, gl.STATIC_COPY);
         gl.bindBuffer(gl.ARRAY_BUFFER, null);
 
-//        gpu.buffer_2 = this.MakeIdxBuffer(gl, gpu, element_count);
-
-        gl.bindBuffer(gl.ARRAY_BUFFER, gpu.buffer_2);
+        gl.bindBuffer(gl.ARRAY_BUFFER, gpu.idxBuffer);
 //        gl.bufferData(gl.ARRAY_BUFFER, gpu.vidx, gl.STATIC_DRAW);
         gl.vertexAttribPointer(0, 1, gl.FLOAT, false, 0, 0);
         gl.enableVertexAttribArray(0);
@@ -553,7 +550,7 @@ Mat.prototype.Clear = function () {
         var gpu = Mat.prototype.Prg[key];
 
         gl.bindBuffer(gl.ARRAY_BUFFER, null);
-        gl.deleteBuffer(gpu.buffer_2);
+        gl.deleteBuffer(gpu.idxBuffer);
 
         if(gpu.A_tex){
 
