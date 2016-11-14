@@ -1,0 +1,206 @@
+﻿<!DOCTYPE html>
+
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8" />
+    <title></title>
+    <script type="text/javascript" src="js/Sys.js"></script>
+    <script type="text/javascript" src="js/ndarray.js"></script>
+    <script type="text/javascript" src="js/numpy.js"></script>
+    <script type="text/javascript" src="../../../../Users/hamad/Downloads/Network.javascript"></script>
+</head>
+<body>
+<div id="drop_zone" style="width:100px; height:100px; background-color:darkgray">Drop files here</div>
+<canvas id="digit-canvas" width="28" height="28" style="width:28px; height:28px; background-color:aqua"/>
+<output id="list"></output>
+
+    <script type="text/javascript">
+        var TrainingData, TestData = {};
+        var TrainingDataImage, TrainingDataLabel;
+
+        var ret = np.random.RandomSampling(6, 6);
+        for(let i of ret) {
+            console.log(i);
+        }
+        var v = xrange(9);
+        np.random.shuffle(v);
+        console.log(v);
+
+
+        //----------------------------------------------------------------------
+        var TrainingImgCnt;
+        var ImgH;
+        var ImgW;
+        var ImgIdx = 0;
+        var DigitCanvas;
+        var Ctx = null;
+        var imageData;
+
+        function RunNetwork() {
+            console.log("Training:%d Test:%d", TrainingData.length, TestData["count"]);
+
+            var net = new Network([
+                new InputLayer(28, 28),
+                new ConvolutionalLayer(5, 20),
+                new PoolingLayer(2),
+                new FullyConnectedLayer(30),
+                new FullyConnectedLayer(10)
+            ]);
+
+            net.SGD(TrainingData, 30, 10, 3.0, TestData)
+//            net.SGD(TrainingData, 30, 100, 10.0, TestData)
+
+            Mat.prototype.Clear();
+        }
+
+        // MNIST http://yann.lecun.com/exdb/mnist/
+
+        // JavaScript で File API を使用してファイルを読み取る
+        // https://www.html5rocks.com/ja/tutorials/file/dndfiles/
+        function handleFileSelect(evt) {
+            evt.stopPropagation();
+            evt.preventDefault();
+
+            var files = evt.dataTransfer.files; // FileList object.
+
+            // files is a FileList of File objects. List some properties.
+            var output = [];
+            for (var i = 0, f; f = files[i]; i++) {
+                output.push('<li><strong>', escape(f.name), '</strong> (', f.type || 'n/a', ') - ',
+                            f.size, ' bytes, last modified: ',
+                            f.lastModifiedDate.toLocaleDateString(), '</li>');
+
+                var reader = new FileReader();
+
+                // Closure to capture the file information.
+                reader.onload = (function (theFile) {
+                    return function (e) {
+                        // Render thumbnail.
+                        var v = new Uint8Array(e.target.result);
+                        var fname = escape(theFile.name);
+
+                        var type, cnt, h, w;
+
+                        if (fname == "train-images.idx3-ubyte" || fname == "t10k-images.idx3-ubyte") {
+
+                            type = BytesToInt(v, 0);
+                            cnt = BytesToInt(v, 4);
+                            h = BytesToInt(v, 8);
+                            w = BytesToInt(v, 12);
+
+                            if (fname == "train-images.idx3-ubyte") {
+                                TrainingDataImage = v;
+
+                                TrainingImgCnt = cnt;
+                                ImgH = h;
+                                ImgW = w;
+
+                                setTimeout(DrawImage, 100);
+                            }
+                            else {
+
+                                TestData["image"] = (new Float32Array(v.slice(16))).map(a => a / 256.0);
+                                TestData["count"] = cnt;
+                            }
+
+                            console.log("画像 name:%s len:%d type:%d cnt:%d H:%d W:%d", fname, v.length, type, cnt, h, w);
+                        }
+                        else if (fname == "train-labels.idx1-ubyte" || fname == "t10k-labels.idx1-ubyte") {
+
+                            type = BytesToInt(v, 0);
+                            cnt = BytesToInt(v, 4);
+                            console.log("ラベル name:%s len:%d type:%d cnt:%d", fname, v.length, type, cnt);
+
+                            if (fname == "train-labels.idx1-ubyte") {
+                                TrainingDataLabel = v;
+                            }
+                            else {
+                                TestData["label"] = v.slice(8);
+                            }
+                        }
+
+                        if (TrainingDataImage && TrainingDataLabel && TestData["image"] && TestData["label"]) {
+
+                            TrainingData = new Array();
+
+                            var wh = ImgW * ImgH;
+
+                            for (var i = 0; i < TrainingImgCnt; i++) {
+                                var st = 16 + wh * i;
+                                var x = new Mat(wh, 1, new Float32Array(TrainingDataImage.slice(st, st + wh)));
+                                x.dt = x.dt.map(a => a / 256.0);
+                                var n = TrainingDataLabel[8 + i];
+                                var y = new Mat(10, 1, new Float32Array(10));
+                                y.dt[n] = 1;
+
+                                TrainingData.push([x, y]);
+                            }
+
+                            RunNetwork();
+                        }
+                    };
+                })(f);
+
+                // Read in the image file as a data URL.
+                reader.readAsArrayBuffer(f);
+            }
+            document.getElementById('list').innerHTML = '<ul>' + output.join('') + '</ul>';
+        }
+
+        function handleDragOver(evt) {
+            evt.stopPropagation();
+            evt.preventDefault();
+            evt.dataTransfer.dropEffect = 'copy'; // Explicitly show this is a copy.
+        }
+
+        // Setup the dnd listeners.
+        var dropZone = document.getElementById('drop_zone');
+        dropZone.addEventListener('dragover', handleDragOver, false);
+        dropZone.addEventListener('drop', handleFileSelect, false);
+
+
+        function BytesToInt(v, offset) {
+            return v[offset] * 0x1000000 + v[offset + 1] * 0x10000 + v[offset + 2] * 0x100 + v[offset + 3];
+        }
+
+        function DrawImage() {
+            if (Ctx == null) {
+
+                DigitCanvas = document.getElementById('digit-canvas');
+                Ctx = DigitCanvas.getContext('2d');
+            }
+            imageData = Ctx.getImageData(0, 0, DigitCanvas.width, DigitCanvas.height);
+            var data = imageData.data;
+            var length = data.length;
+
+            if (length != 4 * ImgW * ImgH) {
+                console.log("length(%d) != 4 * ImgW(%d) * ImgH(%d) : %dx%d", length, ImgW, ImgH, DigitCanvas.width, DigitCanvas.height);
+                return;
+            }
+            if (ImgIdx % 1000 == 0) {
+//                console.log("Draw Image %d/%d", ImgIdx, TrainingImgCnt);
+            }
+
+            var wh = ImgW * ImgH;
+
+            for (var i = 0; i < wh; i++) {
+                var k = 4 * i;
+                var c = 255 - TrainingDataImage[16 + wh * ImgIdx + i];
+
+                data[k] = c;
+                data[k + 1] = c;
+                data[k + 2] = c;
+                data[k + 3] = 255;
+            }
+
+            Ctx.putImageData(imageData, 0, 0);
+
+            ImgIdx += Math.floor( Math.random() * 200 );
+            if (ImgIdx < TrainingImgCnt) {
+
+                setTimeout(DrawImage, 1);
+            }
+        }
+    </script>
+</body>
+</html>

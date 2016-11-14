@@ -1,0 +1,61 @@
+﻿<!DOCTYPE html>
+<!-- Ported from the OpenGL Samples Pack: https://github.com/g-truc/ogl-samples/blob/master/tests/gl-320-transform-feedback-interleaved.cpp -->
+<html lang="en">
+
+<head>
+    <title>WebGL 2.0 行列計算</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <script type="text/javascript" src="js/Sys.js"></script>
+    <script type="text/javascript" src="js/ndarray.js"></script>
+    <script type="text/javascript" src="js/numpy.js"></script>
+    <script>
+        function BodyOnLoad() {
+            'use strict';
+
+            for(var idx = 0; idx < 2; idx++){
+                var sz = (idx == 0 ? [32,32,32] : [32,32,32]);
+            
+                var A = np.random.randn(sz[0], sz[1]);
+                var B = np.random.randn(sz[1], sz[2]);
+
+                var startTime = new Date();
+                var C1 = A.Dot(B);
+                var js_time = new Date() - startTime;
+
+                var C2;
+
+                var diff = 0;
+                var time = 0;
+
+                for(var i = 0; i < 10; i++){
+
+                    startTime = new Date();
+                    C2 = A.Calc(B, (idx == 0));
+
+                    diff = Math.max(diff, C1.Sub(C2).Abs().Sum() / (C1.Rows * C1.Cols));
+                    time = Math.max(time, new Date() - startTime);
+                }
+
+                console.log("" + js_time + "ms " + time + "ms 誤差 " + diff.toFixed(7));
+            }
+            A.Clear();
+
+            document.open();
+            document.write("<b>計算終了</b>");
+            document.close();
+
+/*
+            console.log("START Uniform ----- ");
+            C2 = A.Calc(B);
+            console.log("誤差 " + (C1.Sub(C2).Abs().Sum() / (C1.Rows * C1.Cols)).toFixed(7));
+*/
+        }
+    </script>
+</head>
+
+<body onload="BodyOnLoad()">
+    <b>計算中・・・</b>
+
+</body>
+</html>
