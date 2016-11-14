@@ -423,7 +423,7 @@
             var B_len = (B.Rows * B.Cols / 4).toString();
             var repeat = (A.Cols / 4).toString();
     //        console.log("A_len:[" + A_len + "] B_len:[" + B_len + "] repeat:[" + repeat + "]");
-            gpu.buf_out_len = element_count * Float32Array.BYTES_PER_ELEMENT;
+            gpu.outBufferSize = element_count * Float32Array.BYTES_PER_ELEMENT;
 
             var vsrc = Mat.prototype.Shader[vs_id].replace(/_repeat_/g, repeat).replace(/_A_len_/g, A_len).replace(/_B_len_/g, B_len);
 
@@ -436,7 +436,7 @@
             gpu.loc_B_Cols = gl.getUniformLocation(gpu.program, 'B_Cols');
 
             gpu.idxBuffer = this.MakeIdxBuffer(gl, gpu, element_count);
-            gpu.array_buffer = new ArrayBuffer(gpu.buf_out_len);
+            gpu.array_buffer = new ArrayBuffer(gpu.outBufferSize);
 
             if (use_tex){
                 // テクスチャを使う場合
@@ -458,6 +458,12 @@
 
                 console.log("loc:" + gpu.loc_B_Cols + ", " + gpu.loc_A + ", " + gpu.loc_B);
             }
+
+            // Feedback empty buffer
+            gpu.outBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, gpu.outBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, gpu.outBufferSize, gl.STATIC_COPY);
+            gl.bindBuffer(gl.ARRAY_BUFFER, null);
         }
         else {
 
@@ -465,12 +471,6 @@
         }
 
         // -- Init Buffer
-
-        // Feedback empty buffer
-        var buf_out = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, buf_out);
-        gl.bufferData(gl.ARRAY_BUFFER, gpu.buf_out_len, gl.STATIC_COPY);
-        gl.bindBuffer(gl.ARRAY_BUFFER, null);
 
         gl.bindBuffer(gl.ARRAY_BUFFER, gpu.idxBuffer);
 //        gl.bufferData(gl.ARRAY_BUFFER, gpu.vidx, gl.STATIC_DRAW);
@@ -492,9 +492,6 @@
 
         gl.useProgram(gpu.program);
 
-        var tmp, startTime = new Date();
-        tmp = new Date(); var t1 = tmp - startTime; startTime = tmp;
-
         // ユニフォーム変数の設定
         gl.uniform1i(gpu.loc_B_Cols, B.Cols);
 
@@ -511,7 +508,7 @@
             gl.uniform4fv(gpu.loc_B, new Float32Array(B.T().dt));
         }
 
-        gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, buf_out);
+        gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, gpu.outBuffer);
 
         // 計算開始
         gl.beginTransformFeedback(gl.POINTS);    // TRIANGLES
@@ -522,11 +519,9 @@
         gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, null);
 
         // 処理結果を表示
-        gl.bindBuffer(gl.ARRAY_BUFFER, buf_out);
+        gl.bindBuffer(gl.ARRAY_BUFFER, gpu.outBuffer);
 
         gl.getBufferSubData(gl.ARRAY_BUFFER, 0, gpu.array_buffer);
-
-        console.log("CALC:" + (new Date() - startTime) + "ms");
 
         var C = new Mat(A.Rows, B.Cols, new Float32Array(gpu.array_buffer));
 
@@ -535,8 +530,6 @@
         // 終了処理
         gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null);//++
         gl.deleteTransformFeedback(transformFeedback);
-
-        gl.deleteBuffer(buf_out);
 
         gl.useProgram(null);
 
@@ -551,6 +544,7 @@ Mat.prototype.Clear = function () {
 
         gl.bindBuffer(gl.ARRAY_BUFFER, null);
         gl.deleteBuffer(gpu.idxBuffer);
+        gl.deleteBuffer(gpu.outBuffer);
 
         if(gpu.A_tex){
 
