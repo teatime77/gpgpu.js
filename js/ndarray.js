@@ -373,9 +373,7 @@
         return shader;
     }
 
-    MakeTex(gl, m, tex_id) {
-        //            console.log("make tex : " + m.Cols / 4 + " " + m.Rows + "\r\n" + m.toString());
-
+    MakeTex(gl, tex_id) {
         var texture = gl.createTexture();
 
         gl.activeTexture(tex_id);
@@ -443,8 +441,8 @@
                 gpu.loc_B_Tex = gl.getUniformLocation(gpu.program, 'B_Tex');
 
                 // テクスチャの初期処理
-                gpu.A_tex = this.MakeTex(gl, this, gl.TEXTURE0);
-                gpu.B_tex = this.MakeTex(gl, B.T(), gl.TEXTURE1);
+                gpu.A_tex = this.MakeTex(gl, gl.TEXTURE0);
+                gpu.B_tex = this.MakeTex(gl, gl.TEXTURE1);
 
                 console.log("loc:" + gpu.loc_B_Cols + ", " + gpu.loc_A_Tex + ", " + gpu.loc_B_Tex + " tex:" + gpu.A_tex + ", " + gpu.B_tex);
             }
@@ -477,24 +475,17 @@
         gl.vertexAttribPointer(0, 1, gl.FLOAT, false, 0, 0);
         gl.enableVertexAttribArray(0);
 
-        // テクスチャの値のセット
-        if (use_tex) {
-
-            this.SetTex(gl, this, gl.TEXTURE0 , gpu.A_tex);
-            this.SetTex(gl, B.T(), gl.TEXTURE1, gpu.B_tex);
-        }
+        gl.useProgram(gpu.program);
 
         gl.enable(gl.RASTERIZER_DISCARD);
 
         gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, gpu.transformFeedback);
 
-        gl.useProgram(gpu.program);
-
-        // ユニフォーム変数の設定
-        gl.uniform1i(gpu.loc_B_Cols, B.Cols);
-
+        // テクスチャの値のセット
         if (use_tex) {
-            // テクスチャを使う場合
+
+            this.SetTex(gl, this, gl.TEXTURE0 , gpu.A_tex);
+            this.SetTex(gl, B.T(), gl.TEXTURE1, gpu.B_tex);
 
             gl.uniform1i(gpu.loc_A_Tex, 0);
             gl.uniform1i(gpu.loc_B_Tex, 1);
@@ -505,6 +496,9 @@
             gl.uniform4fv(gpu.loc_A, new Float32Array(this.dt));
             gl.uniform4fv(gpu.loc_B, new Float32Array(B.T().dt));
         }
+
+        // ユニフォーム変数の設定
+        gl.uniform1i(gpu.loc_B_Cols, B.Cols);
 
         gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, gpu.outBuffer);
 

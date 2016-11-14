@@ -12,38 +12,55 @@ class TNumpy {
     }
 
     dot(A, B) {
-        Assert(A instanceof Mat && B instanceof Mat, "d-o-t");
+        Assert(A instanceof Mat && B instanceof Mat && A.Cols == B.Rows && !A.columnMajor && !B.columnMajor, "d-o-t");
 
         var key = "" + A.Rows + "," + A.Cols + "," + B.Cols;
         if (vDot[key] == undefined) {
+            vDot[key] = 0;
+        }
+        if (vDot[key] < 3 && A.Cols % 4 == 0) {
+            vDot[key]++;
 
-            vDot[key] = false;
+            var use_tex = (10 * 12 * 30 < A.Rows * A.Cols * B.Cols);
 
-            if (784 <= A.Cols) {
+            var param = {};
 
-                var startTime = new Date();
-                var C1 = A.Calc(B, true);
-                var t1 = new Date() - startTime;
+            if (use_tex) {
 
-                startTime = new Date();
-                var C2 = A.Dot(B);
-                var t2 = new Date() - startTime;
+                param.textures = [
+                    { name:"A_Tex", value:A },
+                    { name:"B_Tex", value:B.T() }
+                ];
 
-                var diff = C1.Sub(C2).Abs().Sum() / (C1.Rows * C1.Cols);
+                param.uniforms = [
+                    { name:"B_Cols", value:B.Cols }
+                ];
+            }
+            else {
 
-                if (t1 < t2) {
+                param.textures = [
+                ];
 
-                    vDot[key] = true;
-                }
-                console.log("dot:" + key + " GPU:" + t1 + "ms  CPU:" + t2 + "ms 誤差 " + diff.toFixed(7));
-                return C2;
+                param.uniforms = [
+                    { name:"B_Cols", value:B.Cols },
+                    { name:"A", value:A.dt },
+                    { name: "B", value: B.T().dt }
+                ];
             }
 
-            console.log("dot:" + key);
-        }
-        else if (vDot[key] == true) {
+            var startTime = new Date();
+            var C1 = A.Calc(B, use_tex);
+            var t1 = new Date() - startTime;
 
-            return A.Calc(B, true);
+            startTime = new Date();
+            var C2 = A.Dot(B);
+            var t2 = new Date() - startTime;
+
+            var diff = C1.Sub(C2).Abs().Sum() / (C1.Rows * C1.Cols);
+            Assert(diff < 0.001, "dot-diff");
+
+            console.log("dot:" + key + " tex:" + use_tex + " " + t1 + "ms  CPU:" + t2 + "ms 誤差 " + diff.toFixed(7));
+            return C2;
         }
 
         return A.Dot(B);

@@ -3,6 +3,10 @@
 
 class Layer {
     constructor() {
+        this.fwCnt = 0;
+        this.fwTime = 0;
+        this.bwCnt = 0;
+        this.bwTime = 0;
     }
 
     init(prev_layer) {
@@ -16,6 +20,20 @@ class Layer {
     }
 
     backward(Y, eta2) {
+    }
+
+    forward2() {
+        var startTime = new Date();
+        this.forward();
+        this.fwCnt++;
+        this.fwTime += new Date() - startTime;
+    }
+
+    backward2(Y, eta2) {
+        var startTime = new Date();
+        this.backward(Y, eta2);
+        this.bwCnt++;
+        this.bwTime += new Date() - startTime;
     }
 
     updateParameter(eta2) {
@@ -94,23 +112,22 @@ class ConvolutionalLayer extends Layer{
     forward() {
         var prev_Layer = this.prevLayer;
         this.batchLength = prev_Layer.activation.Cols;
-        var prev_activation = prev_Layer.activation.dt;
-        var in_dt_part = new Float32Array(this.filterSize * this.filterSize);
+        var prev_activation_dt = prev_Layer.activation.dt;
 
-        this.z = new Mat(this.unitSize, this.batchLength, null, true);
+        if (!this.z || this.z.Rows != this.unitSize || this.z.Cols != this.batchLength){
+
+            this.z          = new Mat(this.unitSize, this.batchLength, null, true);
+            this.activation = new Mat(this.unitSize, this.batchLength, null, true);
+        }
+        var z_dt = this.z.dt;
+        var activation_dt = this.activation.dt;
+
         for (var batch_idx = 0; batch_idx < this.batchLength; batch_idx++) {
 
-            for (var r = 0; r < this.imgRows; r++) {
-                for (var c = 0; c < this.imgCols; c++) {
+            for (var r1 = 0; r1 < this.imgRows; r1++) {
+                for (var c1 = 0; c1 < this.imgCols; c1++) {
 
-                    for (var r2 = 0; r2 < this.filterSize; r2++) {
-                        for (var c2 = 0; c2 < this.filterSize; c2++) {
-                            var k = batch_idx * prev_Layer.unitSize + (r + r2) * prev_Layer.imgCols + (c + c2);
-                            in_dt_part[r2 * this.filterSize + c2] = prev_activation[k];
-                        }
-                    }
-
-                    var output_base = batch_idx * this.unitSize + this.filterCount * (r * this.imgCols + c);
+                    var output_base = batch_idx * this.unitSize + this.filterCount * (r1 * this.imgCols + c1);
 
                     for(var filter_idx = 0; filter_idx < this.filterCount; filter_idx++){
 
@@ -121,24 +138,26 @@ class ConvolutionalLayer extends Layer{
                         for (var r2 = 0; r2 < this.filterSize; r2++) {
                             for (var c2 = 0; c2 < this.filterSize; c2++) {
                                 var j = r2 * this.filterSize + c2;
-                                sum += in_dt_part[j] * weight.dt[j];
+                                var k = batch_idx * prev_Layer.unitSize + (r1 + r2) * prev_Layer.imgCols + (c1 + c2);
+                                sum += prev_activation_dt[k] * weight.dt[j];
                             }
                         }
 
-                        this.z.dt[output_base + filter_idx] = sum + bias;
+                        var k = output_base + filter_idx;
+                        var z_val = sum + bias;
+                        z_dt[k] = z_val;
+                        activation_dt[k] = sigmoidF(z_val);
                     }
                 }
             }
         }
-
-        this.activation = sigmoid(this.z);
     }
 
     backward(Y, eta2) {
         this.Delta = this.nextLayer.Delta.Mul(sigmoid_prime(this.z));
 
         var prev_Layer = this.prevLayer;
-        var prev_activation = prev_Layer.activation.dt;
+        var prev_activation_dt = prev_Layer.activation.dt;
 
         for(var filter_idx = 0; filter_idx < this.filterCount; filter_idx++) {
 
@@ -150,18 +169,18 @@ class ConvolutionalLayer extends Layer{
 
                     for (var batch_idx = 0; batch_idx < this.batchLength; batch_idx++) {
 
-                        for (var r = 0; r < this.imgRows; r++) {
-                            for (var c = 0; c < this.imgCols; c++) {
+                        for (var r1 = 0; r1 < this.imgRows; r1++) {
+                            for (var c1 = 0; c1 < this.imgCols; c1++) {
 
-                                var output_base = batch_idx * this.unitSize + this.filterCount * (r * this.imgCols + c);
+                                var output_base = batch_idx * this.unitSize + this.filterCount * (r1 * this.imgCols + c1);
                                 var out_idx = output_base + filter_idx;
 
                                 var delta = this.Delta.dt[out_idx];
                                 if (delta != 0) {
 
-                                    var k = batch_idx * prev_Layer.unitSize +(r + r2) * prev_Layer.imgCols + (c + c2);
+                                    var k = batch_idx * prev_Layer.unitSize +(r1 + r2) * prev_Layer.imgCols + (c1 + c2);
 
-                                    nabla_w += delta * prev_activation[k];
+                                    nabla_w += delta * prev_activation_dt[k];
 
                                     nabla_b += delta;
                                 }
@@ -207,10 +226,10 @@ class PoolingLayer extends Layer {
 
         for (var batch_idx = 0; batch_idx < this.batchLength; batch_idx++) {
 
-            for (var r = 0; r < this.imgRows; r++) {
-                for (var c = 0; c < this.imgCols; c++) {
+            for (var r1 = 0; r1 < this.imgRows; r1++) {
+                for (var c1 = 0; c1 < this.imgCols; c1++) {
 
-                    var output_base = batch_idx * this.unitSize + this.filterCount * (r * this.imgCols + c);
+                    var output_base = batch_idx * this.unitSize + this.filterCount * (r1 * this.imgCols + c1);
 
                     for (var filter_idx = 0; filter_idx < this.filterCount; filter_idx++) {
 
@@ -219,7 +238,7 @@ class PoolingLayer extends Layer {
                         for (var r2 = 0; r2 < this.filterSize; r2++) {
                             for (var c2 = 0; c2 < this.filterSize; c2++) {
 
-                                var k = batch_idx * prev_Layer.unitSize + prev_Layer.filterCount * ((r + r2) * prev_Layer.imgCols + (c + c2)) + filter_idx;
+                                var k = batch_idx * prev_Layer.unitSize + prev_Layer.filterCount * ((r1 + r2) * prev_Layer.imgCols + (c1 + c2)) + filter_idx;
                                 var val = prev_activation_dt[k];
                                 if (max_val < val) {
 
@@ -289,7 +308,14 @@ class Network {
                 var X = this.Laminate(mini_batch, 0);
                 var Y = this.Laminate(mini_batch, 1);
                 this.update_mini_batch(X, Y, eta);
-//                console.log("update mini batch:%d", j);//??
+                if (false && this.layers[1].fwCnt % 100 == 0) {
+
+                    var s = "";
+                    for(let layer of this.layers.slice(1)) {
+                        s += " (" + Math.floor(layer.fwTime / layer.fwCnt) + " " + Math.floor(layer.bwTime / layer.bwCnt) + ")";
+                    }
+                    console.log("update mini batch:" + s);
+                }
             }
             console.log("update_mini_batch:" + (new Date() - startTime) + "ms");
 
@@ -323,12 +349,12 @@ class Network {
 
     update_mini_batch(X, Y, eta) {
         this.layers[0].activation = X;
-        this.layers.forEach(x => x.forward());
+        this.layers.forEach(x => x.forward2());
 
         var eta2 = eta / X.Cols;
 
         for (var i = this.layers.length - 1; 1 <= i; i--) {
-            this.layers[i].backward(Y, eta2);
+            this.layers[i].backward2(Y, eta2);
         }
 
         this.layers.forEach(x => x.updateParameter(eta2));
