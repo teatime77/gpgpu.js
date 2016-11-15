@@ -393,67 +393,49 @@
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, m.Cols / 4, m.Rows, 0, gl.RGBA, gl.FLOAT, m.dt);
     }
 
-    Calc(B, use_tex) {
-        var A = this;
-        var vs_id;
-
-        if (use_tex) {
-            vs_id = "vs-Texture";
-        }
-        else {
-
-            vs_id = "vs-Uniform";
-        }
+    Calc(param) {
         var gl = Mat.prototype.WebGL;
 
-        var key = vs_id + ":" + A.Rows + "," + A.Cols + "," + B.Rows + "," + B.Cols;
-        var gpu = Mat.prototype.Prg[key];
+        var TEXTUREs = [gl.TEXTURE0, gl.TEXTURE1, gl.TEXTURE2, gl.TEXTURE3];
+
+        var gpu = Mat.prototype.Prg[param.key];
         if (!gpu) {
 
-            gpu = { "key":key };
-            Mat.prototype.Prg[key] = gpu;
-            console.log("make gpu:" + gpu.key);
+            gpu = {};
+            Mat.prototype.Prg[param.key] = gpu;
 
-            var A_len = (A.Rows * A.Cols / 4).toString();
-            var B_len = (B.Rows * B.Cols / 4).toString();
-            var repeat = (A.Cols / 4).toString();
-    //        console.log("A_len:[" + A_len + "] B_len:[" + B_len + "] repeat:[" + repeat + "]");
-            gpu.elementCount = A.Rows * B.Cols;
-            gpu.outBufferSize = gpu.elementCount * Float32Array.BYTES_PER_ELEMENT;
+            gpu.key = param.key;
 
-            var vsrc = Mat.prototype.Shader[vs_id].replace(/_repeat_/g, repeat).replace(/_A_len_/g, A_len).replace(/_B_len_/g, B_len);
+            gpu.outBufferSize = param.elementCount * Float32Array.BYTES_PER_ELEMENT;
 
             var fsrc = Mat.prototype.Shader['fs-transform'];
-            var vshader = this.MakeShader(gl, gl.VERTEX_SHADER, vsrc);
+            var vshader = this.MakeShader(gl, gl.VERTEX_SHADER, param.vsrc);
             var fshader = this.MakeShader(gl, gl.FRAGMENT_SHADER, fsrc);
-            gpu.program = this.MakeProgram(gl, vshader, fshader, ['dot_val']);
+            gpu.program = this.MakeProgram(gl, vshader, fshader, param.varyings);
             gl.useProgram(gpu.program);
 
-            gpu.loc_B_Cols = gl.getUniformLocation(gpu.program, 'B_Cols');
+            // ユニフォーム変数の初期処理
+            gpu.locUniforms = [];
+            for(let u of param.uniforms) {
 
-            gpu.idxBuffer = this.MakeIdxBuffer(gl, gpu, gpu.elementCount);
+                var loc = gl.getUniformLocation(gpu.program, u.name);
+                gpu.locUniforms.push(loc);
+            }
+
+            // テクスチャの初期処理
+            gpu.locTextures = [];
+            gpu.Textures = [];
+            for (var i = 0; i < param.textures.length; i++) {
+
+                var loc = gl.getUniformLocation(gpu.program, param.textures[i].name);
+                gpu.locTextures.push(loc);
+
+                var tex = this.MakeTex(gl, TEXTUREs[i]);
+                gpu.Textures.push(tex);
+            }
+
+            gpu.idxBuffer = this.MakeIdxBuffer(gl, gpu, param.elementCount);
             gpu.arrayBuffer = new ArrayBuffer(gpu.outBufferSize);
-
-            if (use_tex){
-                // テクスチャを使う場合
-
-                gpu.loc_A_Tex = gl.getUniformLocation(gpu.program, 'A_Tex');
-                gpu.loc_B_Tex = gl.getUniformLocation(gpu.program, 'B_Tex');
-
-                // テクスチャの初期処理
-                gpu.A_tex = this.MakeTex(gl, gl.TEXTURE0);
-                gpu.B_tex = this.MakeTex(gl, gl.TEXTURE1);
-
-                console.log("loc:" + gpu.loc_B_Cols + ", " + gpu.loc_A_Tex + ", " + gpu.loc_B_Tex + " tex:" + gpu.A_tex + ", " + gpu.B_tex);
-            }
-            else{
-                // ユニフォーム行列を使う場合
-
-                gpu.loc_A = gl.getUniformLocation(gpu.program, 'A');
-                gpu.loc_B = gl.getUniformLocation(gpu.program, 'B');
-
-                console.log("loc:" + gpu.loc_B_Cols + ", " + gpu.loc_A + ", " + gpu.loc_B);
-            }
 
             // Feedback empty buffer
             gpu.outBuffer = gl.createBuffer();
@@ -482,29 +464,30 @@
         gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, gpu.transformFeedback);
 
         // テクスチャの値のセット
-        if (use_tex) {
+        for (var i = 0; i < param.textures.length; i++) {
 
-            this.SetTex(gl, this, gl.TEXTURE0 , gpu.A_tex);
-            this.SetTex(gl, B.T(), gl.TEXTURE1, gpu.B_tex);
-
-            gl.uniform1i(gpu.loc_A_Tex, 0);
-            gl.uniform1i(gpu.loc_B_Tex, 1);
-        }
-        else {
-            // ユニフォーム行列を使う場合
-
-            gl.uniform4fv(gpu.loc_A, new Float32Array(this.dt));
-            gl.uniform4fv(gpu.loc_B, new Float32Array(B.T().dt));
+            this.SetTex(gl, param.textures[i].value, TEXTUREs[i], gpu.Textures[i]);
+            gl.uniform1i(gpu.locTextures[i], i);
         }
 
-        // ユニフォーム変数の設定
-        gl.uniform1i(gpu.loc_B_Cols, B.Cols);
+        // ユニフォーム変数のセット
+        for (var i = 0; i < param.uniforms.length; i++) {
+            var u = param.uniforms[i];
+            if (u.value instanceof Mat) {
+
+                gl.uniform4fv(gpu.locUniforms[i], new Float32Array(u.value.dt));
+            }
+            else {
+
+                gl.uniform1i(gpu.locUniforms[i], u.value);
+            }
+        }
 
         gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, gpu.outBuffer);
 
         // 計算開始
         gl.beginTransformFeedback(gl.POINTS);    // TRIANGLES
-        gl.drawArrays(gl.POINTS, 0, gpu.elementCount);
+        gl.drawArrays(gl.POINTS, 0, param.elementCount);
         gl.endTransformFeedback();
 
         gl.disable(gl.RASTERIZER_DISCARD);
@@ -515,16 +498,16 @@
 
         gl.getBufferSubData(gl.ARRAY_BUFFER, 0, gpu.arrayBuffer);
 
-        var C = new Mat(A.Rows, B.Cols, new Float32Array(gpu.arrayBuffer));
+        var ret = new Float32Array(gpu.arrayBuffer);
 
         gl.bindBuffer(gl.ARRAY_BUFFER, null);
 
         // 終了処理
-        gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null);//++
+        gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null);
 
         gl.useProgram(null);
 
-        return C;
+        return ret;
     }
 }
 
@@ -538,11 +521,10 @@ Mat.prototype.Clear = function () {
         gl.deleteBuffer(gpu.outBuffer);
         gl.deleteTransformFeedback(gpu.transformFeedback);
 
-        if(gpu.A_tex){
+        gl.bindTexture(gl.TEXTURE_2D, null);
+        for(let tex of gpu.Textures) {
 
-            gl.bindTexture(gl.TEXTURE_2D, null);
-            gl.deleteTexture(gpu.A_tex);
-            gl.deleteTexture(gpu.B_tex);
+            gl.deleteTexture(tex);
         }
 
         gl.deleteProgram(gpu.program);

@@ -25,8 +25,10 @@ class TNumpy {
 
             var param = {};
 
+            param.elementCount = A.Rows * B.Cols;
             if (use_tex) {
 
+                param.vs_id = "vs-Texture";
                 param.textures = [
                     { name:"A_Tex", value:A },
                     { name:"B_Tex", value:B.T() }
@@ -37,19 +39,32 @@ class TNumpy {
                 ];
             }
             else {
+                param.vs_id = "vs-Uniform";
 
                 param.textures = [
                 ];
 
                 param.uniforms = [
                     { name:"B_Cols", value:B.Cols },
-                    { name:"A", value:A.dt },
-                    { name: "B", value: B.T().dt }
+                    { name:"A", value:A },
+                    { name:"B", value: B.T() }
                 ];
             }
 
+            var A_len = (A.Rows * A.Cols / 4).toString();
+            var B_len = (B.Rows * B.Cols / 4).toString();
+            var repeat = (A.Cols / 4).toString();
+            //        console.log("A_len:[" + A_len + "] B_len:[" + B_len + "] repeat:[" + repeat + "]");
+
+            param.vsrc = Mat.prototype.Shader[param.vs_id].replace(/_repeat_/g, repeat).replace(/_A_len_/g, A_len).replace(/_B_len_/g, B_len);
+            param.varyings = ['dot_val'];
+            param.key = param.vs_id + ":" + A.Rows + "," + A.Cols + "," + B.Rows + "," + B.Cols;
+
+
             var startTime = new Date();
-            var C1 = A.Calc(B, use_tex);
+            var C1_dt = A.Calc(param);
+            var C1 = new Mat(A.Rows, B.Cols, C1_dt);
+
             var t1 = new Date() - startTime;
 
             startTime = new Date();
