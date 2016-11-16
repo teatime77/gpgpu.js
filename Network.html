@@ -5,6 +5,7 @@
     <meta charset="utf-8" />
     <title></title>
     <script type="text/javascript" src="js/Sys.js"></script>
+    <script type="text/javascript" src="js/Shader.js"></script>
     <script type="text/javascript" src="js/ndarray.js"></script>
     <script type="text/javascript" src="js/numpy.js"></script>
     <script type="text/javascript" src="js/Network.js"></script>
@@ -39,16 +40,18 @@
         function RunNetwork() {
             console.log("Training:%d Test:%d", TrainingData.length, TestData["count"]);
 
+            Mat.prototype.Init();
+
             var net = new Network([
                 new InputLayer(28, 28),
-                new ConvolutionalLayer(5, 20),
-                new PoolingLayer(2),
+                //new ConvolutionalLayer(5, 20),
+                //new PoolingLayer(2),
                 new FullyConnectedLayer(30),
                 new FullyConnectedLayer(10)
             ]);
 
-            net.SGD(TrainingData, 30, 10, 3.0, TestData)
-//            net.SGD(TrainingData, 30, 100, 10.0, TestData)
+//???            net.SGD(TrainingData, 30, 10, 3.0, TestData)
+            net.SGD(TrainingData, 30, 12, 10.0, TestData)
 
             Mat.prototype.Clear();
         }

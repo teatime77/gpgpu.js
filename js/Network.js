@@ -109,7 +109,83 @@ class ConvolutionalLayer extends Layer{
         this.weights = xrange(this.filterCount).map(x => np.random.randn(this.filterSize, this.filterSize));
     }
 
+    gpuForwardTest(prev_Layer) {
+        var gl = Mat.prototype.WebGL;
+
+        var dt = new Float32Array(2 * 3 * 4 * 4);
+        for (var i = 0; i < dt.length; i++) {
+            dt[i] = i;
+        }
+        // (rows, cols, init, column_major, depth)
+        var m = new Mat(3, 4 * 4, dt, false, 2);
+        var param = {};
+
+        param.elementCount = m.dt.length;
+
+        var vs_id = "Test";
+        param.textures = [
+            { name: "prev_activation", value: m, dim: gl.TEXTURE_3D }
+        ];
+
+        param.uniforms = [];
+
+        param.vsrc = Shaders[vs_id];
+        param.varyings = ["z", "activation"];
+        param.key = vs_id + ":" + this.batchLength + ":" + this.imgRows + ":" + this.imgCols + ":" + this.filterCount + ":" + this.filterSize;
+
+        var C1_dt = m.Calc(param);
+    }
+
+    gpuForward(prev_Layer) {
+        var weights = new Float32Array(this.filterCount * this.filterSize * this.filterSize);
+        var biases = new Float32Array(this.filterCount);
+
+        for(var filter_idx = 0; filter_idx < this.filterCount; filter_idx++){
+            var weight = this.weights[filter_idx];
+            for(var i = 0; i < weight.dt.length; i++){
+                weights[filter_idx * weight.dt.length + i] = weight[i];
+            }
+            biases[filter_idx] = this.biases[filter_idx];
+        }
+
+        var param = {};
+
+        param.elementCount = this.batchLength * this.imgRows * this.imgCols * this.filterCount;
+        var vs_id = "ConvolutionalLayer-forward";
+        param.textures = [
+            { name: "prev_activation", value: prev_Layer.activation }
+        ];
+
+        param.uniforms = [
+            //{ name: "batchLength", value:this.batchLength  },
+            //{ name: "imgRows"    , value:this.imgRows },
+            //{ name: "imgCols"    , value:this.imgCols },
+            //{ name: "filterCount", value:this.filterCount },
+            { name: "weight"     , value:weights },
+            { name: "bias"       , value:biases }
+        ];
+
+        var dic = [
+            { name:/batchLength/g, value:this.batchLength.toString() },
+            { name:/imgRows/g, value:this.imgRows.toString() },
+            { name:/imgCols/g, value:this.imgCols.toString() },
+            { name:/filterCount/g, value:this.filterCount.toString() },
+            { name:/filterSize/g, value: this.filterSize.toString() }
+        ];
+
+        var s = Shaders[vs_id];
+        for(let x in dic){
+            s = s.replace(x.name, x.value);
+        }
+
+        param.vsrc = s;
+        param.varyings = ["z", "activation"];
+        param.key = vs_id + ":" + this.batchLength + ":" + this.imgRows + ":" + this.imgCols + ":" + this.filterCount + ":" + this.filterSize;
+    }
+
     forward() {
+        this.gpuForwardTest(this.prevLayer);
+        return;
         var prev_Layer = this.prevLayer;
         this.batchLength = prev_Layer.activation.Cols;
         var prev_activation_dt = prev_Layer.activation.dt;

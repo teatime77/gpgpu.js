@@ -1,112 +1,14 @@
 ﻿class Mat {
-    constructor(rows, cols, init, column_major) {
-        if (!Mat.prototype.WebGL) {
-
-            console.log("init WebGL");
-
-            Mat.prototype.Prg = {};
-
-            // -- Init Canvas
-            var canvas = document.createElement('canvas');
-            canvas.width = 32;
-            canvas.height = 32;
-            document.body.appendChild(canvas);
-
-            // -- Init WebGL Context
-            var gl = canvas.getContext('webgl2', { antialias: false });
-            var isWebGL2 = !!gl;
-            if (!isWebGL2) {
-                console.log("WebGL 2 is not available. See How to get a WebGL 2 implementation");
-                console.log("https://www.khronos.org/webgl/wiki/Getting_a_WebGL_Implementation");
-
-                throw "WebGL 2 is not available.";
-            }
-
-            Mat.prototype.WebGL = gl;
-
-            var shader = {};
-
-            shader["vs-Texture"] = `#version 300 es
-
-                precision highp float;
-                precision highp int;
-
-                uniform int B_Cols;
-
-                uniform sampler2D A_Tex;
-                uniform sampler2D B_Tex;
-
-                layout(location = 0) in float idx_f;
-
-                out float dot_val;
-
-                void main() {
-                    uint idx = uint(idx_f);
-                    int i   = int(idx / uint(B_Cols));
-                    int j   = int(idx % uint(B_Cols));
-
-                    int k;
-                    float sum = 0.0;
-                    for(k = 0; k < _repeat_; k++) {
-                        vec4  A_txl, B_txl;
-
-                        A_txl = texelFetch(A_Tex, ivec2(k, i), 0);
-                        B_txl = texelFetch(B_Tex, ivec2(k, j), 0);
-                        sum   += dot(A_txl, B_txl);
-                    }
-
-                    dot_val = sum;
-                }`;
-
-            shader["vs-Uniform"] = `#version 300 es
-
-                precision highp float;
-                precision highp int;
-
-                uniform int B_Cols;
-
-                uniform vec4 A[_A_len_];
-                uniform vec4 B[_B_len_];
-
-                layout(location = 0) in float idx_f;
-
-                out float dot_val;
-
-                void main() {
-                    uint idx = uint(idx_f);
-                    int i   = int(idx / uint(B_Cols));
-                    int j   = int(idx % uint(B_Cols));
-
-                    int k;
-                    float sum = 0.0;
-                    for(k = 0; k < _repeat_; k++) {
-                        sum += dot(A[_repeat_*i +k], B[_repeat_*j +k]);
-                    }
-                    dot_val = sum;
-                }`;
-
-            shader["fs-transform"] = `#version 300 es
-                precision highp float;
-                precision highp int;
-
-                out vec4 color;
-
-                void main()
-                {
-                    color = vec4(1.0);
-                }`;
-
-            Mat.prototype.Shader = shader;
-        }
-
+    constructor(rows, cols, init, column_major, depth) {
         this.Rows = rows;
         this.Cols = cols;
+        this.Depth = (depth == undefined ? 1 : depth);
         this.shape = [rows, cols];
         this.columnMajor = (column_major == undefined ? false : column_major);
 
         if (init) {
 
-            Assert(init instanceof Float32Array && init.length == rows * cols, "Mat-init");
+            Assert(init instanceof Float32Array && init.length == rows * cols * this.Depth, "Mat-init");
             this.dt = init;
         }
         else {
@@ -322,7 +224,7 @@
         gl.attachShader(prg, vshaderTransform);
         gl.attachShader(prg, fshaderTransform);
 
-        gl.transformFeedbackVaryings(prg, varyings, gl.INTERLEAVED_ATTRIBS);   //  gl.SEPARATE_ATTRIBS
+        gl.transformFeedbackVaryings(prg, varyings, gl.SEPARATE_ATTRIBS);   // gl.INTERLEAVED_ATTRIBS 
         gl.linkProgram(prg);
 
         // check
@@ -373,24 +275,32 @@
         return shader;
     }
 
-    MakeTex(gl, tex_id) {
+    MakeTex(gl, tex_id, dim) {
         var texture = gl.createTexture();
 
         gl.activeTexture(tex_id);
-        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.bindTexture(dim, texture);
 
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(dim, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        gl.texParameteri(dim, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(dim, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(dim, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
         return texture;
     }
 
-    SetTex(gl, m, tex_id, texture) {
+    SetTex(gl, m, tex_id, dim, texture) {
         gl.activeTexture(tex_id);
-        gl.bindTexture(gl.TEXTURE_2D, texture);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, m.Cols / 4, m.Rows, 0, gl.RGBA, gl.FLOAT, m.dt);
+        gl.bindTexture(dim, texture);
+        if (dim == gl.TEXTURE_2D) {
+
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, m.Cols / 4, m.Rows, 0, gl.RGBA, gl.FLOAT, m.dt);
+        }
+        else {
+            Assert(dim == gl.TEXTURE_3D, "Set-Tex");
+
+            gl.texImage3D(gl.TEXTURE_3D, 0, gl.RGBA32F, m.Cols / 4, m.Rows, m.Depth, 0, gl.RGBA, gl.FLOAT, m.dt);
+        }
     }
 
     Calc(param) {
@@ -406,9 +316,9 @@
 
             gpu.key = param.key;
 
-            gpu.outBufferSize = param.elementCount * Float32Array.BYTES_PER_ELEMENT;
+            gpu.outBufferSize = param.varyings.length * param.elementCount * Float32Array.BYTES_PER_ELEMENT;
 
-            var fsrc = Mat.prototype.Shader['fs-transform'];
+            var fsrc = Shaders['fs-transform'];
             var vshader = this.MakeShader(gl, gl.VERTEX_SHADER, param.vsrc);
             var fshader = this.MakeShader(gl, gl.FRAGMENT_SHADER, fsrc);
             gpu.program = this.MakeProgram(gl, vshader, fshader, param.varyings);
@@ -430,7 +340,7 @@
                 var loc = gl.getUniformLocation(gpu.program, param.textures[i].name);
                 gpu.locTextures.push(loc);
 
-                var tex = this.MakeTex(gl, TEXTUREs[i]);
+                var tex = this.MakeTex(gl, TEXTUREs[i], param.textures[i].dim);
                 gpu.Textures.push(tex);
             }
 
@@ -466,7 +376,7 @@
         // テクスチャの値のセット
         for (var i = 0; i < param.textures.length; i++) {
 
-            this.SetTex(gl, param.textures[i].value, TEXTUREs[i], gpu.Textures[i]);
+            this.SetTex(gl, param.textures[i].value, TEXTUREs[i], param.textures[i].dim, gpu.Textures[i]);
             gl.uniform1i(gpu.locTextures[i], i);
         }
 
@@ -522,6 +432,7 @@ Mat.prototype.Clear = function () {
         gl.deleteTransformFeedback(gpu.transformFeedback);
 
         gl.bindTexture(gl.TEXTURE_2D, null);
+        gl.bindTexture(gl.TEXTURE_3D, null);
         for(let tex of gpu.Textures) {
 
             gl.deleteTexture(tex);
@@ -530,4 +441,28 @@ Mat.prototype.Clear = function () {
         gl.deleteProgram(gpu.program);
         console.log("clear gpu:" + gpu.key);
     }
+}
+
+Mat.prototype.Init = function () {
+    console.log("init WebGL");
+
+    Mat.prototype.Prg = {};
+
+    // -- Init Canvas
+    var canvas = document.createElement('canvas');
+    canvas.width = 32;
+    canvas.height = 32;
+    document.body.appendChild(canvas);
+
+    // -- Init WebGL Context
+    var gl = canvas.getContext('webgl2', { antialias: false });
+    var isWebGL2 = !!gl;
+    if (!isWebGL2) {
+        console.log("WebGL 2 is not available. See How to get a WebGL 2 implementation");
+        console.log("https://www.khronos.org/webgl/wiki/Getting_a_WebGL_Implementation");
+
+        throw "WebGL 2 is not available.";
+    }
+
+    Mat.prototype.WebGL = gl;
 }
