@@ -21,8 +21,6 @@ class TNumpy {
         if (vDot[key] < 3 && A.Cols % 4 == 0) {
             vDot[key]++;
 
-            var gl = Mat.prototype.WebGL;
-
             var use_tex = (10 * 12 * 30 < A.Rows * A.Cols * B.Cols);
 
             var param = {};
@@ -34,8 +32,8 @@ class TNumpy {
 
                 vs_id = "vs-Texture";
                 param.textures = [
-                    { name: "A_Tex", value: A, dim: gl.TEXTURE_2D },
-                    { name: "B_Tex", value: B.T(), dim: gl.TEXTURE_2D }
+                    { name: "A_Tex", value: A, dim: WebGL2.GL.TEXTURE_2D },
+                    { name: "B_Tex", value: B.T(), dim: WebGL2.GL.TEXTURE_2D }
                 ];
 
                 param.uniforms = [
@@ -66,7 +64,7 @@ class TNumpy {
 
 
             var startTime = new Date();
-            var ret = A.Calc(param);
+            var ret = WebGL2.Calc(param);
             var C1 = new Mat(A.Rows, B.Cols, ret[0]);
 
             var t1 = new Date() - startTime;

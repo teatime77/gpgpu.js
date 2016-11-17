@@ -6,6 +6,7 @@
     <title></title>
     <script type="text/javascript" src="js/Sys.js"></script>
     <script type="text/javascript" src="js/Shader.js"></script>
+    <script type="text/javascript" src="js/WebGL.js"></script>
     <script type="text/javascript" src="js/ndarray.js"></script>
     <script type="text/javascript" src="js/numpy.js"></script>
     <script type="text/javascript" src="js/Network.js"></script>
@@ -16,6 +17,7 @@
 <output id="list"></output>
 
     <script type="text/javascript">
+        var WebGL2;
         var TrainingData, TestData = {};
         var TrainingDataImage, TrainingDataLabel;
 
@@ -40,12 +42,12 @@
         function RunNetwork() {
             console.log("Training:%d Test:%d", TrainingData.length, TestData["count"]);
 
-            Mat.prototype.Init();
+            WebGL2 = new WebGLLib();
 
             var net = new Network([
                 new InputLayer(28, 28),
-                //new ConvolutionalLayer(5, 20),
-                //new PoolingLayer(2),
+                new ConvolutionalLayer(5, 20),
+                new PoolingLayer(2),
                 new FullyConnectedLayer(30),
                 new FullyConnectedLayer(10)
             ]);
@@ -53,7 +55,7 @@
 //???            net.SGD(TrainingData, 30, 10, 3.0, TestData)
             net.SGD(TrainingData, 30, 12, 10.0, TestData)
 
-            Mat.prototype.Clear();
+            WebGL2.WebGLClear();
         }
 
         // MNIST http://yann.lecun.com/exdb/mnist/

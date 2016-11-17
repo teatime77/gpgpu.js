@@ -110,8 +110,6 @@ class ConvolutionalLayer extends Layer{
     }
 
     gpuForwardTest(prev_Layer) {
-        var gl = Mat.prototype.WebGL;
-
         var dt = new Float32Array(2 * 3 * 4 * 4);
         for (var i = 0; i < dt.length; i++) {
             dt[i] = i;
@@ -124,7 +122,7 @@ class ConvolutionalLayer extends Layer{
 
         var vs_id = "Test";
         param.textures = [
-            { name: "prev_activation", value: m, dim: gl.TEXTURE_3D }
+            { name: "prev_activation", value: m, dim: WebGL2.GL.TEXTURE_3D }
         ];
 
         param.uniforms = [];
@@ -133,12 +131,11 @@ class ConvolutionalLayer extends Layer{
         param.varyings = ["z", "activation"];
         param.key = vs_id + ":" + this.batchLength + ":" + this.imgRows + ":" + this.imgCols + ":" + this.filterCount + ":" + this.filterSize;
 
-        var ret = m.Calc(param);
+        var ret = WebGL2.Calc(param);
     }
 
-    gpuForward(prev_Layer) {
-        var gl = Mat.prototype.WebGL;
-
+    gpuForward() {
+        var prev_Layer = this.prevLayer;
         var weights = new Float32Array(this.filterCount * this.filterSize * this.filterSize);
         var biases = new Float32Array(this.filterCount);
 
@@ -158,7 +155,7 @@ class ConvolutionalLayer extends Layer{
         param.elementCount = this.batchLength * this.imgRows * this.imgCols * this.filterCount;
         var vs_id = "ConvolutionalLayer-forward";
         param.textures = [
-            { name: "prev_activation", value: m, dim: gl.TEXTURE_3D }
+            { name: "prev_activation", value: m, dim: WebGL2.GL.TEXTURE_3D }
         ];
 
         param.uniforms = [
@@ -166,33 +163,31 @@ class ConvolutionalLayer extends Layer{
             { name: "biases", value: biases }
         ];
 
-        param.vsrc = Shaders[vs_id]
-            .replace(/unitSize/g   , this.unitSize.toString())
-            .replace(/imgCols/g    , this.imgCols.toString())
-            .replace(/filterCount/g, this.filterCount.toString())
-            .replace(/filterSize/g , this.filterSize.toString());
+        if (this.forwardSrc == undefined) {
+
+            this.forwardSrc = Shaders[vs_id]
+                .replace(/imgCols_filterCount/g, (this.imgCols * this.filterCount).toString() + "u")
+                .replace(/filterSize_filterSize/g, (this.filterSize * this.filterSize).toString() + "u")
+                .replace(/unitSize/g   , this.unitSize.toString()+"u")
+                .replace(/imgCols/g    , this.imgCols.toString())
+                .replace(/filterCount/g, this.filterCount.toString()+"u")
+                .replace(/filterSize/g, this.filterSize.toString() + "u");
+        }
+        param.vsrc = this.forwardSrc;
 
         param.varyings = ["z", "activation"];
+        param.arrayBuffers = [this.zArrayBuffer, this.activationArrayBuffer];
         param.key = vs_id + ":" + this.imgRows + ":" + this.imgCols + ":" + this.filterCount + ":" + this.filterSize;
 
-        var ret = m.Calc(param);
+        var ret = WebGL2.Calc(param);
 
         return ret;
     }
 
-    forward() {
+    cpuForward() {
         var prev_Layer = this.prevLayer;
-        this.batchLength = prev_Layer.activation.Cols;
-
-        var ret = this.gpuForward(prev_Layer);
 
         var prev_activation_dt = prev_Layer.activation.dt;
-
-        if (!this.z || this.z.Rows != this.unitSize || this.z.Cols != this.batchLength){
-
-            this.z          = new Mat(this.unitSize, this.batchLength, null, true);
-            this.activation = new Mat(this.unitSize, this.batchLength, null, true);
-        }
         var z_dt = this.z.dt;
         var activation_dt = this.activation.dt;
 
@@ -226,15 +221,52 @@ class ConvolutionalLayer extends Layer{
                 }
             }
         }
+    }
 
+    forward() {
+        this.batchLength = this.prevLayer.activation.Cols;
+
+        if (!this.z || this.z.Rows != this.unitSize || this.z.Cols != this.batchLength){
+
+            this.zArrayBuffer          = new ArrayBuffer(4 * this.unitSize * this.batchLength);
+            this.activationArrayBuffer = new ArrayBuffer(4 * this.unitSize * this.batchLength);
+
+            this.zGPU          = new Mat(this.unitSize, this.batchLength, new Float32Array(this.zArrayBuffer), true);
+            this.activationGPU = new Mat(this.unitSize, this.batchLength, new Float32Array(this.activationArrayBuffer), true);
+
+            this.z             = new Mat(this.unitSize, this.batchLength, null, true);
+            this.activation    = new Mat(this.unitSize, this.batchLength, null, true);
+        }
+
+        var t0 = new Date();
+        this.gpuForward();
+        var t1 = new Date();
+
+        this.cpuForward();
+        var t2 = new Date();
+
+        Assert(this.zGPU.dt.length == this.z.dt.length && this.activationGPU.dt.length == this.activation.dt.length, "Convolutional-Layer-forward");
         var max_diff = 0;
-        for (var k = 0; k < z_dt.length; k++) {
-            var diff = Math.abs(ret[0][k] - z_dt[k]) + Math.abs(ret[1][k] - activation_dt[k]);
+        for (var k = 0; k < this.z.dt.length; k++) {
+            var diff = Math.max(Math.abs(this.zGPU.dt[k] - this.z.dt[k]), Math.abs(this.activationGPU.dt[k] - this.activation.dt[k]));
             if(max_diff < diff){
                 max_diff = diff;
             }
         }
-        console.log("forward diff:%f", max_diff);
+        Assert(max_diff < 0.00001, "Convolutional-Layer-forward-diff");
+        if (this.forwardCnt == undefined) {
+
+            this.forwardCnt = 0;
+            this.forwardGPU = 0;
+            this.forwardCPU = 0;
+        }
+        this.forwardCnt++;
+        this.forwardGPU += t1 - t0;
+        this.forwardCPU += t2 - t1;
+        if (this.forwardCnt % 100 == 0) {
+
+            console.log("forward diff:%f cnt:%d GPU:%dms CPU:%dms", max_diff, this.forwardCnt, Math.round(this.forwardGPU / this.forwardCnt), Math.round(this.forwardCPU / this.forwardCnt));
+        }
     }
 
     backward(Y, eta2) {

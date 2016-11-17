@@ -51,34 +51,35 @@ out float activation;
 void main() {
     uint idx = uint(idx_f);
 
-    uint batch_idx = idx / uint(unitSize);
-    idx %= uint(unitSize);
+    uint batch_idx = idx / unitSize;
+    idx -= batch_idx * unitSize;
 
-    uint r1 = idx / uint(imgCols * filterCount);
-    idx %= uint(imgCols * filterCount);
+    uint r1 = idx / imgCols_filterCount;
+    idx -= r1 * imgCols_filterCount;
 
-    uint c1 = idx / uint(filterCount);
-    idx %= uint(filterCount);
+    uint c1 = idx / filterCount;
+    idx -= c1 * filterCount;
 
     uint filter_idx = idx;
 
-    uint weight_idx = filter_idx * uint(filterSize * filterSize);
+    uint weight_idx = filter_idx * filterSize_filterSize;
 
     uint r2;
     float sum = 0.0;
-    for (r2 = 0u; r2 < uint(filterSize); r2++) {
-        uint x = c1 / 4u;
-        uint u = c1 % 4u;
+    for (r2 = 0u; r2 < filterSize; r2++) {
+        uint x = c1 >> 2u;  // c1 / 4u
+        uint u = c1 &  3u;   // c1 % 4u
+
         uint c2 = 0u;
         for(; ; ) {
             vec4  txl = texelFetch(prev_activation, ivec3(x, r1 + r2, batch_idx), 0);
-            for(; u < 4u && c2 < uint(filterSize); u++, c2++) {
+            for(; u < 4u && c2 < filterSize; u++, c2++) {
 
                 sum += txl[u] * weights[weight_idx];
                 weight_idx++;
             }
 
-            if(uint(filterSize) <= c2) {
+            if(filterSize <= c2) {
                 break;
             }
 
