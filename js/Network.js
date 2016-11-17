@@ -133,61 +133,59 @@ class ConvolutionalLayer extends Layer{
         param.varyings = ["z", "activation"];
         param.key = vs_id + ":" + this.batchLength + ":" + this.imgRows + ":" + this.imgCols + ":" + this.filterCount + ":" + this.filterSize;
 
-        var C1_dt = m.Calc(param);
+        var ret = m.Calc(param);
     }
 
     gpuForward(prev_Layer) {
+        var gl = Mat.prototype.WebGL;
+
         var weights = new Float32Array(this.filterCount * this.filterSize * this.filterSize);
         var biases = new Float32Array(this.filterCount);
 
         for(var filter_idx = 0; filter_idx < this.filterCount; filter_idx++){
             var weight = this.weights[filter_idx];
             for(var i = 0; i < weight.dt.length; i++){
-                weights[filter_idx * weight.dt.length + i] = weight[i];
+                weights[filter_idx * weight.dt.length + i] = weight.dt[i];
             }
             biases[filter_idx] = this.biases[filter_idx];
         }
+
+        // (rows, cols, init, column_major, depth)
+        var m = new Mat(prev_Layer.imgRows, prev_Layer.imgCols, prev_Layer.activation.dt, false, this.batchLength);
 
         var param = {};
 
         param.elementCount = this.batchLength * this.imgRows * this.imgCols * this.filterCount;
         var vs_id = "ConvolutionalLayer-forward";
         param.textures = [
-            { name: "prev_activation", value: prev_Layer.activation }
+            { name: "prev_activation", value: m, dim: gl.TEXTURE_3D }
         ];
 
         param.uniforms = [
-            //{ name: "batchLength", value:this.batchLength  },
-            //{ name: "imgRows"    , value:this.imgRows },
-            //{ name: "imgCols"    , value:this.imgCols },
-            //{ name: "filterCount", value:this.filterCount },
-            { name: "weight"     , value:weights },
-            { name: "bias"       , value:biases }
+            { name: "weights", value: weights },
+            { name: "biases", value: biases }
         ];
 
-        var dic = [
-            { name:/batchLength/g, value:this.batchLength.toString() },
-            { name:/imgRows/g, value:this.imgRows.toString() },
-            { name:/imgCols/g, value:this.imgCols.toString() },
-            { name:/filterCount/g, value:this.filterCount.toString() },
-            { name:/filterSize/g, value: this.filterSize.toString() }
-        ];
+        param.vsrc = Shaders[vs_id]
+            .replace(/unitSize/g   , this.unitSize.toString())
+            .replace(/imgCols/g    , this.imgCols.toString())
+            .replace(/filterCount/g, this.filterCount.toString())
+            .replace(/filterSize/g , this.filterSize.toString());
 
-        var s = Shaders[vs_id];
-        for(let x in dic){
-            s = s.replace(x.name, x.value);
-        }
-
-        param.vsrc = s;
         param.varyings = ["z", "activation"];
-        param.key = vs_id + ":" + this.batchLength + ":" + this.imgRows + ":" + this.imgCols + ":" + this.filterCount + ":" + this.filterSize;
+        param.key = vs_id + ":" + this.imgRows + ":" + this.imgCols + ":" + this.filterCount + ":" + this.filterSize;
+
+        var ret = m.Calc(param);
+
+        return ret;
     }
 
     forward() {
-        this.gpuForwardTest(this.prevLayer);
-        return;
         var prev_Layer = this.prevLayer;
         this.batchLength = prev_Layer.activation.Cols;
+
+        var ret = this.gpuForward(prev_Layer);
+
         var prev_activation_dt = prev_Layer.activation.dt;
 
         if (!this.z || this.z.Rows != this.unitSize || this.z.Cols != this.batchLength){
@@ -223,10 +221,20 @@ class ConvolutionalLayer extends Layer{
                         var z_val = sum + bias;
                         z_dt[k] = z_val;
                         activation_dt[k] = sigmoidF(z_val);
+
                     }
                 }
             }
         }
+
+        var max_diff = 0;
+        for (var k = 0; k < z_dt.length; k++) {
+            var diff = Math.abs(ret[0][k] - z_dt[k]) + Math.abs(ret[1][k] - activation_dt[k]);
+            if(max_diff < diff){
+                max_diff = diff;
+            }
+        }
+        console.log("forward diff:%f", max_diff);
     }
 
     backward(Y, eta2) {

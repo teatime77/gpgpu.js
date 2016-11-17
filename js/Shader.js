@@ -28,7 +28,7 @@ void main() {
     vec4  txl = texelFetch(prev_activation, ivec3(x, y, Z), 0);
 
     z = idx_f;
-    activation = txl[idx];
+    activation = txl[idx] + 0.1;
 }`;
 
 
@@ -38,7 +38,7 @@ precision highp float;
 precision highp int;
 precision highp sampler3D;
 
-uniform float weights[filterCount * filterSize];
+uniform float weights[filterCount * filterSize * filterSize];
 uniform float biases[filterCount];
 
 uniform sampler3D prev_activation;
@@ -51,38 +51,39 @@ out float activation;
 void main() {
     uint idx = uint(idx_f);
 
-    int filter_idx = idx % filterSize;
-    idx -= filter_idx;
+    uint batch_idx = idx / uint(unitSize);
+    idx %= uint(unitSize);
 
-    int c1 = idx % row_size;
-    idx -= c1;
+    uint r1 = idx / uint(imgCols * filterCount);
+    idx %= uint(imgCols * filterCount);
 
-    int r1 = idx % unitSize;
-    idx -= r1;
+    uint c1 = idx / uint(filterCount);
+    idx %= uint(filterCount);
 
-    int batch_idx = idx / unitSize;
+    uint filter_idx = idx;
 
-    int weight_offset = filter_idx * filterSize;
+    uint weight_idx = filter_idx * uint(filterSize * filterSize);
 
-    int r2;
+    uint r2;
     float sum = 0.0;
-    for (r2 = 0; r2 < filterSize; r2++) {
-        int x = c1 / 4;
-        int u = c1 % 4;
-        int c2 = 0;
+    for (r2 = 0u; r2 < uint(filterSize); r2++) {
+        uint x = c1 / 4u;
+        uint u = c1 % 4u;
+        uint c2 = 0u;
         for(; ; ) {
-            vec4  txl = texelFetch(prev_activation, ivec2(x, r1 + r2), 0);
-            for(; u < 4 && c2 < filterSize; u++, c2++) {
+            vec4  txl = texelFetch(prev_activation, ivec3(x, r1 + r2, batch_idx), 0);
+            for(; u < 4u && c2 < uint(filterSize); u++, c2++) {
 
-                sum += txl[u]* weights[weight_offset + c2];
+                sum += txl[u] * weights[weight_idx];
+                weight_idx++;
             }
 
-            if(filterSize <= c2) {
+            if(uint(filterSize) <= c2) {
                 break;
             }
 
             x++;
-            u = 0;
+            u = 0u;
         }
     }
 

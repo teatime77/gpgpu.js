@@ -316,8 +316,6 @@
 
             gpu.key = param.key;
 
-            gpu.outBufferSize = param.varyings.length * param.elementCount * Float32Array.BYTES_PER_ELEMENT;
-
             var fsrc = Shaders['fs-transform'];
             var vshader = this.MakeShader(gl, gl.VERTEX_SHADER, param.vsrc);
             var fshader = this.MakeShader(gl, gl.FRAGMENT_SHADER, fsrc);
@@ -345,13 +343,22 @@
             }
 
             gpu.idxBuffer = this.MakeIdxBuffer(gl, gpu, param.elementCount);
-            gpu.arrayBuffer = new ArrayBuffer(gpu.outBufferSize);
+            gpu.arrayBuffers = [];
+            gpu.outBuffers = [];
 
-            // Feedback empty buffer
-            gpu.outBuffer = gl.createBuffer();
-            gl.bindBuffer(gl.ARRAY_BUFFER, gpu.outBuffer);
-            gl.bufferData(gl.ARRAY_BUFFER, gpu.outBufferSize, gl.STATIC_COPY);
-            gl.bindBuffer(gl.ARRAY_BUFFER, null);
+            for (var i = 0; i < param.varyings.length; i++) {
+                var sz = param.elementCount * Float32Array.BYTES_PER_ELEMENT;
+
+                gpu.arrayBuffers.push( new ArrayBuffer(sz) );
+
+                // Feedback empty buffer
+                var buf = gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+                gl.bufferData(gl.ARRAY_BUFFER, sz, gl.STATIC_COPY);
+                gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+                gpu.outBuffers.push(buf);
+            }
 
             // -- Init TransformFeedback 
             gpu.transformFeedback = gl.createTransformFeedback();
@@ -387,13 +394,20 @@
 
                 gl.uniform4fv(gpu.locUniforms[i], new Float32Array(u.value.dt));
             }
+            else if (u.value instanceof Float32Array) {
+
+                gl.uniform1fv(gpu.locUniforms[i], new Float32Array(u.value));
+            }
             else {
 
                 gl.uniform1i(gpu.locUniforms[i], u.value);
             }
         }
 
-        gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, gpu.outBuffer);
+        for (var i = 0; i < param.varyings.length; i++) {
+
+            gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, i, gpu.outBuffers[i]);
+        }
 
         // 計算開始
         gl.beginTransformFeedback(gl.POINTS);    // TRIANGLES
@@ -401,16 +415,21 @@
         gl.endTransformFeedback();
 
         gl.disable(gl.RASTERIZER_DISCARD);
-        gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, null);
 
-        // 処理結果を表示
-        gl.bindBuffer(gl.ARRAY_BUFFER, gpu.outBuffer);
+        var ret = [];
+        for (var i = 0; i < param.varyings.length; i++) {
 
-        gl.getBufferSubData(gl.ARRAY_BUFFER, 0, gpu.arrayBuffer);
+            gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, i, null);
 
-        var ret = new Float32Array(gpu.arrayBuffer);
+            // 処理結果を表示
+            gl.bindBuffer(gl.ARRAY_BUFFER, gpu.outBuffers[i]);
 
-        gl.bindBuffer(gl.ARRAY_BUFFER, null);
+            gl.getBufferSubData(gl.ARRAY_BUFFER, 0, gpu.arrayBuffers[i]);
+
+            ret.push( new Float32Array(gpu.arrayBuffers[i]) );
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, null);
+        }
 
         // 終了処理
         gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null);
@@ -428,7 +447,7 @@ Mat.prototype.Clear = function () {
 
         gl.bindBuffer(gl.ARRAY_BUFFER, null);
         gl.deleteBuffer(gpu.idxBuffer);
-        gl.deleteBuffer(gpu.outBuffer);
+        gl.deleteBuffer(gpu.outBuffers);
         gl.deleteTransformFeedback(gpu.transformFeedback);
 
         gl.bindTexture(gl.TEXTURE_2D, null);

@@ -66,8 +66,8 @@ class TNumpy {
 
 
             var startTime = new Date();
-            var C1_dt = A.Calc(param);
-            var C1 = new Mat(A.Rows, B.Cols, C1_dt);
+            var ret = A.Calc(param);
+            var C1 = new Mat(A.Rows, B.Cols, ret[0]);
 
             var t1 = new Date() - startTime;
 
