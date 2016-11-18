@@ -231,24 +231,36 @@ class ConvolutionalLayer extends Layer{
             this.zArrayBuffer          = new ArrayBuffer(4 * this.unitSize * this.batchLength);
             this.activationArrayBuffer = new ArrayBuffer(4 * this.unitSize * this.batchLength);
 
-            this.zGPU          = new Mat(this.unitSize, this.batchLength, new Float32Array(this.zArrayBuffer), true);
-            this.activationGPU = new Mat(this.unitSize, this.batchLength, new Float32Array(this.activationArrayBuffer), true);
+            this.z          = new Mat(this.unitSize, this.batchLength, new Float32Array(this.zArrayBuffer), true);
+            this.activation = new Mat(this.unitSize, this.batchLength, new Float32Array(this.activationArrayBuffer), true);
 
-            this.z             = new Mat(this.unitSize, this.batchLength, null, true);
-            this.activation    = new Mat(this.unitSize, this.batchLength, null, true);
+            //this.z             = new Mat(this.unitSize, this.batchLength, null, true);
+            //this.activation    = new Mat(this.unitSize, this.batchLength, null, true);
         }
+
+        if (this.batchLength == 12) {
+
+            this.gpuForward();
+        }
+        else {
+
+            this.cpuForward();
+        }
+        if (true) return;
 
         var t0 = new Date();
         this.gpuForward();
         var t1 = new Date();
 
+        var z_gpu_dt = new Float32Array(this.z.dt);
+        var activation_gpu_dt = new Float32Array(this.activation.dt);
+
         this.cpuForward();
         var t2 = new Date();
 
-        Assert(this.zGPU.dt.length == this.z.dt.length && this.activationGPU.dt.length == this.activation.dt.length, "Convolutional-Layer-forward");
         var max_diff = 0;
         for (var k = 0; k < this.z.dt.length; k++) {
-            var diff = Math.max(Math.abs(this.zGPU.dt[k] - this.z.dt[k]), Math.abs(this.activationGPU.dt[k] - this.activation.dt[k]));
+            var diff = Math.max(Math.abs(z_gpu_dt[k] - this.z.dt[k]), Math.abs(activation_gpu_dt[k] - this.activation.dt[k]));
             if(max_diff < diff){
                 max_diff = diff;
             }
@@ -424,7 +436,7 @@ class Network {
                 var X = this.Laminate(mini_batch, 0);
                 var Y = this.Laminate(mini_batch, 1);
                 this.update_mini_batch(X, Y, eta);
-                if (false && this.layers[1].fwCnt % 100 == 0) {
+                if (this.layers[1].fwCnt % 1000 == 0) {
 
                     var s = "";
                     for(let layer of this.layers.slice(1)) {
