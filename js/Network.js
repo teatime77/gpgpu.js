@@ -1,4 +1,4 @@
-// import
+﻿// import
 // import
 
 class Layer {
@@ -72,7 +72,8 @@ class FullyConnectedLayer extends Layer{
     backward(Y, eta2) {
         if (!this.nextLayer) {
 
-            this.Delta = cost_derivative(this.activation, Y).Mul(sigmoid_prime(this.z));
+            this.costDerivative = cost_derivative(this.activation, Y);
+            this.Delta = this.costDerivative.Mul(sigmoid_prime(this.z));
         }
         else {
 
@@ -191,31 +192,43 @@ class ConvolutionalLayer extends Layer{
         var z_dt = this.z.dt;
         var activation_dt = this.activation.dt;
 
+        // バッチ内のデータに対し
         for (var batch_idx = 0; batch_idx < this.batchLength; batch_idx++) {
 
+            // すべての行に対し
             for (var r1 = 0; r1 < this.imgRows; r1++) {
+
+                // すべての列に対し
                 for (var c1 = 0; c1 < this.imgCols; c1++) {
 
                     var output_base = batch_idx * this.unitSize + this.filterCount * (r1 * this.imgCols + c1);
 
-                    for(var filter_idx = 0; filter_idx < this.filterCount; filter_idx++){
+                    // すべてのフィルターに対し
+                    for (var filter_idx = 0; filter_idx < this.filterCount; filter_idx++) {
 
                         var weight = this.weights[filter_idx];
                         var bias = this.biases[filter_idx];
 
                         var sum = 0.0;
+
+                        // フィルターの行に対し
                         for (var r2 = 0; r2 < this.filterSize; r2++) {
+
+                            // フィルターの列に対し
                             for (var c2 = 0; c2 < this.filterSize; c2++) {
-                                var j = r2 * this.filterSize + c2;
-                                var k = batch_idx * prev_Layer.unitSize + (r1 + r2) * prev_Layer.imgCols + (c1 + c2);
-                                sum += prev_activation_dt[k] * weight.dt[j];
+                                var weight_idx = r2 * this.filterSize + c2;
+                                var prev_activation_idx = batch_idx * prev_Layer.unitSize + (r1 + r2) * prev_Layer.imgCols + (c1 + c2);
+                                sum += prev_activation_dt[ prev_activation_idx ] * weight.dt[weight_idx];
                             }
                         }
 
-                        var k = output_base + filter_idx;
+                        // 出力先
+                        var output_idx = output_base + filter_idx;
+
                         var z_val = sum + bias;
-                        z_dt[k] = z_val;
-                        activation_dt[k] = sigmoidF(z_val);
+
+                        z_dt[output_idx] = z_val;
+                        activation_dt[output_idx] = sigmoidF(z_val);
 
                     }
                 }
@@ -282,7 +295,14 @@ class ConvolutionalLayer extends Layer{
     }
 
     backward(Y, eta2) {
-        this.Delta = this.nextLayer.Delta.Mul(sigmoid_prime(this.z));
+        var eta3 = eta2 / (this.filterSize * this.filterSize);
+
+        //this.Delta = this.nextLayer.Delta.Mul(sigmoid_prime(this.z));
+        var deltaT = new Float32Array(this.nextLayer.DeltaT);
+        for (var i = 0; i < deltaT.length; i++) {
+            deltaT[i] *= sigmoid_primeF(this.z.dt[i]);
+        }
+
 
         var prev_Layer = this.prevLayer;
         var prev_activation_dt = prev_Layer.activation.dt;
@@ -303,12 +323,12 @@ class ConvolutionalLayer extends Layer{
                                 var output_base = batch_idx * this.unitSize + this.filterCount * (r1 * this.imgCols + c1);
                                 var out_idx = output_base + filter_idx;
 
-                                var delta = this.Delta.dt[out_idx];
+                                var delta = deltaT[out_idx];
                                 if (delta != 0) {
 
-                                    var k = batch_idx * prev_Layer.unitSize +(r1 + r2) * prev_Layer.imgCols + (c1 + c2);
+                                    var prev_activation_idx = batch_idx * prev_Layer.unitSize + (r1 + r2) * prev_Layer.imgCols + (c1 + c2);
 
-                                    nabla_w += delta * prev_activation_dt[k];
+                                    nabla_w += delta * prev_activation_dt[ prev_activation_idx ];
 
                                     nabla_b += delta;
                                 }
@@ -316,12 +336,12 @@ class ConvolutionalLayer extends Layer{
                         }
                     }
 
-                    var j = r2 * this.filterSize + c2;
-                    this.weights[filter_idx].dt[j] -= eta2 * nabla_w;
+                    var weight_idx = r2 * this.filterSize + c2;
+                    this.weights[filter_idx].dt[weight_idx] -= eta3 * nabla_w;
                 }
             }
 
-            this.biases[filter_idx] -= eta2 * nabla_b;
+            this.biases[filter_idx] -= eta3 * nabla_b;
         }
     }
 }
@@ -352,22 +372,31 @@ class PoolingLayer extends Layer {
 
         this.maxIdx = new Int8Array(this.unitSize * this.batchLength);
 
+        // バッチ内のデータに対し
         for (var batch_idx = 0; batch_idx < this.batchLength; batch_idx++) {
 
+            // すべての行に対し
             for (var r1 = 0; r1 < this.imgRows; r1++) {
+
+                // すべての列に対し
                 for (var c1 = 0; c1 < this.imgCols; c1++) {
 
                     var output_base = batch_idx * this.unitSize + this.filterCount * (r1 * this.imgCols + c1);
 
+                    // すべてのフィルターに対し
                     for (var filter_idx = 0; filter_idx < this.filterCount; filter_idx++) {
 
                         var max_val = -10000;
                         var max_idx;
+
+                        // フィルターの行に対し
                         for (var r2 = 0; r2 < this.filterSize; r2++) {
+
+                            // フィルターの列に対し
                             for (var c2 = 0; c2 < this.filterSize; c2++) {
 
-                                var k = batch_idx * prev_Layer.unitSize + prev_Layer.filterCount * ((r1 + r2) * prev_Layer.imgCols + (c1 + c2)) + filter_idx;
-                                var val = prev_activation_dt[k];
+                                var prev_activation_idx = batch_idx * prev_Layer.unitSize + prev_Layer.filterCount * ((r1 + r2) * prev_Layer.imgCols + (c1 + c2)) + filter_idx;
+                                var val = prev_activation_dt[prev_activation_idx];
                                 if (max_val < val) {
 
                                     max_val = val;
@@ -376,8 +405,11 @@ class PoolingLayer extends Layer {
                             }
                         }
 
-                        out_dt[output_base + filter_idx] = max_val;
-                        this.maxIdx[output_base + filter_idx] = max_idx;
+                        // 出力先
+                        var output_idx = output_base + filter_idx;
+
+                        out_dt[output_idx] = max_val;
+                        this.maxIdx[output_idx] = max_idx;
                     }
                 }
             }
@@ -387,20 +419,17 @@ class PoolingLayer extends Layer {
     }
 
     backward(Y, eta2) {
+        var deltaT = np.dot(this.nextLayer.weight.transpose(), this.nextLayer.Delta).T();
+        Assert(deltaT.Rows == this.batchLength && deltaT.Cols == this.unitSize, "Pooling-Layer-backward");
+
+        this.DeltaT = new Float32Array(this.prevLayer.activation.dt.length);
+
         var filter_stride = this.filterSize * this.filterSize;
-        var delta = np.dot(this.nextLayer.weight.transpose(), this.nextLayer.Delta);
-        Assert(delta.Rows == this.unitSize && delta.Cols == this.batchLength, "Pooling-Layer-backward");
-
-        var dt = new Float32Array(this.prevLayer.activation.dt.length);
-
-        for (var i = 0; i < delta.dt.length; i++) {
+        for (var i = 0; i < deltaT.dt.length; i++) {
             var k = i * filter_stride + this.maxIdx[i];
-            dt[k] = delta.dt[i];
+            this.DeltaT[k] = deltaT.dt[i];
         }
-
-        this.Delta = new Mat(this.prevLayer.unitSize, this.batchLength, dt, true);
     }
-
 }
 
 class Network {
@@ -438,7 +467,7 @@ class Network {
                 this.update_mini_batch(X, Y, eta);
                 if (this.layers[1].fwCnt % 1000 == 0) {
 
-                    var s = "";
+                    var s = "" + this.layers[1].fwCnt + " ";
                     for(let layer of this.layers.slice(1)) {
                         s += " (" + Math.floor(layer.fwTime / layer.fwCnt) + " " + Math.floor(layer.bwTime / layer.bwCnt) + ")";
                     }
@@ -485,7 +514,21 @@ class Network {
             this.layers[i].backward2(Y, eta2);
         }
 
-        this.layers.forEach(x => x.updateParameter(eta2));
+        if (false) {
+
+            var cost1 = this.layers[this.layers.length - 1].costDerivative;
+            console.log(this.costAvg(cost1));
+
+            this.layers.forEach(x => x.updateParameter(eta2));
+
+            this.layers.forEach(x => x.forward2());
+            var cost2 = cost_derivative(this.layers[this.layers.length - 1].activation, Y);
+            console.log(this.costAvg( cost2 ));
+        }
+    }
+
+    costAvg(cost) {
+        return xrange(cost.Cols).map(c => cost.Col(c).dt.map(x => Math.abs(x)).reduce((x, y) => x + y) / cost.Rows);
     }
 
     feedforward(a) {
@@ -531,7 +574,8 @@ function sigmoid_prime(z){
 }
 
 function sigmoid_primeF(z) {
-    return sigmoidF(z) * (1 - sigmoidF(z));
+    var f = sigmoidF(z);
+    return f * (1 - f);
 }
 
 //??
