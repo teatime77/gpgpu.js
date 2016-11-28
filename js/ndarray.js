@@ -45,11 +45,21 @@
     }
 
     At(r, c) {
+        Assert(r < this.Rows && c < this.Cols, "Mat-at");
         return this.dt[r * this.Cols + c];
     }
 
     Set(r, c, val) {
+        Assert(r < this.Rows && c < this.Cols, "Mat-set");
+
         this.dt[r * this.Cols + c] = val;
+    }
+
+    Set3(d, r, c, val) {
+        Assert(d < this.Depth && r < this.Rows && c < this.Cols, "Mat-set3");
+
+        var sz = this.Rows * this.Cols;
+        this.dt[d * sz + r * this.Cols + c] = val;
     }
 
     Col(c) {

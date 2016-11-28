@@ -1,5 +1,6 @@
 ﻿// import
 // import
+var isDebug = false;
 
 class Layer {
     constructor() {
@@ -65,22 +66,45 @@ class FullyConnectedLayer extends Layer{
     }
 
     forward() {
+        this.batchLength = this.prevLayer.activation.Cols;
         this.z = np.dot(this.weight, this.prevLayer.activation).AddV(this.bias);
         this.activation = sigmoid(this.z);
     }
 
     backward(Y, eta2) {
         if (!this.nextLayer) {
+            // 最後のレイヤーの場合
 
             this.costDerivative = cost_derivative(this.activation, Y);
             this.Delta = this.costDerivative.Mul(sigmoid_prime(this.z));
+
+            if (isDebug) {
+
+                this.cost = xrange(this.costDerivative.Cols).map(c => this.costDerivative.Col(c).dt.map(x => x * x).reduce((x, y) => x + y));
+            }
         }
         else {
+            // 最後のレイヤーでない場合
 
             this.Delta = np.dot(this.nextLayer.weight.transpose(), this.nextLayer.Delta).Mul(sigmoid_prime(this.z));
         }
         this.nabla_b = this.Delta.reduce((x, y) => x + y);
         this.nabla_w = np.dot(this.Delta, this.prevLayer.activation.transpose());
+
+        if (isDebug) {
+
+            this.nablaBiases = this.Delta;
+            // constructor(rows, cols, init, column_major, depth)
+            this.nablaWeights = new Mat(this.weight.Rows, this.weight.Cols, null, false, this.batchLength);
+            for (var batch_idx = 0; batch_idx < this.batchLength; batch_idx++) {
+                for (var r = 0; r < this.weight.Rows; r++) {
+                    for (var c = 0; c < this.weight.Cols; c++) {
+                        var f = this.Delta.At(r, batch_idx) * this.prevLayer.activation.At(c, batch_idx);
+                        this.nablaWeights.Set3(batch_idx, r, c, f);
+                    }
+                }
+            }
+        }
     }
 
     updateParameter(eta2) {
@@ -444,6 +468,7 @@ class Network {
     }
 
     SGD(training_data, epochs, mini_batch_size, eta, test_data) {
+        this.miniBatchSize = mini_batch_size;
         var n_test;//??
         if(test_data == undefined){ test_data = None;}
         if(test_data){
@@ -514,12 +539,77 @@ class Network {
             this.layers[i].backward2(Y, eta2);
         }
 
-        if (false) {
+
+        if (!isDebug) {
+            this.layers.forEach(x => x.updateParameter(eta2));
+        }
+        else {
+            var delta = 0.001;
+
+            var last_layer = this.layers[this.layers.length - 1];
+            var last_z_sv = new Float32Array(last_layer.z.dt);
+            var activation_sv = new Float32Array(last_layer.activation.dt);
+            var cost_sv = last_layer.cost;
+
+            for(var layer_idx = this.layers.length - 1; 0 <= layer_idx; layer_idx--) {
+                var layer = this.layers[layer_idx];
+                if (layer.nablaBiases) {
+                    for (var batch_idx = 0; batch_idx < this.miniBatchSize; batch_idx++) {
+
+                        for (var r = 0; r < layer.nablaBiases.Rows; r++) {
+                            var b = layer.bias.dt[r];
+                            var cd = layer.costDerivative.dt[r];
+                            var nb = layer.nablaBiases.dt[r];
+                            layer.bias.dt[r] -= delta;
+
+                            console.log("nable検証 : %f %f", nb, cd);//, layer.prevLayer.activation.At(c, 0)
+                            console.log("activation :" + layer.activation.dt);
+                            console.log("z :" + layer.z.dt);
+
+                            this.layers.forEach(x => x.forward2());
+
+                            for (var i = this.layers.length - 1; 1 <= i; i--) {
+                                this.layers[i].backward2(Y, eta2);
+                            }
+
+                            var cost = this.layers[this.layers.length - 1].cost;
+                            var cost_diff = xrange(cost.length).map(i => cost_sv[i] - cost[i]);
+                            console.log("C = Σ(ai - yi)^2 = " + cost_sv[batch_idx]);
+                            console.log("δC/δa0 = 2 * (a0 - y0) = 2 * (" + activation_sv[r] + "-" + Y.dt[r] + ") = " + (2 * (activation_sv[r] - Y.dt[r])));
+                            
+                            var deltaC1 = cost[batch_idx] - cost_sv[batch_idx];
+                            console.log("ΔC = " + deltaC1);
+
+                            console.log("Δa0 = " + (layer.activation.dt[r] - activation_sv[r]));
+
+                            var deltaC2 = (activation_sv[r] - layer.activation.dt[r]) * 2 * (activation_sv[r] - Y.dt[r]);
+                            console.log("ΔC ≒ Δa0 * 2 * (a0 - y0) = " + deltaC2);
+
+                            console.log("ΔC誤差 = " + (deltaC1 - deltaC2));
+
+                            console.log(cost);
+                            console.log(cost_diff);
+                            console.log("cost-Derivative : %f", layer.costDerivative.dt[r]);
+                            console.log("activation :" + layer.activation.dt);
+                            console.log("activation-diff :" + xrange(activation_sv.length).map(i => activation_sv[i] - layer.activation.dt[i]));
+                            console.log("last_z_sv :" + last_z_sv);
+                            console.log("z    :" + layer.z.dt);
+                            console.log("z-diff :" + xrange(last_z_sv.length).map(i => last_z_sv[i] - layer.z.dt[i]));
+
+                            for (var r2 = 0; r2 < layer.nablaBiases.Rows; r2++) {
+                                if (r2 != r) {
+                                    Assert(last_z_sv[r2] - last_layer.z.dt[r2] == 0 && activation_sv[r2] - last_layer.activation.dt[r2] == 0, "z-activation-diff");
+                                }
+                            }
+
+                            layer.bias.dt[r] = b;
+                        }
+                    }
+                }
+            }
 
             var cost1 = this.layers[this.layers.length - 1].costDerivative;
             console.log(this.costAvg(cost1));
-
-            this.layers.forEach(x => x.updateParameter(eta2));
 
             this.layers.forEach(x => x.forward2());
             var cost2 = cost_derivative(this.layers[this.layers.length - 1].activation, Y);
