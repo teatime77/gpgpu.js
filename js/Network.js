@@ -1,6 +1,6 @@
 ﻿// import
 // import
-var isDebug = true;
+var isDebug = false;
 var isFloat64 = isDebug;
 
 function newFloatArray(x) {
@@ -582,8 +582,9 @@ class Network {
                             var cd = layer.costDerivative.dt[r];
                             var nb = layer.nablaBiases.dt[r];
                             layer.bias.dt[r] -= delta;
+                            //layer.bias.dt[r] -= nb;
 
-                            //console.log("nable検証 : %f %f", nb, cd);//, layer.prevLayer.activation.At(c, 0)
+                            //console.log("nabla検証 : %f %f", nb, cd);//, layer.prevLayer.activation.At(c, 0)
                             //console.log("activation :" + layer.activation.dt);
                             //console.log("z :" + layer.z.dt);
 
@@ -597,29 +598,36 @@ class Network {
                             console.log("C = 1/2 * Σ(ai - yi)^2 = " + cost_sv[batch_idx]);
                             console.log("δC/δa0 = a0 - y0 = " + layer.costDerivative_sv[r]);
                             
-                            var deltaC1 = last_layer.cost[batch_idx] - cost_sv[batch_idx];
-                            console.log("ΔC = " + deltaC1);
+                            //-------------------- ΔC
+                            var deltaC = last_layer.cost[batch_idx] - cost_sv[batch_idx];
+                            console.log("ΔC = " + deltaC);
 
+                            //-------------------- nabla-b * delta
+                            var deltaC1 = - nb * delta;
+                            console.log("- nabla-b * delta = - %f * %f = %f", nb, delta, deltaC1);//, layer.prevLayer.activation.At(c, 0)
+                            var err1 = Math.abs((deltaC -deltaC1) / (deltaC == 0 ? 1: deltaC));
+
+                            //-------------------- δC/δa0
                             var delta_a = layer.activation.dt[r] - layer.activation_sv[r];
                             console.log("Δa0 = " + delta_a);
 
                             var deltaC2 = delta_a * layer.costDerivative_sv[r];
-                            console.log("ΔC ≒ Δa0 * (a0 - y0) = " + deltaC2);
+                            console.log("ΔC ≒ Δa0 * δC/δa0 = " + deltaC2);
 
-                            var err1 = Math.abs((deltaC1 - deltaC2) / (deltaC1 == 0 ? 1 : deltaC1));
+                            var err2 = Math.abs((deltaC - deltaC2) / (deltaC == 0 ? 1 : deltaC));
 
 
-                            // δC/δz0 = δC/δa0 * da0/dz0
+                            //-------------------- δC/δz0 = δC/δa0 * da0/dz0
                             var delta_z = layer.z.dt[r] - layer.z_sv[r];
                             console.log("Δz0 = " + delta_z);
                             console.log("da0/dz0 = " + sigmoid_primeF(layer.z_sv[r]));
 
                             var deltaC3 = delta_z * layer.costDerivative_sv[r] * sigmoid_primeF(layer.z_sv[r]);
-                            console.log("ΔC ≒ Δz0 * (a0 - y0) * da0/dz0 = " + deltaC3);
+                            console.log("ΔC ≒ Δz0 * δC/δa0 * da0/dz0 = " + deltaC3);
 
-                            var err2 = Math.abs((deltaC1 - deltaC3) / (deltaC1 == 0 ? 1 : deltaC1));
-                            max_err = Math.max(max_err, Math.max(err1, err2));
-                            console.log("ΔC誤差 = " + err1 + " " + err2 + " " + max_err);
+                            var err3 = Math.abs((deltaC - deltaC3) / (deltaC == 0 ? 1 : deltaC));
+                            max_err = Math.max(Math.max(max_err, err1), Math.max(err2, err3));
+                            console.log("ΔC誤差 = " + err1 + " " + err2 + " " + err3 + " " + max_err);
 
                             /*
                             var cost_diff = xrange(last_layer.cost.length).map(i => cost_sv[i] - last_layer.cost[i]);
