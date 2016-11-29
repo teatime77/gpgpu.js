@@ -8,12 +8,12 @@
 
         if (init) {
 
-            Assert(init instanceof Float32Array && init.length == rows * cols * this.Depth, "Mat-init");
+            Assert((init instanceof Float32Array || init instanceof Float64Array) && init.length == rows * cols * this.Depth, "Mat-init");
             this.dt = init;
         }
         else {
 
-            this.dt = new Float32Array(rows * cols);
+            this.dt = newFloatArray(rows * cols);
             /*
             for (var r = 0; r < rows; r++) {
                 for (var c = 0; c < cols; c++) {
@@ -30,7 +30,7 @@
     }
 
     T() {
-        var v = new Float32Array(this.Cols * this.Rows);
+        var v = newFloatArray(this.Cols * this.Rows);
         for (var r = 0; r < this.Cols; r++) {
             for (var c = 0; c < this.Rows; c++) {
                 v[r * this.Rows + c] = this.dt[c * this.Cols + r];
@@ -63,7 +63,7 @@
     }
 
     Col(c) {
-        var v = new Float32Array(this.Rows);
+        var v = newFloatArray(this.Rows);
         for (var r = 0; r < this.Rows; r++) {
             v[r] = this.dt[r * this.Cols + c];
         }
@@ -73,7 +73,7 @@
 
     Add(m) {
         Assert(m instanceof Mat && m.Rows == this.Rows && m.Cols == this.Cols, "Mat-add");
-        var v = new Float32Array(this.Rows * this.Cols);
+        var v = newFloatArray(this.Rows * this.Cols);
         for (var r = 0; r < this.Rows; r++) {
             for (var c = 0; c < this.Cols; c++) {
                 var k = r * this.Cols + c;
@@ -86,7 +86,7 @@
 
     AddV(m) {
         Assert(m instanceof Mat && m.Rows == this.Rows && m.Cols == 1, "Mat-add-V");
-        var v = new Float32Array(this.Rows * this.Cols);
+        var v = newFloatArray(this.Rows * this.Cols);
         for (var r = 0; r < this.Rows; r++) {
             for (var c = 0; c < this.Cols; c++) {
                 var k = r * this.Cols + c;
@@ -99,7 +99,7 @@
 
     SubV(m) {
         Assert(m instanceof Mat && m.Rows == this.Rows && m.Cols == 1, "Mat-sub-V");
-        var v = new Float32Array(this.Rows * this.Cols);
+        var v = newFloatArray(this.Rows * this.Cols);
         for (var r = 0; r < this.Rows; r++) {
             for (var c = 0; c < this.Cols; c++) {
                 var k = r * this.Cols + c;
@@ -111,7 +111,7 @@
     }
 
     reduce(f) {
-        var v = new Float32Array(this.Rows);
+        var v = newFloatArray(this.Rows);
         for (var r = 0; r < this.Rows; r++) {
             var x;
             for (var c = 0; c < this.Cols; c++) {
@@ -133,7 +133,7 @@
 
     Sub(m) {
         Assert(m instanceof Mat && m.Rows == this.Rows && m.Cols == this.Cols, "Mat-Sub");
-        var v = new Float32Array(this.Rows * this.Cols);
+        var v = newFloatArray(this.Rows * this.Cols);
         for (var r = 0; r < this.Rows; r++) {
             for (var c = 0; c < this.Cols; c++) {
                 var k = r * this.Cols + c;
@@ -150,7 +150,7 @@
             return new Mat(this.Rows, this.Cols, this.dt.map(x => x * m));
         }
         Assert(m instanceof Mat && m.Rows == this.Rows && m.Cols == this.Cols && m.columnMajor == this.columnMajor, "Mat-Mul");
-        var v = new Float32Array(this.Rows * this.Cols);
+        var v = newFloatArray(this.Rows * this.Cols);
         for (var r = 0; r < this.Rows; r++) {
             for (var c = 0; c < this.Cols; c++) {
                 var k = r * this.Cols + c;
@@ -162,7 +162,7 @@
     }
 
     Abs() {
-        var v = new Float32Array(this.Rows * this.Cols);
+        var v = newFloatArray(this.Rows * this.Cols);
         for (var r = 0; r < this.Rows; r++) {
             for (var c = 0; c < this.Cols; c++) {
                 var k = r * this.Cols + c;
@@ -187,7 +187,7 @@
     Dot(m) {
         Assert(m instanceof Mat && m.Rows == this.Cols, "Mat-Dot");
 
-        var v = new Float32Array(this.Rows * m.Cols);
+        var v = newFloatArray(this.Rows * m.Cols);
         for (var r = 0; r < this.Rows; r++) {
             for (var c = 0; c < m.Cols; c++) {
                 var sum = 0;

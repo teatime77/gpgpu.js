@@ -18,7 +18,7 @@ class TNumpy {
         if (vDot[key] == undefined) {
             vDot[key] = 0;
         }
-        if (vDot[key] < 3 && A.Cols % 4 == 0) {
+        if (!isFloat64 && vDot[key] < 3 && A.Cols % 4 == 0) {
             vDot[key]++;
 
             var use_tex = (10 * 12 * 30 < A.Rows * A.Cols * B.Cols);

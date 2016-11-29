@@ -1,6 +1,17 @@
 ﻿// import
 // import
 var isDebug = true;
+var isFloat64 = isDebug;
+
+function newFloatArray(x) {
+    if(isFloat64){
+        return new Float64Array(x);
+    }
+    else {
+
+        return new Float32Array(x);
+    }
+}
 
 class Layer {
     constructor() {
@@ -137,7 +148,7 @@ class ConvolutionalLayer extends Layer{
     }
 
     gpuForwardTest(prev_Layer) {
-        var dt = new Float32Array(2 * 3 * 4 * 4);
+        var dt = newFloatArray(2 * 3 * 4 * 4);
         for (var i = 0; i < dt.length; i++) {
             dt[i] = i;
         }
@@ -163,8 +174,8 @@ class ConvolutionalLayer extends Layer{
 
     gpuForward() {
         var prev_Layer = this.prevLayer;
-        var weights = new Float32Array(this.filterCount * this.filterSize * this.filterSize);
-        var biases = new Float32Array(this.filterCount);
+        var weights = newFloatArray(this.filterCount * this.filterSize * this.filterSize);
+        var biases = newFloatArray(this.filterCount);
 
         for(var filter_idx = 0; filter_idx < this.filterCount; filter_idx++){
             var weight = this.weights[filter_idx];
@@ -270,8 +281,8 @@ class ConvolutionalLayer extends Layer{
             this.zArrayBuffer          = new ArrayBuffer(4 * this.unitSize * this.batchLength);
             this.activationArrayBuffer = new ArrayBuffer(4 * this.unitSize * this.batchLength);
 
-            this.z          = new Mat(this.unitSize, this.batchLength, new Float32Array(this.zArrayBuffer), true);
-            this.activation = new Mat(this.unitSize, this.batchLength, new Float32Array(this.activationArrayBuffer), true);
+            this.z          = new Mat(this.unitSize, this.batchLength, newFloatArray(this.zArrayBuffer), true);
+            this.activation = new Mat(this.unitSize, this.batchLength, newFloatArray(this.activationArrayBuffer), true);
 
             //this.z             = new Mat(this.unitSize, this.batchLength, null, true);
             //this.activation    = new Mat(this.unitSize, this.batchLength, null, true);
@@ -291,8 +302,8 @@ class ConvolutionalLayer extends Layer{
         this.gpuForward();
         var t1 = new Date();
 
-        var z_gpu_dt = new Float32Array(this.z.dt);
-        var activation_gpu_dt = new Float32Array(this.activation.dt);
+        var z_gpu_dt = newFloatArray(this.z.dt);
+        var activation_gpu_dt = newFloatArray(this.activation.dt);
 
         this.cpuForward();
         var t2 = new Date();
@@ -324,7 +335,7 @@ class ConvolutionalLayer extends Layer{
         var eta3 = eta2 / (this.filterSize * this.filterSize);
 
         //this.Delta = this.nextLayer.Delta.Mul(sigmoid_prime(this.z));
-        var deltaT = new Float32Array(this.nextLayer.DeltaT);
+        var deltaT = newFloatArray(this.nextLayer.DeltaT);
         for (var i = 0; i < deltaT.length; i++) {
             deltaT[i] *= sigmoid_primeF(this.z.dt[i]);
         }
@@ -394,7 +405,7 @@ class PoolingLayer extends Layer {
         var prev_Layer = this.prevLayer;
         var prev_activation_dt = prev_Layer.activation.dt;
         this.batchLength = prev_Layer.batchLength;
-        var out_dt = new Float32Array(this.unitSize * this.batchLength);
+        var out_dt = newFloatArray(this.unitSize * this.batchLength);
 
         this.maxIdx = new Int8Array(this.unitSize * this.batchLength);
 
@@ -448,7 +459,7 @@ class PoolingLayer extends Layer {
         var deltaT = np.dot(this.nextLayer.weight.transpose(), this.nextLayer.Delta).T();
         Assert(deltaT.Rows == this.batchLength && deltaT.Cols == this.unitSize, "Pooling-Layer-backward");
 
-        this.DeltaT = new Float32Array(this.prevLayer.activation.dt.length);
+        this.DeltaT = newFloatArray(this.prevLayer.activation.dt.length);
 
         var filter_stride = this.filterSize * this.filterSize;
         for (var i = 0; i < deltaT.dt.length; i++) {
@@ -550,12 +561,13 @@ class Network {
 
             var last_layer = this.layers[this.layers.length - 1];
             var cost_sv = last_layer.cost;
+            var max_err = 0;
 
             this.layers.forEach(layer => {
                 if (layer.nablaBiases) {
-                    layer.z_sv = new Float32Array(layer.z.dt);
-                    layer.activation_sv = new Float32Array(layer.activation.dt);
-                    layer.costDerivative_sv = new Float32Array(layer.costDerivative.dt);
+                    layer.z_sv = newFloatArray(layer.z.dt);
+                    layer.activation_sv = newFloatArray(layer.activation.dt);
+                    layer.costDerivative_sv = newFloatArray(layer.costDerivative.dt);
                 }
             });
 
@@ -571,9 +583,9 @@ class Network {
                             var nb = layer.nablaBiases.dt[r];
                             layer.bias.dt[r] -= delta;
 
-                            console.log("nable検証 : %f %f", nb, cd);//, layer.prevLayer.activation.At(c, 0)
-                            console.log("activation :" + layer.activation.dt);
-                            console.log("z :" + layer.z.dt);
+                            //console.log("nable検証 : %f %f", nb, cd);//, layer.prevLayer.activation.At(c, 0)
+                            //console.log("activation :" + layer.activation.dt);
+                            //console.log("z :" + layer.z.dt);
 
                             this.layers.forEach(x => x.forward2());
 
@@ -594,7 +606,7 @@ class Network {
                             var deltaC2 = delta_a * layer.costDerivative_sv[r];
                             console.log("ΔC ≒ Δa0 * (a0 - y0) = " + deltaC2);
 
-                            console.log("ΔC誤差 = " + Math.abs((deltaC1 - deltaC2) / (deltaC1 == 0 ? 1 : deltaC1)));
+                            var err1 = Math.abs((deltaC1 - deltaC2) / (deltaC1 == 0 ? 1 : deltaC1));
 
 
                             // δC/δz0 = δC/δa0 * da0/dz0
@@ -605,7 +617,9 @@ class Network {
                             var deltaC3 = delta_z * layer.costDerivative_sv[r] * sigmoid_primeF(layer.z_sv[r]);
                             console.log("ΔC ≒ Δz0 * (a0 - y0) * da0/dz0 = " + deltaC3);
 
-                            console.log("ΔC誤差 = " + Math.abs((deltaC1 - deltaC3) / (deltaC1 == 0 ? 1 : deltaC1)));
+                            var err2 = Math.abs((deltaC1 - deltaC3) / (deltaC1 == 0 ? 1 : deltaC1));
+                            max_err = Math.max(max_err, Math.max(err1, err2));
+                            console.log("ΔC誤差 = " + err1 + " " + err2 + " " + max_err);
 
                             /*
                             var cost_diff = xrange(last_layer.cost.length).map(i => cost_sv[i] - last_layer.cost[i]);

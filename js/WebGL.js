@@ -76,7 +76,7 @@ class WebGLLib {
     }
 
     MakeFloat32Array(n) {
-        var v = new Float32Array(n);
+        var v = newFloatArray(n);
 
         for (var k = 0; k < n; k++) {
             v[k] = k;
@@ -229,11 +229,11 @@ class WebGLLib {
             var u = param.uniforms[i];
             if (u.value instanceof Mat) {
 
-                gl.uniform4fv(gpu.locUniforms[i], new Float32Array(u.value.dt));
+                gl.uniform4fv(gpu.locUniforms[i], newFloatArray(u.value.dt));
             }
             else if (u.value instanceof Float32Array) {
 
-                gl.uniform1fv(gpu.locUniforms[i], new Float32Array(u.value));
+                gl.uniform1fv(gpu.locUniforms[i], newFloatArray(u.value));
             }
             else {
 
@@ -263,7 +263,7 @@ class WebGLLib {
 
             gl.getBufferSubData(gl.ARRAY_BUFFER, 0, gpu.arrayBuffers[i]);
 
-            ret.push( new Float32Array(gpu.arrayBuffers[i]) );
+            ret.push( newFloatArray(gpu.arrayBuffers[i]) );
 
             gl.bindBuffer(gl.ARRAY_BUFFER, null);
         }
