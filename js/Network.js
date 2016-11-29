@@ -1,6 +1,6 @@
 ﻿// import
 // import
-var isDebug = false;
+var isDebug = true;
 
 class Layer {
     constructor() {
@@ -76,18 +76,20 @@ class FullyConnectedLayer extends Layer{
             // 最後のレイヤーの場合
 
             this.costDerivative = cost_derivative(this.activation, Y);
-            this.Delta = this.costDerivative.Mul(sigmoid_prime(this.z));
 
             if (isDebug) {
 
-                this.cost = xrange(this.costDerivative.Cols).map(c => this.costDerivative.Col(c).dt.map(x => x * x).reduce((x, y) => x + y));
+                // cost = 1/2 * Σ xi*xi
+                this.cost = xrange(this.costDerivative.Cols).map(c => this.costDerivative.Col(c).dt.map(x => x * x).reduce((x, y) => x + y)).map(x => x / 2);
             }
         }
         else {
             // 最後のレイヤーでない場合
 
-            this.Delta = np.dot(this.nextLayer.weight.transpose(), this.nextLayer.Delta).Mul(sigmoid_prime(this.z));
+            this.costDerivative = np.dot(this.nextLayer.weight.transpose(), this.nextLayer.Delta);
         }
+        this.Delta = this.costDerivative.Mul(sigmoid_prime(this.z));
+
         this.nabla_b = this.Delta.reduce((x, y) => x + y);
         this.nabla_w = np.dot(this.Delta, this.prevLayer.activation.transpose());
 
@@ -547,9 +549,16 @@ class Network {
             var delta = 0.001;
 
             var last_layer = this.layers[this.layers.length - 1];
-            var last_z_sv = new Float32Array(last_layer.z.dt);
-            var activation_sv = new Float32Array(last_layer.activation.dt);
             var cost_sv = last_layer.cost;
+
+            this.layers.forEach(layer => {
+                if (layer.nablaBiases) {
+                    layer.z_sv = new Float32Array(layer.z.dt);
+                    layer.activation_sv = new Float32Array(layer.activation.dt);
+                    layer.costDerivative_sv = new Float32Array(layer.costDerivative.dt);
+                }
+            });
+
 
             for(var layer_idx = this.layers.length - 1; 0 <= layer_idx; layer_idx--) {
                 var layer = this.layers[layer_idx];
@@ -571,34 +580,48 @@ class Network {
                             for (var i = this.layers.length - 1; 1 <= i; i--) {
                                 this.layers[i].backward2(Y, eta2);
                             }
+                            //Assert(layer.activation_sv[r] - Y.dt[r] == layer.costDerivative_sv[r], "");
 
-                            var cost = this.layers[this.layers.length - 1].cost;
-                            var cost_diff = xrange(cost.length).map(i => cost_sv[i] - cost[i]);
-                            console.log("C = Σ(ai - yi)^2 = " + cost_sv[batch_idx]);
-                            console.log("δC/δa0 = 2 * (a0 - y0) = 2 * (" + activation_sv[r] + "-" + Y.dt[r] + ") = " + (2 * (activation_sv[r] - Y.dt[r])));
+                            console.log("C = 1/2 * Σ(ai - yi)^2 = " + cost_sv[batch_idx]);
+                            console.log("δC/δa0 = a0 - y0 = " + layer.costDerivative_sv[r]);
                             
-                            var deltaC1 = cost[batch_idx] - cost_sv[batch_idx];
+                            var deltaC1 = last_layer.cost[batch_idx] - cost_sv[batch_idx];
                             console.log("ΔC = " + deltaC1);
 
-                            console.log("Δa0 = " + (layer.activation.dt[r] - activation_sv[r]));
+                            var delta_a = layer.activation.dt[r] - layer.activation_sv[r];
+                            console.log("Δa0 = " + delta_a);
 
-                            var deltaC2 = (activation_sv[r] - layer.activation.dt[r]) * 2 * (activation_sv[r] - Y.dt[r]);
-                            console.log("ΔC ≒ Δa0 * 2 * (a0 - y0) = " + deltaC2);
+                            var deltaC2 = delta_a * layer.costDerivative_sv[r];
+                            console.log("ΔC ≒ Δa0 * (a0 - y0) = " + deltaC2);
 
-                            console.log("ΔC誤差 = " + (deltaC1 - deltaC2));
+                            console.log("ΔC誤差 = " + Math.abs((deltaC1 - deltaC2) / (deltaC1 == 0 ? 1 : deltaC1)));
 
-                            console.log(cost);
-                            console.log(cost_diff);
+
+                            // δC/δz0 = δC/δa0 * da0/dz0
+                            var delta_z = layer.z.dt[r] - layer.z_sv[r];
+                            console.log("Δz0 = " + delta_z);
+                            console.log("da0/dz0 = " + sigmoid_primeF(layer.z_sv[r]));
+
+                            var deltaC3 = delta_z * layer.costDerivative_sv[r] * sigmoid_primeF(layer.z_sv[r]);
+                            console.log("ΔC ≒ Δz0 * (a0 - y0) * da0/dz0 = " + deltaC3);
+
+                            console.log("ΔC誤差 = " + Math.abs((deltaC1 - deltaC3) / (deltaC1 == 0 ? 1 : deltaC1)));
+
+                            /*
+                            var cost_diff = xrange(last_layer.cost.length).map(i => cost_sv[i] - last_layer.cost[i]);
+                            console.log("last-layer-cost : " + last_layer.cost);
+                            console.log("cost-diff : " + cost_diff);
                             console.log("cost-Derivative : %f", layer.costDerivative.dt[r]);
                             console.log("activation :" + layer.activation.dt);
-                            console.log("activation-diff :" + xrange(activation_sv.length).map(i => activation_sv[i] - layer.activation.dt[i]));
-                            console.log("last_z_sv :" + last_z_sv);
+                            console.log("activation-diff :" + xrange(layer.activation_sv.length).map(i => layer.activation_sv[i] - layer.activation.dt[i]));
+                            console.log("z-sv :" + layer.z_sv);
                             console.log("z    :" + layer.z.dt);
-                            console.log("z-diff :" + xrange(last_z_sv.length).map(i => last_z_sv[i] - layer.z.dt[i]));
+                            console.log("z-diff :" + xrange(layer.z_sv.length).map(i => layer.z_sv[i] - layer.z.dt[i]));
+                            */
 
                             for (var r2 = 0; r2 < layer.nablaBiases.Rows; r2++) {
                                 if (r2 != r) {
-                                    Assert(last_z_sv[r2] - last_layer.z.dt[r2] == 0 && activation_sv[r2] - last_layer.activation.dt[r2] == 0, "z-activation-diff");
+                                    Assert(layer.z_sv[r2] - layer.z.dt[r2] == 0 && layer.activation_sv[r2] - layer.activation.dt[r2] == 0, "z-activation-diff");
                                 }
                             }
 

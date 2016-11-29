@@ -46,8 +46,8 @@
 
             var net = new Network([
                 new InputLayer(28, 28),
-                new ConvolutionalLayer(5, 20),
-                new PoolingLayer(2),
+                //new ConvolutionalLayer(5, 20),
+                //new PoolingLayer(2),
                 new FullyConnectedLayer(30),
                 new FullyConnectedLayer(10)
             ]);
@@ -55,7 +55,14 @@
             if(net.layers.length == 3){
 
 //???            net.SGD(TrainingData, 30, 10, 3.0, TestData)
-                net.SGD(TrainingData, 30, 12, 10.0, TestData)
+                if (!isDebug) {
+
+                    net.SGD(TrainingData, 30, 12, 10.0, TestData)
+                }
+                else {
+
+                    net.SGD(TrainingData, 30, 1, 10.0, TestData)
+                }
             }
             else{
 
