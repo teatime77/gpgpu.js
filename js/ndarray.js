@@ -58,8 +58,13 @@
     Set3(d, r, c, val) {
         Assert(d < this.Depth && r < this.Rows && c < this.Cols, "Mat-set3");
 
-        var sz = this.Rows * this.Cols;
-        this.dt[d * sz + r * this.Cols + c] = val;
+        this.dt[(d * this.Rows + r) * this.Cols + c] = val;
+    }
+
+    At3(d, r, c) {
+        Assert(d < this.Depth && r < this.Rows && c < this.Cols, "Mat-at3");
+
+        return this.dt[(d * this.Rows + r) * this.Cols + c];
     }
 
     Col(c) {

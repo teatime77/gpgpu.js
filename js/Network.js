@@ -542,6 +542,102 @@ class Network {
         return X;
     }
 
+    check(layer, last_layer, cost_sv, Y, eta2, batch_idx, r, c, max_err) {
+        var delta = 0.001;
+
+        var nabla;
+        var param_sv;
+
+        if (c == -1) {
+
+            nabla = layer.nablaBiases.dt[r];
+
+            param_sv = layer.bias.dt[r];
+            layer.bias.dt[r] -= delta;
+        }
+        else {
+
+            nabla = layer.nablaWeights.At3(batch_idx, r, c);
+
+            param_sv = layer.weight.At(r, c);
+            layer.weight.Set(r, c, param_sv - delta);
+        }
+
+        //console.log("nabla検証 : %f", nabla);//, layer.prevLayer.activation.At(c, 0)
+        //console.log("activation :" + layer.activation.dt);
+        //console.log("z :" + layer.z.dt);
+
+        this.layers.forEach(x => x.forward2());
+
+        for (var i = this.layers.length - 1; 1 <= i; i--) {
+            this.layers[i].backward2(Y, eta2);
+        }
+        //Assert(layer.activation_sv[r] - Y.dt[r] == layer.costDerivative_sv[r], "");
+
+        console.log("C = 1/2 * Σ(ai - yi)^2 = " + cost_sv[batch_idx]);
+        console.log("δC/δa0 = a0 - y0 = " + layer.costDerivative_sv[r]);
+                            
+        //-------------------- ΔC
+        var deltaC = last_layer.cost[batch_idx] - cost_sv[batch_idx];
+        console.log("ΔC = " + deltaC);
+
+        //-------------------- nabla * delta
+        var deltaC1 = - nabla * delta;
+        console.log("- nabla * delta = - %f * %f = %f", nabla, delta, deltaC1);//, layer.prevLayer.activation.At(c, 0)
+        var err1 = Math.abs((deltaC -deltaC1) / (deltaC == 0 ? 1: deltaC));
+
+        //-------------------- δC/δa0
+        var delta_a = layer.activation.dt[r] - layer.activation_sv[r];
+        console.log("Δa0 = " + delta_a);
+
+        var deltaC2 = delta_a * layer.costDerivative_sv[r];
+        console.log("ΔC ≒ Δa0 * δC/δa0 = " + deltaC2);
+
+        var err2 = Math.abs((deltaC - deltaC2) / (deltaC == 0 ? 1 : deltaC));
+
+
+        //-------------------- δC/δz0 = δC/δa0 * da0/dz0
+        var delta_z = layer.z.dt[r] - layer.z_sv[r];
+        console.log("Δz0 = " + delta_z);
+        console.log("da0/dz0 = " + sigmoid_primeF(layer.z_sv[r]));
+
+        var deltaC3 = delta_z * layer.costDerivative_sv[r] * sigmoid_primeF(layer.z_sv[r]);
+        console.log("ΔC ≒ Δz0 * δC/δa0 * da0/dz0 = " + deltaC3);
+
+        var err3 = Math.abs((deltaC - deltaC3) / (deltaC == 0 ? 1 : deltaC));
+        max_err = Math.max(Math.max(max_err, err1), Math.max(err2, err3));
+        console.log("ΔC誤差 = " + err1 + " " + err2 + " " + err3 + " " + max_err);
+
+        /*
+        var cost_diff = xrange(last_layer.cost.length).map(i => cost_sv[i] - last_layer.cost[i]);
+        console.log("last-layer-cost : " + last_layer.cost);
+        console.log("cost-diff : " + cost_diff);
+        console.log("cost-Derivative : %f", layer.costDerivative.dt[r]);
+        console.log("activation :" + layer.activation.dt);
+        console.log("activation-diff :" + xrange(layer.activation_sv.length).map(i => layer.activation_sv[i] - layer.activation.dt[i]));
+        console.log("z-sv :" + layer.z_sv);
+        console.log("z    :" + layer.z.dt);
+        console.log("z-diff :" + xrange(layer.z_sv.length).map(i => layer.z_sv[i] - layer.z.dt[i]));
+        */
+
+        for (var r2 = 0; r2 < layer.nablaBiases.Rows; r2++) {
+            if (r2 != r) {
+                Assert(layer.z_sv[r2] - layer.z.dt[r2] == 0 && layer.activation_sv[r2] - layer.activation.dt[r2] == 0, "z-activation-diff");
+            }
+        }
+
+        if (c == -1) {
+
+            layer.bias.dt[r] = param_sv;
+        }
+        else {
+
+            layer.weight.Set(r, c, param_sv);
+        }
+
+        return max_err;
+    }
+
     update_mini_batch(X, Y, eta) {
         this.layers[0].activation = X;
         this.layers.forEach(x => x.forward2());
@@ -557,10 +653,9 @@ class Network {
             this.layers.forEach(x => x.updateParameter(eta2));
         }
         else {
-            var delta = 0.001;
 
             var last_layer = this.layers[this.layers.length - 1];
-            var cost_sv = last_layer.cost;
+            var cost_sv = newFloatArray( last_layer.cost );
             var max_err = 0;
 
             this.layers.forEach(layer => {
@@ -576,78 +671,12 @@ class Network {
                 var layer = this.layers[layer_idx];
                 if (layer.nablaBiases) {
                     for (var batch_idx = 0; batch_idx < this.miniBatchSize; batch_idx++) {
-
                         for (var r = 0; r < layer.nablaBiases.Rows; r++) {
-                            var b = layer.bias.dt[r];
-                            var cd = layer.costDerivative.dt[r];
-                            var nb = layer.nablaBiases.dt[r];
-                            layer.bias.dt[r] -= delta;
-                            //layer.bias.dt[r] -= nb;
+                            max_err = this.check(layer, last_layer, cost_sv, Y, eta2, batch_idx, r, -1, max_err);
 
-                            //console.log("nabla検証 : %f %f", nb, cd);//, layer.prevLayer.activation.At(c, 0)
-                            //console.log("activation :" + layer.activation.dt);
-                            //console.log("z :" + layer.z.dt);
-
-                            this.layers.forEach(x => x.forward2());
-
-                            for (var i = this.layers.length - 1; 1 <= i; i--) {
-                                this.layers[i].backward2(Y, eta2);
+                            for (var c = 0; c < layer.weight.Cols; c++) {
+                                max_err = this.check(layer, last_layer, cost_sv, Y, eta2, batch_idx, r, c, max_err);
                             }
-                            //Assert(layer.activation_sv[r] - Y.dt[r] == layer.costDerivative_sv[r], "");
-
-                            console.log("C = 1/2 * Σ(ai - yi)^2 = " + cost_sv[batch_idx]);
-                            console.log("δC/δa0 = a0 - y0 = " + layer.costDerivative_sv[r]);
-                            
-                            //-------------------- ΔC
-                            var deltaC = last_layer.cost[batch_idx] - cost_sv[batch_idx];
-                            console.log("ΔC = " + deltaC);
-
-                            //-------------------- nabla-b * delta
-                            var deltaC1 = - nb * delta;
-                            console.log("- nabla-b * delta = - %f * %f = %f", nb, delta, deltaC1);//, layer.prevLayer.activation.At(c, 0)
-                            var err1 = Math.abs((deltaC -deltaC1) / (deltaC == 0 ? 1: deltaC));
-
-                            //-------------------- δC/δa0
-                            var delta_a = layer.activation.dt[r] - layer.activation_sv[r];
-                            console.log("Δa0 = " + delta_a);
-
-                            var deltaC2 = delta_a * layer.costDerivative_sv[r];
-                            console.log("ΔC ≒ Δa0 * δC/δa0 = " + deltaC2);
-
-                            var err2 = Math.abs((deltaC - deltaC2) / (deltaC == 0 ? 1 : deltaC));
-
-
-                            //-------------------- δC/δz0 = δC/δa0 * da0/dz0
-                            var delta_z = layer.z.dt[r] - layer.z_sv[r];
-                            console.log("Δz0 = " + delta_z);
-                            console.log("da0/dz0 = " + sigmoid_primeF(layer.z_sv[r]));
-
-                            var deltaC3 = delta_z * layer.costDerivative_sv[r] * sigmoid_primeF(layer.z_sv[r]);
-                            console.log("ΔC ≒ Δz0 * δC/δa0 * da0/dz0 = " + deltaC3);
-
-                            var err3 = Math.abs((deltaC - deltaC3) / (deltaC == 0 ? 1 : deltaC));
-                            max_err = Math.max(Math.max(max_err, err1), Math.max(err2, err3));
-                            console.log("ΔC誤差 = " + err1 + " " + err2 + " " + err3 + " " + max_err);
-
-                            /*
-                            var cost_diff = xrange(last_layer.cost.length).map(i => cost_sv[i] - last_layer.cost[i]);
-                            console.log("last-layer-cost : " + last_layer.cost);
-                            console.log("cost-diff : " + cost_diff);
-                            console.log("cost-Derivative : %f", layer.costDerivative.dt[r]);
-                            console.log("activation :" + layer.activation.dt);
-                            console.log("activation-diff :" + xrange(layer.activation_sv.length).map(i => layer.activation_sv[i] - layer.activation.dt[i]));
-                            console.log("z-sv :" + layer.z_sv);
-                            console.log("z    :" + layer.z.dt);
-                            console.log("z-diff :" + xrange(layer.z_sv.length).map(i => layer.z_sv[i] - layer.z.dt[i]));
-                            */
-
-                            for (var r2 = 0; r2 < layer.nablaBiases.Rows; r2++) {
-                                if (r2 != r) {
-                                    Assert(layer.z_sv[r2] - layer.z.dt[r2] == 0 && layer.activation_sv[r2] - layer.activation.dt[r2] == 0, "z-activation-diff");
-                                }
-                            }
-
-                            layer.bias.dt[r] = b;
                         }
                     }
                 }
