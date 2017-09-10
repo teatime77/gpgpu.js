@@ -1,7 +1,8 @@
 ﻿// import
 // import
 var isDebug = false;
-var isFloat64 = isDebug;
+var isFloat64 = true;// isDebug;
+var DebugOut = true;
 
 function newFloatArray(x) {
     if(isFloat64){
@@ -295,7 +296,7 @@ class ConvolutionalLayer extends Layer{
             //this.activation    = new Mat(this.unitSize, this.batchLength, null, true);
         }
 
-        if (this.batchLength == 12) {
+        if (!isFloat64 && this.batchLength == 12) {
 
             this.gpuForward();
         }
@@ -342,7 +343,7 @@ class ConvolutionalLayer extends Layer{
         //this.Delta = this.nextLayer.Delta.Mul(sigmoid_prime(this.z));
         var deltaT = newFloatArray(this.nextLayer.DeltaT);
         for (var i = 0; i < deltaT.length; i++) {
-//???????????????            deltaT[i] *= sigmoid_primeF(this.z.dt[i]);
+            deltaT[i] *= sigmoid_primeF(this.z.dt[i]);
         }
 
         var prev_Layer = this.prevLayer;
@@ -352,10 +353,41 @@ class ConvolutionalLayer extends Layer{
         this.nablaWeights = new Mat(this.filterSize, this.filterSize, null, false, this.filterCount);
         this.costDerivative = new Mat(this.unitSize, 1);
 
+
         // すべてのフィルターに対し
-        for(var filter_idx = 0; filter_idx < this.filterCount; filter_idx++) {
+        for (var filter_idx = 0; filter_idx < this.filterCount; filter_idx++) {
 
             var nabla_b = 0.0;
+
+            // バッチ内のデータに対し
+            for (var batch_idx = 0; batch_idx < this.batchLength; batch_idx++) {
+
+                // 出力の行に対し
+                for (var r1 = 0; r1 < this.imgRows; r1++) {
+
+                    // 出力の列に対し
+                    for (var c1 = 0; c1 < this.imgCols; c1++) {
+
+                        // 出力先
+                        var output_base = batch_idx * this.unitSize + this.filterCount * (r1 * this.imgCols + c1);
+                        var output_idx = output_base + filter_idx;
+
+                        //var z_val = sum + bias;
+
+                        //z_dt[output_idx] = z_val;
+                        //activation_dt[output_idx] = sigmoidF(z_val);
+
+                        nabla_b += deltaT[output_idx];
+                        this.costDerivative.dt[output_idx] = this.nextLayer.DeltaT[output_idx];
+                    }
+                }
+            }
+
+            this.nablaBiases.Set(filter_idx, 0, nabla_b);
+        }
+
+        // すべてのフィルターに対し
+        for(var filter_idx = 0; filter_idx < this.filterCount; filter_idx++) {
 
             // フィルターの行に対し
             for (var r2 = 0; r2 < this.filterSize; r2++) {
@@ -375,18 +407,14 @@ class ConvolutionalLayer extends Layer{
                             for (var c1 = 0; c1 < this.imgCols; c1++) {
 
                                 var output_base = batch_idx * this.unitSize + this.filterCount * (r1 * this.imgCols + c1);
-                                var out_idx = output_base + filter_idx;
+                                var output_idx = output_base + filter_idx;
 
-                                var delta = deltaT[out_idx];
+                                var delta = deltaT[output_idx];
                                 if (delta != 0) {
 
                                     var prev_activation_idx = batch_idx * prev_Layer.unitSize + (r1 + r2) * prev_Layer.imgCols + (c1 + c2);
 
                                     nabla_w += delta * prev_activation_dt[ prev_activation_idx ];
-
-                                    nabla_b += delta;
-
-                                    this.costDerivative.dt[out_idx] = delta;
                                 }
                             }
                         }
@@ -395,8 +423,6 @@ class ConvolutionalLayer extends Layer{
                     this.nablaWeights.Set3(filter_idx, r2, c2, nabla_w);
                 }
             }
-
-            this.nablaBiases.Set(filter_idx, 0, nabla_b);
         }
     }
 
@@ -613,7 +639,7 @@ class Network {
         var nabla;
         var param_sv;
         var a_idx;
-        var err1;
+        var err1, err2, err3;
 
         if (layer instanceof FullyConnectedLayer) {
             delta = 0.001;
@@ -635,7 +661,7 @@ class Network {
             }
         }
         else {
-            delta = 0.00001;
+            delta = 0.0001;
 
             if (c == -1) {
 
@@ -659,44 +685,37 @@ class Network {
             this.layers[i].backward2(Y, eta2);
         }
 
-        console.log("C = 1/2 * Σ(ai - yi)^2 = " + cost_sv[batch_idx]);
                             
         //-------------------- ΔC
         var deltaC = last_layer.cost[batch_idx] - cost_sv[batch_idx];
-        console.log("ΔC = " + deltaC);
 
         //-------------------- nabla * delta
         var deltaC1 = - nabla * delta;
-        console.log("- nabla * delta = - %f * %f = %f", nabla, delta, deltaC1);//, layer.prevLayer.activation.At(c, 0)
         err1 = Math.abs((deltaC -deltaC1) / (deltaC == 0 ? 1: deltaC));
+
+        var deltaC2, deltaC3, delta_a, delta_z;
+        var cost_deriv;
+        var sigmoid_prime_z;
 
         if (layer instanceof FullyConnectedLayer) {
 
-            //Assert(layer.activation_sv[a_idx] - Y.dt[a_idx] == layer.costDerivative_sv[a_idx], "");
-            console.log("δC/δa0 = a0 - y0 = " + layer.costDerivative_sv[a_idx]);
+            //Assert(layer.activation_sv[a_idx] - Y.dt[a_idx] == cost_deriv, "");
 
             //-------------------- δC/δa0
-            var delta_a = layer.activation.dt[a_idx] - layer.activation_sv[a_idx];
-            console.log("Δa0 = " + delta_a);
+            delta_a = layer.activation.dt[a_idx] - layer.activation_sv[a_idx];
 
-            var deltaC2 = delta_a * layer.costDerivative_sv[a_idx];
-            console.log("ΔC ≒ Δa0 * δC/δa0 = " + deltaC2);
+            cost_deriv = layer.costDerivative_sv[a_idx];
+            deltaC2 = delta_a * cost_deriv;
 
-            var err2 = Math.abs((deltaC - deltaC2) / (deltaC == 0 ? 1 : deltaC));
-
+            err2 = Math.abs((deltaC - deltaC2) / (deltaC == 0 ? 1 : deltaC));
 
             //-------------------- δC/δz0 = δC/δa0 * da0/dz0
-            var delta_z = layer.z.dt[a_idx] - layer.z_sv[a_idx];
-            console.log("Δz0 = " + delta_z);
-            console.log("da0/dz0 = " + sigmoid_primeF(layer.z_sv[a_idx]));
+            delta_z = layer.z.dt[a_idx] - layer.z_sv[a_idx];
 
-            var deltaC3 = delta_z * layer.costDerivative_sv[a_idx] * sigmoid_primeF(layer.z_sv[a_idx]);
-            console.log("ΔC ≒ Δz0 * δC/δa0 * da0/dz0 = " + deltaC3);
+            sigmoid_prime_z = sigmoid_primeF(layer.z_sv[a_idx]);
+            deltaC3 = delta_z * cost_deriv * sigmoid_prime_z;
 
-            var err3 = Math.abs((deltaC - deltaC3) / (deltaC == 0 ? 1 : deltaC));
-
-            max_err = Math.max(Math.max(max_err, err1), Math.max(err2, err3));
-            console.log("ΔC誤差 = " + err1 + " " + err2 + " " + err3 + " " + max_err);
+            err3 = Math.abs((deltaC - deltaC3) / (deltaC == 0 ? 1 : deltaC));
 
             for (var r2 = 0; r2 < layer.nablaBiases.Rows; r2++) {
                 if (r2 != r) {
@@ -705,9 +724,38 @@ class Network {
             }
         }
         else {
+            deltaC2 = xrange(layer.activation.dt.length).map(a_idx => (layer.activation.dt[a_idx] - layer.activation_sv[a_idx]) * layer.costDerivative_sv[a_idx]).reduce((x, y) => x + y);
 
-            max_err = Math.max(max_err, err1);
-            console.log("ΔC誤差 = " + err1 + " " + max_err);
+            err2 = Math.abs((deltaC - deltaC2) / (deltaC == 0 ? 1 : deltaC));
+
+            deltaC3 = xrange(layer.activation.dt.length).map(a_idx => (layer.z.dt[a_idx] - layer.z_sv[a_idx]) * layer.costDerivative_sv[a_idx] * sigmoid_primeF(layer.z_sv[a_idx])).reduce((x, y) => x + y);
+
+            err3 = Math.abs((deltaC -deltaC3) / (deltaC == 0 ? 1: deltaC));
+        }
+
+        var max_err123 = Math.max(err1, Math.max(err2, err3));
+        max_err = Math.max(max_err, max_err123);
+
+        this.ErrSum += max_err123;
+        this.ErrCnt++;
+
+        if (10 < max_err123 && DebugOut) {
+
+            console.log("C = 1/2 * Σ(ai - yi)^2 = " + cost_sv[batch_idx]);
+            console.log("ΔC = " + deltaC);
+            console.log("- nabla * delta = - " + nabla + " * " + delta + " = " + deltaC1);//, layer.prevLayer.activation.At(c, 0)
+
+            if (layer instanceof FullyConnectedLayer) {
+
+                console.log("ΔC ≒ Δa0 * δC/δa0 = " + delta_a + " * " + cost_deriv + " = " + deltaC2);
+                console.log("ΔC ≒ Δz0 * δC/δa0 * da0/dz0 = " + delta_z + " * " + cost_deriv + " * " + sigmoid_prime_z + " = " + deltaC3);
+            }
+            else {
+
+                console.log("ΔC ≒ Δa0 * δC/δa0 = " + deltaC2);
+                console.log("ΔC ≒ Δz0 * δC/δa0 * da0/dz0 = " + deltaC3);
+            }
+            console.log("ΔC誤差 max:" + max_err + " avg:" + (this.ErrSum / this.ErrCnt) + " " + err1 + " " + err2 + " " + err3 + " " + max_err123);
         }
 
         if (layer instanceof FullyConnectedLayer) {
@@ -738,7 +786,7 @@ class Network {
 
 
     check2(layer, last_layer, cost_sv, Y, eta2, max_err) {      
-        var err1 = 0, err3 = 0;
+        var err3 = 0, err_sum = 0, err_cnt = 0;
 
         //if(layer.nextLayer.maxIdx){
 
@@ -772,9 +820,9 @@ class Network {
 
         var batch_idx = 0;
         for (var a_idx = 0; a_idx < layer.activation.dt.length; a_idx++) {
-            if (layer.costDerivative_sv[a_idx] != 0) {
-
-                console.log("δC/δa0 = a0 - y0 = " + layer.costDerivative_sv[a_idx]);
+            var sigmoid_prime_z;
+            var cost_deriv = layer.costDerivative_sv[a_idx];
+            if (cost_deriv != 0) {
 
                 var delta_z;
                 var delta_a;
@@ -803,6 +851,14 @@ class Network {
                     var next_filter_stride = layer.nextLayer.filterSize * layer.nextLayer.filterSize;
                     var next_a_idx = Math.floor(a_idx / next_filter_stride);
                     if (layer.nextLayer.maxIdx[next_a_idx] != layer.nextLayer.maxIdx_sv[next_a_idx]) {
+
+                        //-------------------- 変更した値を戻す
+                        if (layer.z) {
+
+                            layer.z.dt[a_idx] = layer.z_sv[a_idx];
+                        }
+                        layer.activation.dt[a_idx] = layer.activation_sv[a_idx];
+
                         continue;
                     }
                 }
@@ -811,17 +867,12 @@ class Network {
                     this.layers[i].backward2(Y, eta2);
                 }
 
-                console.log("C = 1/2 * Σ(ai - yi)^2 = " + cost_sv[batch_idx]);
-
                 //-------------------- ΔC
                 var deltaC = last_layer.cost[batch_idx] - cost_sv[batch_idx];
-                console.log("ΔC = " + deltaC);
 
                 //-------------------- δC/δa0
-                console.log("Δa0 = " + delta_a);
 
-                var deltaC2 = delta_a * layer.costDerivative_sv[a_idx];
-                console.log("ΔC ≒ Δa0 * δC/δa0 = " + deltaC2);
+                var deltaC2 = delta_a * cost_deriv;
 
                 var err2 = Math.abs((deltaC - deltaC2) / (deltaC == 0 ? 1 : deltaC));
 
@@ -829,18 +880,29 @@ class Network {
 
                     //-------------------- δC/δz0 = δC/δa0 * da0/dz0
                     //var delta_z = layer.z.dt[a_idx] - layer.z_sv[a_idx];
-                    console.log("Δz0 = " + delta_z);
-                    console.log("da0/dz0 = " + sigmoid_primeF(layer.z_sv[a_idx]));
-
-                    var deltaC3 = delta_z * layer.costDerivative_sv[a_idx] * sigmoid_primeF(layer.z_sv[a_idx]);
-                    console.log("ΔC ≒ Δz0 * δC/δa0 * da0/dz0 = " + deltaC3);
+                    sigmoid_prime_z = sigmoid_primeF(layer.z_sv[a_idx]);
+                    var deltaC3 = delta_z * cost_deriv * sigmoid_prime_z;
 
                     err3 = Math.abs((deltaC - deltaC3) / (deltaC == 0 ? 1 : deltaC));
                 }
 
                 //-------------------- 誤差表示
-                max_err = Math.max(Math.max(max_err, err1), Math.max(err2, err3));
-                console.log("ΔC誤差 = " + err1 + " " + err2 + " " + err3 + " " + max_err);
+                var err23 = Math.max(err2, err3);
+                max_err = Math.max(max_err, err23);
+
+                err_sum += err23;
+                err_cnt++;
+                if (10 < err23 && DebugOut) {
+
+                    console.log("C = " + cost_sv[batch_idx]);
+                    console.log("ΔC = " + deltaC);
+                    console.log("ΔC ≒ Δa0 * δC/δa0 = " + delta_a + " * " + cost_deriv + " = " + deltaC2);
+                    if (layer.z) {
+
+                        console.log("ΔC ≒ Δz0 * δC/δa0 * da0/dz0 = " + delta_z + " * " + cost_deriv + " * " + sigmoid_prime_z + " = " + +deltaC3);
+                    }
+                    console.log("ΔC誤差  max:" + max_err + " avg:" + (err_sum/err_cnt) + " " + err2 + " " + err3 + " " + err23);
+                }
 
                 //-------------------- 変更した値を戻す
                 if (layer.z) {
@@ -888,6 +950,8 @@ class Network {
                 }
             });
 
+            this.ErrSum = 0;
+            this.ErrCnt = 0;
 
             //for (var layer_idx = this.layers.length - 1; 0 <= layer_idx; layer_idx--) {
             for(var layer_idx = 0; layer_idx < this.layers.length; layer_idx++) {
@@ -910,7 +974,6 @@ class Network {
                         }
                         else {
                             max_err = this.check2(layer, last_layer, cost_sv, Y, eta2, max_err);
-                            /*
 
                             // すべてのフィルターに対し
                             for (var filter_idx = 0; filter_idx < layer.filterCount; filter_idx++) {
@@ -926,18 +989,12 @@ class Network {
                                     }
                                 }
                             }
+                            /*
                             */
                         }
                     }
                 }
             }
-
-            var cost1 = this.layers[this.layers.length - 1].costDerivative;
-            console.log(this.costAvg(cost1));
-
-            this.layers.forEach(x => x.forward2());
-            var cost2 = cost_derivative(this.layers[this.layers.length - 1].activation, Y);
-            console.log(this.costAvg( cost2 ));
         }
     }
 

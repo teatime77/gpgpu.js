@@ -13,7 +13,7 @@
         }
         else {
 
-            this.dt = newFloatArray(rows * cols);
+            this.dt = newFloatArray(rows * cols * this.Depth);
             /*
             for (var r = 0; r < rows; r++) {
                 for (var c = 0; c < cols; c++) {
