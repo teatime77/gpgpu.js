@@ -1,11 +1,9 @@
 ﻿class Mat {
-    constructor(rows, cols, init, column_major, depth) {
+    constructor(rows, cols, init, depth) {
         this.Rows = rows;
         this.Cols = cols;
         this.Depth = (depth == undefined ? 1 : depth);
         this.shape = [rows, cols];
-//        Assert(column_major != true, "column major");
-        this.columnMajor = (column_major == undefined ? false : column_major);
 
         if (init) {
 
@@ -52,7 +50,7 @@
     }
 
     map(f) {
-        return new Mat(this.Rows, this.Cols, this.dt.map(f), this.columnMajor);
+        return new Mat(this.Rows, this.Cols, this.dt.map(f));
     }
 
     T() {
@@ -184,7 +182,7 @@
 
             return new Mat(this.Rows, this.Cols, this.dt.map(x => x * m));
         }
-        Assert(m instanceof Mat && m.Rows == this.Rows && m.Cols == this.Cols && m.columnMajor == this.columnMajor, "Mat-Mul");
+        Assert(m instanceof Mat && m.Rows == this.Rows && m.Cols == this.Cols, "Mat-Mul");
         var v = newFloatArray(this.Rows * this.Cols);
         for (var r = 0; r < this.Rows; r++) {
             for (var c = 0; c < this.Cols; c++) {

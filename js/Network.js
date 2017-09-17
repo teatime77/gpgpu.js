@@ -112,7 +112,7 @@ class FullyConnectedLayer extends Layer{
 
             this.nablaBiases = this.Delta;
             // constructor(rows, cols, init, column_major, depth)
-            this.nablaWeights = new Mat(this.weight.Rows, this.weight.Cols, null, false, this.batchLength);
+            this.nablaWeights = new Mat(this.weight.Rows, this.weight.Cols, null, this.batchLength);
             for (var batch_idx = 0; batch_idx < this.batchLength; batch_idx++) {
                 for (var r = 0; r < this.weight.Rows; r++) {
                     for (var c = 0; c < this.weight.Cols; c++) {
@@ -157,7 +157,7 @@ class ConvolutionalLayer extends Layer{
             dt[i] = i;
         }
         // (rows, cols, init, column_major, depth)
-        var m = new Mat(3, 4 * 4, dt, false, 2);
+        var m = new Mat(3, 4 * 4, dt, 2);
         var param = {};
 
         param.elementCount = m.dt.length;
@@ -190,7 +190,7 @@ class ConvolutionalLayer extends Layer{
         }
 
         // (rows, cols, init, column_major, depth)
-        var m = new Mat(prev_Layer.imgRows, prev_Layer.imgCols, prev_Layer.activation.dt, false, this.batchLength);
+        var m = new Mat(prev_Layer.imgRows, prev_Layer.imgCols, prev_Layer.activation.dt, this.batchLength);
 
         var param = {};
 
@@ -287,17 +287,17 @@ class ConvolutionalLayer extends Layer{
 
             if (! isDebug) {
 
-                this.z          = new Mat(this.unitSize, this.batchLength, new Float32Array(this.zArrayBuffer), true);
-                this.activation = new Mat(this.unitSize, this.batchLength, new Float32Array(this.activationArrayBuffer), true);
+                this.z          = new Mat(this.unitSize, this.batchLength, new Float32Array(this.zArrayBuffer));
+                this.activation = new Mat(this.unitSize, this.batchLength, new Float32Array(this.activationArrayBuffer));
             }
             else {
 
-                this.z          = new Mat(this.unitSize, this.batchLength, newFloatArray(this.unitSize * this.batchLength), true);
-                this.activation = new Mat(this.unitSize, this.batchLength, newFloatArray(this.unitSize * this.batchLength), true);
+                this.z          = new Mat(this.unitSize, this.batchLength, newFloatArray(this.unitSize * this.batchLength));
+                this.activation = new Mat(this.unitSize, this.batchLength, newFloatArray(this.unitSize * this.batchLength));
             }
 
-            //this.z             = new Mat(this.unitSize, this.batchLength, null, true);
-            //this.activation    = new Mat(this.unitSize, this.batchLength, null, true);
+            //this.z             = new Mat(this.unitSize, this.batchLength, null);
+            //this.activation    = new Mat(this.unitSize, this.batchLength, null);
         }
 
         if (UseGPU && this.batchLength == 12) {
@@ -354,7 +354,7 @@ class ConvolutionalLayer extends Layer{
         var prev_activation_dt = prev_Layer.activation.dt;
 
         this.nablaBiases = new Mat(this.filterCount, 1);
-        this.nablaWeights = new Mat(this.filterSize, this.filterSize, null, false, this.filterCount);
+        this.nablaWeights = new Mat(this.filterSize, this.filterSize, null, this.filterCount);
         this.costDerivative = new Mat(this.unitSize, 1);
 
 

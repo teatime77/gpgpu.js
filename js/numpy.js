@@ -12,7 +12,7 @@ class TNumpy {
     }
 
     dot(A, B) {
-        Assert(A instanceof Mat && B instanceof Mat && A.Cols == B.Rows && !A.columnMajor && !B.columnMajor, "d-o-t");
+        Assert(A instanceof Mat && B instanceof Mat && A.Cols == B.Rows, "d-o-t");
 
         var key = "" + A.Rows + "," + A.Cols + "," + B.Cols;
         if (vDot[key] == undefined) {
