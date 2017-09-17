@@ -114,24 +114,13 @@ class TNumpyRandom {
     }
 
     randn() {
-        var m;
+        if(arguments.length == 0){
 
-        switch (arguments.length) {
-            case 0:
-                return this.NextDouble();
-
-            case 1:
-                m = new Mat(1, arguments[0]);
-                break;
-
-            case 2:
-                m = new Mat(arguments[0], arguments[1]);
-                break;
-
-            default:
-                Assert(false, "");
-                return null;
+            return this.NextDouble();
         }
+
+        var args = Array.prototype.slice.call(arguments);
+        var m = new Mat(args);
 
         m.dt = m.dt.map(x => this.NextDouble());
 //        m.dt = m.dt.map(x => Math.random());

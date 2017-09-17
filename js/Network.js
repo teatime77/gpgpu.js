@@ -147,8 +147,8 @@ class ConvolutionalLayer extends Layer{
         this.imgCols = this.prevLayer.imgCols - this.filterSize + 1;
         this.unitSize = this.imgRows * this.imgCols * this.filterCount;
 
-        this.biases = xrange(this.filterCount).map(x => np.random.randn());
-        this.weights = xrange(this.filterCount).map(x => np.random.randn(this.filterSize, this.filterSize));
+        this.biases = np.random.randn(this.filterCount);
+        this.weights = np.random.randn(this.filterCount, this.filterSize, this.filterSize);
     }
 
     gpuForwardTest(prev_Layer) {
@@ -227,27 +227,17 @@ class ConvolutionalLayer extends Layer{
     }
 
     cpuForward() {
-        var prev_Layer = this.prevLayer;
-
-        var prev_activation_dt = prev_Layer.activation.dt;
-        var z_dt = this.z.dt;
-        var activation_dt = this.activation.dt;
-
         // 出力の行に対し
         for (var r1 = 0; r1 < this.imgRows; r1++) {
 
             // 出力の列に対し
             for (var c1 = 0; c1 < this.imgCols; c1++) {
 
-
                 // バッチ内のデータに対し
                 for (var batch_idx = 0; batch_idx < this.batchLength; batch_idx++) {
 
                     // すべてのフィルターに対し
                     for (var filter_idx = 0; filter_idx < this.filterCount; filter_idx++) {
-
-                        var weight = this.weights[filter_idx];
-                        var bias = this.biases[filter_idx];
 
                         var sum = 0.0;
 
@@ -256,20 +246,14 @@ class ConvolutionalLayer extends Layer{
 
                             // フィルターの列に対し
                             for (var c2 = 0; c2 < this.filterSize; c2++) {
-                                var weight_idx = r2 * this.filterSize + c2;
-
-                                var prev_activation_idx = ((r1 + r2) * prev_Layer.imgCols + (c1 + c2)) * this.batchLength + batch_idx;
-                                sum += prev_activation_dt[ prev_activation_idx ] * weight.dt[weight_idx];
+                                sum += this.prevLayer.activation.At(r1 + r2, c1 + c2, batch_idx) * this.weights.At(filter_idx, r2, c2);
                             }
                         }
 
-                        // 出力先
-                        var output_idx = (this.filterCount * (r1 * this.imgCols + c1) + filter_idx) * this.batchLength + batch_idx;
+                        var z_val = sum + this.biases.At(filter_idx);
 
-                        var z_val = sum + bias;
-
-                        z_dt[output_idx] = z_val;
-                        activation_dt[output_idx] = sigmoidF(z_val);
+                        this.z.Set(filter_idx, r1, c1, batch_idx, z_val);
+                        this.activation.Set(filter_idx, r1, c1, batch_idx, sigmoidF(z_val));
                     }
                 }
             }
@@ -287,11 +271,11 @@ class ConvolutionalLayer extends Layer{
 
             if (! isDebug) {
 
-                this.z          = new Mat(this.unitSize, this.batchLength, new Float32Array(this.zArrayBuffer));
-                this.activation = new Mat(this.unitSize, this.batchLength, new Float32Array(this.activationArrayBuffer));
+                this.z = new Mat(this.filterCount, this.imgRows, this.imgCols, this.batchLength, new Float32Array(this.zArrayBuffer));
+                this.activation = new Mat(this.filterCount, this.imgRows, this.imgCols, this.batchLength, new Float32Array(this.activationArrayBuffer));
             }
             else {
-
+                Assert(false);
                 this.z          = new Mat(this.unitSize, this.batchLength, newFloatArray(this.unitSize * this.batchLength));
                 this.activation = new Mat(this.unitSize, this.batchLength, newFloatArray(this.unitSize * this.batchLength));
             }
@@ -345,7 +329,8 @@ class ConvolutionalLayer extends Layer{
 
     backward(Y, eta2) {
         //this.Delta = this.nextLayer.Delta.Mul(sigmoid_prime(this.z));
-        var deltaT = newFloatArray(this.nextLayer.DeltaT);
+        var delta_z = new Mat(this.filterCount, this.imgRows, this.imgCols, this.batchLength, this.nextLayer.Delta);
+            new Mat(this.nextLayer.DeltaT);
         for (var i = 0; i < deltaT.length; i++) {
             deltaT[i] *= sigmoid_primeF(this.z.dt[i]);
         }

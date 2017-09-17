@@ -1,14 +1,32 @@
 ﻿class Mat {
     constructor() {
-        // 引数のリストをArrayに変換します。
-        var args = Array.prototype.slice.call(arguments);
+        var args;
+        if (arguments.length == 1 && Array.isArray(arguments[0])) {
+
+            args = arguments[0];
+        }
+        else {
+
+            // 引数のリストをArrayに変換します。
+            args = Array.prototype.slice.call(arguments);
+        }
 
         // 引数の最後
         var last_arg = args[args.length - 1];
         if (typeof last_arg != 'number') {
             // 引数の最後が数値でない場合
 
-            var init = last_arg;
+            var init;
+
+            if(typeof last_arg == 'Mat'){
+
+                init = new Float32Array(last_arg.dt);
+            }
+            else{
+
+                Assert(last_arg instanceof Float32Array, "is Float32Array");
+                init = last_arg;
+            }
             args.pop();
         }
 
@@ -44,7 +62,7 @@
                 break;
 
             default:
-                Assert(false, "new mat")
+                Assert(false, "new mat:" + String(shape.length) + ":" + typeof arguments[0] + ":" + arguments[0] + ":" + String(arguments.length))
                 break;
         }
 
@@ -122,24 +140,29 @@
         return this.T();
     }
 
-    At() {
+    Idx() {
         Assert(arguments.length == this.shape.length)
         switch (this.shape.length) {
             case 2:
                 Assert(arguments[0] < this.shape[0] && arguments[1] < this.shape[1], "Mat-at");
-                return this.dt[arguments[0] * this.sizes[1] + arguments[1]];
+                return arguments[0] * this.sizes[1] + arguments[1];
 
             case 3:
                 Assert(arguments[0] < this.shape[0] && arguments[1] < this.shape[1] && arguments[2] < this.shape[2], "Mat-at");
-                return this.dt[arguments[0] * this.sizes[1] + arguments[1] * this.sizes[2] + arguments[2]];
+                return arguments[0] * this.sizes[1] + arguments[1] * this.sizes[2] + arguments[2];
 
             case 4:
                 Assert(arguments[0] < this.shape[0] && arguments[1] < this.shape[1] && arguments[2] < this.shape[2] && arguments[3] < this.shape[3], "Mat-at");
-                return this.dt[arguments[0] * this.sizes[1] + arguments[1] * this.sizes[2] + arguments[2] * this.sizes[3] + arguments[3]];
+                return arguments[0] * this.sizes[1] + arguments[1] * this.sizes[2] + arguments[2] * this.sizes[3] + arguments[3];
 
             default:
                 Assert(false);
         }
+    }
+
+    At() {
+        var args = Array.prototype.slice.call(arguments);
+        return this.dt[Idx(args)]
     }
 
     Set() {
@@ -147,24 +170,7 @@
         var args = Array.prototype.slice.call(arguments);
 
         var val = args.pop();
-
-        Assert(args.length == this.shape.length)
-        switch (this.shape.length) {
-            case 2:
-                Assert(arguments[0] < this.shape[0] && arguments[1] < this.shape[1], "Mat-at");
-                this.dt[arguments[0] * this.sizes[1] + arguments[1]] = val;
-
-            case 3:
-                Assert(arguments[0] < this.shape[0] && arguments[1] < this.shape[1] && arguments[2] < this.shape[2], "Mat-at");
-                this.dt[arguments[0] * this.sizes[1] + arguments[1] * this.sizes[2] + arguments[2]] = val;
-
-            case 4:
-                Assert(arguments[0] < this.shape[0] && arguments[1] < this.shape[1] && arguments[2] < this.shape[2] && arguments[3] < this.shape[3], "Mat-at");
-                this.dt[arguments[0] * this.sizes[1] + arguments[1] * this.sizes[2] + arguments[2] * this.sizes[3] + arguments[3]] = val;
-
-            default:
-                Assert(false);
-        }
+        this.dt[Idx(args)] = val;
     }
 
     Col(c) {
@@ -176,17 +182,26 @@
         return new Mat(this.Rows, 1, v);
     }
 
-    Add(m) {
-        Assert(m instanceof Mat && m.Rows == this.Rows && m.Cols == this.Cols, "Mat-add");
-        var v = newFloatArray(this.Rows * this.Cols);
-        for (var r = 0; r < this.Rows; r++) {
-            for (var c = 0; c < this.Cols; c++) {
-                var k = r * this.Cols + c;
-                v[k] = this.dt[k] + m.dt[k];
+    SameShape(m) {
+        if (this.shape.length != m.shape.length) {
+            return false;
+        }
+        for (var i = 0; i < this.shape.length; i++) {
+            if (this.shape[i] != m.shape[i]) {
+                return false;
             }
         }
+        return true;
+    }
 
-        return new Mat(this.Rows, this.Cols, v);
+    Add(m) {
+        Assert(m instanceof Mat && this.SameShape(m), "Mat-add");
+        var v = newFloatArray(this.dt.length);
+        for (var i = 0; i < this.dt.length; i++) {
+            v[i] = this.dt[i] + m.dt[i];
+        }
+
+        return new Mat(this.shape.concat([v]));
     }
 
     AddV(m) {
@@ -258,16 +273,14 @@
 
             return new Mat(this.Rows, this.Cols, this.dt.map(x => x * m));
         }
-        Assert(m instanceof Mat && m.Rows == this.Rows && m.Cols == this.Cols, "Mat-Mul");
-        var v = newFloatArray(this.Rows * this.Cols);
-        for (var r = 0; r < this.Rows; r++) {
-            for (var c = 0; c < this.Cols; c++) {
-                var k = r * this.Cols + c;
-                v[k] = this.dt[k] * m.dt[k];
-            }
+
+        Assert(m instanceof Mat && this.SameShape(m), "Mat-mul");
+        var v = newFloatArray(this.dt.length);
+        for (var i = 0; i < this.dt.length; i++) {
+            v[i] = this.dt[i] * m.dt[i];
         }
 
-        return new Mat(this.Rows, this.Cols, v);
+        return new Mat(this.shape.concat([v]));
     }
 
     Abs() {
