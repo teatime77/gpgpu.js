@@ -8,7 +8,7 @@ class TNumpy {
 
     zeros(shape) {
         Assert(shape.length == 2, "zero-s");
-        return new Mat(shape[0], shape[1]);
+        return new Mat([shape[0], shape[1]]);
     }
 
     dot(A, B) {
@@ -65,7 +65,7 @@ class TNumpy {
 
             var startTime = new Date();
             var ret = WebGL2.Calc(param);
-            var C1 = new Mat(A.Rows, B.Cols, ret[0]);
+            var C1 = new Mat([A.Rows, B.Cols], ret[0]);
 
             var t1 = new Date() - startTime;
 
@@ -118,11 +118,11 @@ class TNumpyRandom {
                 return this.NextDouble();
 
             case 1:
-                m = new Mat(1, arguments[0]);
+                m = new Mat([1, arguments[0]]);
                 break;
 
             case 2:
-                m = new Mat(arguments[0], arguments[1]);
+                m = new Mat([arguments[0], arguments[1]]);
                 break;
 
             default:

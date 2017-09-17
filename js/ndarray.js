@@ -1,13 +1,36 @@
 ﻿class Mat {
-    constructor(rows, cols, init, depth) {
-        this.Rows = rows;
-        this.Cols = cols;
-        this.Depth = (depth == undefined ? 1 : depth);
-        this.shape = [rows, cols];
+    constructor(shape, init) {
+        
+        switch (shape.length) {
+            case 1:
+                this.Depth = 1;
+                this.Rows = 1;
+                this.Cols = shape[0];
+                break;
+
+            case 2:
+                this.Depth = 1;
+                this.Rows = shape[0];
+                this.Cols = shape[1];
+                break;
+
+            case 3:
+                this.Depth = shape[0];
+                this.Rows = shape[1];
+                this.Cols = shape[2];
+                break;
+
+            default:
+                Assert(false, "new mat")
+                break;
+        }
+
+        this.shape = shape;
+        this.nElement = shape.reduce((x, y) => x * y);
 
         if (init) {
 
-            if ((init instanceof Float32Array || init instanceof Float64Array) && init.length == rows * cols * this.Depth) {
+            if ((init instanceof Float32Array || init instanceof Float64Array) && init.length == this.Rows * this.Cols * this.Depth) {
 
             }
             else {
@@ -15,8 +38,8 @@
                 console.log(init instanceof Float32Array);
                 console.log(init instanceof Float64Array);
                 console.log(String(init.length));
-                console.log(String(rows) + ":" + String(cols) + ":" + String(this.Depth));
-                console.log(init.length == rows * cols * this.Depth);
+                console.log(String(this.Rows) + ":" + String(this.Cols) + ":" + String(this.Depth));
+                console.log(init.length == this.Rows * this.Cols * this.Depth);
 
                 try {
                     // 例外を発生させてみる。
@@ -27,17 +50,17 @@
                 }
                 console.assert(false);
             }
-            Assert((init instanceof Float32Array || init instanceof Float64Array) && init.length == rows * cols * this.Depth, "Mat-init");
+            Assert((init instanceof Float32Array || init instanceof Float64Array) && init.length == this.Rows * this.Cols * this.Depth, "Mat-init");
             this.dt = init;
         }
         else {
 
-            this.dt = newFloatArray(rows * cols * this.Depth);
+            this.dt = newFloatArray(this.Rows * this.Cols * this.Depth);
             /*
-            for (var r = 0; r < rows; r++) {
-                for (var c = 0; c < cols; c++) {
-                    //                            this.dt[r * cols + c] = r * 1000 + c;
-                    this.dt[r * cols + c] = Math.random();
+            for (var r = 0; r < this.Rows; r++) {
+                for (var c = 0; c < this.Cols; c++) {
+                    //                            this.dt[r * this.Cols + c] = r * 1000 + c;
+                    this.dt[r * this.Cols + c] = Math.random();
                 }
             }
             */
@@ -50,7 +73,7 @@
     }
 
     map(f) {
-        return new Mat(this.Rows, this.Cols, this.dt.map(f));
+        return new Mat([this.Rows, this.Cols], this.dt.map(f));
     }
 
     T() {
@@ -61,7 +84,7 @@
             }
         }
 
-        return new Mat(this.Cols, this.Rows, v);
+        return new Mat([this.Cols, this.Rows], v);
     }
 
     transpose() {
@@ -97,7 +120,7 @@
             v[r] = this.dt[r * this.Cols + c];
         }
 
-        return new Mat(this.Rows, 1, v);
+        return new Mat([this.Rows, 1], v);
     }
 
     Add(m) {
@@ -110,7 +133,7 @@
             }
         }
 
-        return new Mat(this.Rows, this.Cols, v);
+        return new Mat([this.Rows, this.Cols], v);
     }
 
     AddV(m) {
@@ -123,7 +146,7 @@
             }
         }
 
-        return new Mat(this.Rows, this.Cols, v);
+        return new Mat([this.Rows, this.Cols], v);
     }
 
     SubV(m) {
@@ -136,7 +159,7 @@
             }
         }
 
-        return new Mat(this.Rows, this.Cols, v);
+        return new Mat([this.Rows, this.Cols], v);
     }
 
     reduce(f) {
@@ -161,7 +184,7 @@
             v[r] = x;
         }
 
-        return new Mat(this.Rows, 1, v);
+        return new Mat([this.Rows, 1], v);
     }
 
     Sub(m) {
@@ -174,13 +197,13 @@
             }
         }
 
-        return new Mat(this.Rows, this.Cols, v);
+        return new Mat([this.Rows, this.Cols], v);
     }
 
     Mul(m) {
         if (m instanceof Number) {
 
-            return new Mat(this.Rows, this.Cols, this.dt.map(x => x * m));
+            return new Mat([this.Rows, this.Cols], this.dt.map(x => x * m));
         }
         Assert(m instanceof Mat && m.Rows == this.Rows && m.Cols == this.Cols, "Mat-Mul");
         var v = newFloatArray(this.Rows * this.Cols);
@@ -191,7 +214,7 @@
             }
         }
 
-        return new Mat(this.Rows, this.Cols, v);
+        return new Mat([this.Rows, this.Cols], v);
     }
 
     Abs() {
@@ -203,7 +226,7 @@
             }
         }
 
-        return new Mat(this.Rows, this.Cols, v);
+        return new Mat([this.Rows, this.Cols], v);
     }
 
     Sum() {
@@ -230,7 +253,7 @@
                 v[r * m.Cols + c] = sum;
             }
         }
-        return new Mat(this.Rows, m.Cols, v);
+        return new Mat([this.Rows, m.Cols], v);
     }
 
     toString() {
