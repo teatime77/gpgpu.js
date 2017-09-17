@@ -1,6 +1,19 @@
 ﻿class Mat {
-    constructor(shape, init) {
-        
+    constructor() {
+        // 引数のリストをArrayに変換します。
+        var args = Array.prototype.slice.call(arguments);
+
+        // 引数の最後
+        var last_arg = args[args.length - 1];
+        if (Array.isArray(last_arg)) {
+            // 引数の最後が配列の場合
+
+            var init = last_arg;
+            args.pop();
+        }
+
+        var shape = args;
+
         switch (shape.length) {
             case 1:
                 this.Depth = 1;
@@ -73,7 +86,7 @@
     }
 
     map(f) {
-        return new Mat([this.Rows, this.Cols], this.dt.map(f));
+        return new Mat(this.Rows, this.Cols, this.dt.map(f));
     }
 
     T() {
@@ -84,7 +97,7 @@
             }
         }
 
-        return new Mat([this.Cols, this.Rows], v);
+        return new Mat(this.Cols, this.Rows, v);
     }
 
     transpose() {
@@ -120,7 +133,7 @@
             v[r] = this.dt[r * this.Cols + c];
         }
 
-        return new Mat([this.Rows, 1], v);
+        return new Mat(this.Rows, 1, v);
     }
 
     Add(m) {
@@ -133,7 +146,7 @@
             }
         }
 
-        return new Mat([this.Rows, this.Cols], v);
+        return new Mat(this.Rows, this.Cols, v);
     }
 
     AddV(m) {
@@ -146,7 +159,7 @@
             }
         }
 
-        return new Mat([this.Rows, this.Cols], v);
+        return new Mat(this.Rows, this.Cols, v);
     }
 
     SubV(m) {
@@ -159,7 +172,7 @@
             }
         }
 
-        return new Mat([this.Rows, this.Cols], v);
+        return new Mat(this.Rows, this.Cols, v);
     }
 
     reduce(f) {
@@ -184,7 +197,7 @@
             v[r] = x;
         }
 
-        return new Mat([this.Rows, 1], v);
+        return new Mat(this.Rows, 1, v);
     }
 
     Sub(m) {
@@ -197,13 +210,13 @@
             }
         }
 
-        return new Mat([this.Rows, this.Cols], v);
+        return new Mat(this.Rows, this.Cols, v);
     }
 
     Mul(m) {
         if (m instanceof Number) {
 
-            return new Mat([this.Rows, this.Cols], this.dt.map(x => x * m));
+            return new Mat(this.Rows, this.Cols, this.dt.map(x => x * m));
         }
         Assert(m instanceof Mat && m.Rows == this.Rows && m.Cols == this.Cols, "Mat-Mul");
         var v = newFloatArray(this.Rows * this.Cols);
@@ -214,7 +227,7 @@
             }
         }
 
-        return new Mat([this.Rows, this.Cols], v);
+        return new Mat(this.Rows, this.Cols, v);
     }
 
     Abs() {
@@ -226,7 +239,7 @@
             }
         }
 
-        return new Mat([this.Rows, this.Cols], v);
+        return new Mat(this.Rows, this.Cols, v);
     }
 
     Sum() {
@@ -253,7 +266,7 @@
                 v[r * m.Cols + c] = sum;
             }
         }
-        return new Mat([this.Rows, m.Cols], v);
+        return new Mat(this.Rows, m.Cols, v);
     }
 
     toString() {

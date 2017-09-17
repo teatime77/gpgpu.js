@@ -112,7 +112,7 @@ class FullyConnectedLayer extends Layer{
 
             this.nablaBiases = this.Delta;
             // constructor(rows, cols, init, column_major, depth)
-            this.nablaWeights = new Mat([this.weight.Rows, this.weight.Cols, this.batchLength]);
+            this.nablaWeights = new Mat(this.weight.Rows, this.weight.Cols, this.batchLength);
             for (var batch_idx = 0; batch_idx < this.batchLength; batch_idx++) {
                 for (var r = 0; r < this.weight.Rows; r++) {
                     for (var c = 0; c < this.weight.Cols; c++) {
@@ -157,7 +157,7 @@ class ConvolutionalLayer extends Layer{
             dt[i] = i;
         }
         // (rows, cols, init, column_major, depth)
-        var m = new Mat([3, 4 * 4, 2], dt);
+        var m = new Mat(3, 4 * 4, 2, dt);
         var param = {};
 
         param.elementCount = m.dt.length;
@@ -190,7 +190,7 @@ class ConvolutionalLayer extends Layer{
         }
 
         // (rows, cols, init, column_major, depth)
-        var m = new Mat([prev_Layer.imgRows, prev_Layer.imgCols, this.batchLength], prev_Layer.activation.dt);
+        var m = new Mat(prev_Layer.imgRows, prev_Layer.imgCols, this.batchLength, prev_Layer.activation.dt);
 
         var param = {};
 
@@ -287,17 +287,17 @@ class ConvolutionalLayer extends Layer{
 
             if (! isDebug) {
 
-                this.z          = new Mat([this.unitSize, this.batchLength], new Float32Array(this.zArrayBuffer));
-                this.activation = new Mat([this.unitSize, this.batchLength], new Float32Array(this.activationArrayBuffer));
+                this.z          = new Mat(this.unitSize, this.batchLength, new Float32Array(this.zArrayBuffer));
+                this.activation = new Mat(this.unitSize, this.batchLength, new Float32Array(this.activationArrayBuffer));
             }
             else {
 
-                this.z          = new Mat([this.unitSize, this.batchLength], newFloatArray(this.unitSize * this.batchLength));
-                this.activation = new Mat([this.unitSize, this.batchLength], newFloatArray(this.unitSize * this.batchLength));
+                this.z          = new Mat(this.unitSize, this.batchLength, newFloatArray(this.unitSize * this.batchLength));
+                this.activation = new Mat(this.unitSize, this.batchLength, newFloatArray(this.unitSize * this.batchLength));
             }
 
-            //this.z             = new Mat([this.unitSize, this.batchLength]);
-            //this.activation    = new Mat([this.unitSize, this.batchLength]);
+            //this.z             = new Mat(this.unitSize, this.batchLength);
+            //this.activation    = new Mat(this.unitSize, this.batchLength);
         }
 
         if (UseGPU && this.batchLength == 12) {
@@ -353,9 +353,9 @@ class ConvolutionalLayer extends Layer{
         var prev_Layer = this.prevLayer;
         var prev_activation_dt = prev_Layer.activation.dt;
 
-        this.nablaBiases = new Mat([this.filterCount, 1]);
-        this.nablaWeights = new Mat([this.filterSize, this.filterSize, this.filterCount]);
-        this.costDerivative = new Mat([this.unitSize, 1]);
+        this.nablaBiases = new Mat(this.filterCount, 1);
+        this.nablaWeights = new Mat(this.filterSize, this.filterSize, this.filterCount);
+        this.costDerivative = new Mat(this.unitSize, 1);
 
 
         // すべてのフィルターに対し
@@ -522,7 +522,7 @@ class PoolingLayer extends Layer {
             }
         }
 
-        this.activationT = new Mat([this.batchLength, this.unitSize], out_dt);
+        this.activationT = new Mat(this.batchLength, this.unitSize, out_dt);
         this.activation = this.activationT.T();
     }
 
@@ -626,7 +626,7 @@ class Network {
 
     Laminate(mini_batch, i) {
         var x_rows = mini_batch[0][i].Rows;
-        var X = new Mat([x_rows, mini_batch.length]);
+        var X = new Mat(x_rows, mini_batch.length);
         for (var idx = 0; idx < mini_batch.length; idx++) {
             var x = mini_batch[idx][i];
             for (var r = 0; r < x_rows; r++) {
@@ -1021,7 +1021,7 @@ class Network {
         var cnt = test_data["count"];
         var labels = test_data["label"];
 
-        var X = new Mat([cnt, 28 * 28], TestData["image"]).T();
+        var X = new Mat(cnt, 28 * 28, TestData["image"]).T();
         this.layers[0].activation = X;
         this.layers.forEach(x => x.forward());
 
