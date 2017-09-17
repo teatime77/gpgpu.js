@@ -117,7 +117,7 @@ class FullyConnectedLayer extends Layer{
                 for (var r = 0; r < this.weight.Rows; r++) {
                     for (var c = 0; c < this.weight.Cols; c++) {
                         var f = this.Delta.At(r, batch_idx) * this.prevLayer.activation.At(c, batch_idx);
-                        this.nablaWeights.Set3(batch_idx, r, c, f);
+                        this.nablaWeights.Set(batch_idx, r, c, f);
                     }
                 }
             }
@@ -424,7 +424,7 @@ class ConvolutionalLayer extends Layer{
                         }
                     }
 
-                    this.nablaWeights.Set3(filter_idx, r2, c2, nabla_w);
+                    this.nablaWeights.Set(filter_idx, r2, c2, nabla_w);
                 }
             }
         }
@@ -443,7 +443,7 @@ class ConvolutionalLayer extends Layer{
 
                 // フィルターの列に対し
                 for (var c2 = 0; c2 < this.filterSize; c2++) {
-                    var nabla_w = this.nablaWeights.At3(filter_idx, r2, c2);
+                    var nabla_w = this.nablaWeights.At(filter_idx, r2, c2);
 
                     var weight_idx = r2 * this.filterSize + c2;
                     this.weights[filter_idx].dt[weight_idx] -= eta3 * nabla_w;
@@ -659,7 +659,7 @@ class Network {
             }
             else {
 
-                nabla = layer.nablaWeights.At3(batch_idx, r, c);
+                nabla = layer.nablaWeights.At(batch_idx, r, c);
 
                 param_sv = layer.weight.At(r, c);
                 layer.weight.Set(r, c, param_sv - delta);
@@ -677,7 +677,7 @@ class Network {
             }
             else {
 
-                nabla = layer.nablaWeights.At3(filter_idx, r, c);
+                nabla = layer.nablaWeights.At(filter_idx, r, c);
 
                 param_sv = layer.weights[filter_idx].At(r, c);
                 layer.weights[filter_idx].Set(r, c, param_sv - delta);

@@ -20,6 +20,9 @@ function printStackTrace(e) {
 }
 
 function Assert(b, msg) {
+    if (msg == undefined) {
+        msg = "assert";
+    }
     if(!b){
         if (this && this.LineText) {
             console.log(msg + " " + this.LineText);

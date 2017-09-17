@@ -16,21 +16,31 @@
 
         switch (shape.length) {
             case 1:
+                this.Times = 1;
                 this.Depth = 1;
                 this.Rows = 1;
                 this.Cols = shape[0];
                 break;
 
             case 2:
+                this.Times = 1;
                 this.Depth = 1;
                 this.Rows = shape[0];
                 this.Cols = shape[1];
                 break;
 
             case 3:
+                this.Times = 1;
                 this.Depth = shape[0];
                 this.Rows = shape[1];
                 this.Cols = shape[2];
+                break;
+
+            case 4:
+                this.Times = shape[0];
+                this.Depth = shape[1];
+                this.Rows  = shape[2];
+                this.Cols  = shape[3];
                 break;
 
             default:
@@ -40,6 +50,14 @@
 
         this.shape = shape;
         this.nElement = shape.reduce((x, y) => x * y);
+
+        this.sizes = [];
+        var n = 1;
+        for (var i = 0; i < shape.length; i++) {
+            
+            n *= shape[shape.length - 1 - i];
+            this.sizes.splice(i, 0, n);
+        }
 
         if (init) {
 
@@ -104,27 +122,49 @@
         return this.T();
     }
 
-    At(r, c) {
-        Assert(r < this.Rows && c < this.Cols, "Mat-at");
-        return this.dt[r * this.Cols + c];
+    At() {
+        Assert(arguments.length == this.shape.length)
+        switch (this.shape.length) {
+            case 2:
+                Assert(arguments[0] < this.shape[0] && arguments[1] < this.shape[1], "Mat-at");
+                return this.dt[arguments[0] * this.sizes[1] + arguments[1]];
+
+            case 3:
+                Assert(arguments[0] < this.shape[0] && arguments[1] < this.shape[1] && arguments[2] < this.shape[2], "Mat-at");
+                return this.dt[arguments[0] * this.sizes[1] + arguments[1] * this.sizes[2] + arguments[2]];
+
+            case 4:
+                Assert(arguments[0] < this.shape[0] && arguments[1] < this.shape[1] && arguments[2] < this.shape[2] && arguments[3] < this.shape[3], "Mat-at");
+                return this.dt[arguments[0] * this.sizes[1] + arguments[1] * this.sizes[2] + arguments[2] * this.sizes[3] + arguments[3]];
+
+            default:
+                Assert(false);
+        }
     }
 
-    Set(r, c, val) {
-        Assert(r < this.Rows && c < this.Cols, "Mat-set");
+    Set() {
+        // 引数のリストをArrayに変換します。
+        var args = Array.prototype.slice.call(arguments);
 
-        this.dt[r * this.Cols + c] = val;
-    }
+        var val = args.pop();
 
-    Set3(d, r, c, val) {
-        Assert(d < this.Depth && r < this.Rows && c < this.Cols, "Mat-set3");
+        Assert(args.length == this.shape.length)
+        switch (this.shape.length) {
+            case 2:
+                Assert(arguments[0] < this.shape[0] && arguments[1] < this.shape[1], "Mat-at");
+                this.dt[arguments[0] * this.sizes[1] + arguments[1]] = val;
 
-        this.dt[(d * this.Rows + r) * this.Cols + c] = val;
-    }
+            case 3:
+                Assert(arguments[0] < this.shape[0] && arguments[1] < this.shape[1] && arguments[2] < this.shape[2], "Mat-at");
+                this.dt[arguments[0] * this.sizes[1] + arguments[1] * this.sizes[2] + arguments[2]] = val;
 
-    At3(d, r, c) {
-        Assert(d < this.Depth && r < this.Rows && c < this.Cols, "Mat-at3");
+            case 4:
+                Assert(arguments[0] < this.shape[0] && arguments[1] < this.shape[1] && arguments[2] < this.shape[2] && arguments[3] < this.shape[3], "Mat-at");
+                this.dt[arguments[0] * this.sizes[1] + arguments[1] * this.sizes[2] + arguments[2] * this.sizes[3] + arguments[3]] = val;
 
-        return this.dt[(d * this.Rows + r) * this.Cols + c];
+            default:
+                Assert(false);
+        }
     }
 
     Col(c) {
