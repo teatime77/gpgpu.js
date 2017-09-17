@@ -625,15 +625,16 @@ class Network {
     }
 
     Laminate(mini_batch, i) {
-        var x_rows = mini_batch[0][i].Rows;
-        var X = new Mat(x_rows, mini_batch.length);
-        for (var idx = 0; idx < mini_batch.length; idx++) {
-            var x = mini_batch[idx][i];
-            for (var r = 0; r < x_rows; r++) {
-                X.dt[r * X.Cols + idx] = x.dt[r];
+        // データの次元
+        var dim_size = mini_batch[0][i].Cols;
+        var X = new Mat(dim_size, mini_batch.length);
+        for (var batch_idx = 0; batch_idx < mini_batch.length; batch_idx++) {
+            var x = mini_batch[batch_idx][i];
+            for (var dim = 0; dim < dim_size; dim++) {
+                X.dt[dim * mini_batch.length + batch_idx] = x.dt[dim];
             }
         }
-
+        
         return X;
     }
 

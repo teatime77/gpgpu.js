@@ -5,8 +5,8 @@
 
         // 引数の最後
         var last_arg = args[args.length - 1];
-        if (Array.isArray(last_arg)) {
-            // 引数の最後が配列の場合
+        if (typeof last_arg != 'number') {
+            // 引数の最後が数値でない場合
 
             var init = last_arg;
             args.pop();
