@@ -9,9 +9,34 @@
     return null;
 };
 
+function printStackTrace(e) {
+    if (e.stack) {
+        // 出力方法は、使いやすいように修正する。
+        console.log(e.stack);
+    } else {
+        // stackがない場合には、そのままエラー情報を出す。
+        console.log(e.message, e);
+    }
+}
+
 function Assert(b, msg) {
-    if (!b) {
-        console.log(msg + " " + this.LineText);
+    if(!b){
+        if (this && this.LineText) {
+            console.log(msg + " " + this.LineText);
+        }
+        else {
+
+            console.log(msg);
+        }
+        try {
+            // 例外を発生させてみる。
+            throw new Error("original Error");
+        }
+        catch (e) {
+            printStackTrace(e);
+        }
+
+        throw new Error("msg");
     }
 }
 

@@ -4,10 +4,31 @@
         this.Cols = cols;
         this.Depth = (depth == undefined ? 1 : depth);
         this.shape = [rows, cols];
+//        Assert(column_major != true, "column major");
         this.columnMajor = (column_major == undefined ? false : column_major);
 
         if (init) {
 
+            if ((init instanceof Float32Array || init instanceof Float64Array) && init.length == rows * cols * this.Depth) {
+
+            }
+            else {
+                console.log("--------------------------------")
+                console.log(init instanceof Float32Array);
+                console.log(init instanceof Float64Array);
+                console.log(String(init.length));
+                console.log(String(rows) + ":" + String(cols) + ":" + String(this.Depth));
+                console.log(init.length == rows * cols * this.Depth);
+
+                try {
+                    // 例外を発生させてみる。
+                    throw new Error("original Error");
+                }
+                catch (e) {
+                    printStackTrace(e);
+                }
+                console.assert(false);
+            }
             Assert((init instanceof Float32Array || init instanceof Float64Array) && init.length == rows * cols * this.Depth, "Mat-init");
             this.dt = init;
         }
@@ -23,6 +44,11 @@
             }
             */
         }
+    }
+
+    copy(m) {
+        Assert(this.Rows == m.Rows && this.Cols == m.Cols && this.Depth == m.Depth);
+        this.dt.set(m.dt);
     }
 
     map(f) {
@@ -117,15 +143,19 @@
 
     reduce(f) {
         var v = newFloatArray(this.Rows);
+        // すべての行に対し
         for (var r = 0; r < this.Rows; r++) {
             var x;
+            // 列の最初の要素から順にfを適用する。
             for (var c = 0; c < this.Cols; c++) {
                 var k = r * this.Cols + c;
                 if (c == 0) {
+                    // 最初の場合
 
                     x = this.dt[k];
                 }
                 else {
+                    // 2番目以降の場合
 
                     x = f(x, this.dt[k]);
                 }

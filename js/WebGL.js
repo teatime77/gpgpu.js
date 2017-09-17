@@ -183,7 +183,8 @@ class WebGLLib {
             }
             else{
 
-                gpu.arrayBuffers = xrange(param.varyings.length).map(x => new ArrayBuffer(out_buffer_size));
+                console.assert(!isFloat64);
+                gpu.arrayBuffers = xrange(param.varyings.length).map(x => new Float32Array(param.elementCount));    // ArrayBuffer(out_buffer_size)
             }
 
             for (var i = 0; i < param.varyings.length; i++) {

@@ -1,7 +1,8 @@
 ﻿// import
 // import
 var isDebug = false;
-var isFloat64 = true;// isDebug;
+var UseGPU = false;
+var isFloat64 = false;
 var DebugOut = true;
 
 function newFloatArray(x) {
@@ -102,7 +103,9 @@ class FullyConnectedLayer extends Layer{
         }
         this.Delta = this.costDerivative.Mul(sigmoid_prime(this.z));
 
+        // Deltaの各行のバッチ内の総和
         this.nabla_b = this.Delta.reduce((x, y) => x + y);
+
         this.nabla_w = np.dot(this.Delta, this.prevLayer.activation.transpose());
 
         if (isDebug) {
@@ -278,8 +281,9 @@ class ConvolutionalLayer extends Layer{
 
         if (!this.z || this.z.Rows != this.unitSize || this.z.Cols != this.batchLength){
 
-            this.zArrayBuffer          = new ArrayBuffer(4 * this.unitSize * this.batchLength);
-            this.activationArrayBuffer = new ArrayBuffer(4 * this.unitSize * this.batchLength);
+            console.assert(!isFloat64);
+            this.zArrayBuffer = new Float32Array(this.unitSize * this.batchLength);          // ArrayBuffer
+            this.activationArrayBuffer = new Float32Array(this.unitSize * this.batchLength); // ArrayBuffer
 
             if (! isDebug) {
 
@@ -296,7 +300,7 @@ class ConvolutionalLayer extends Layer{
             //this.activation    = new Mat(this.unitSize, this.batchLength, null, true);
         }
 
-        if (!isFloat64 && this.batchLength == 12) {
+        if (UseGPU && this.batchLength == 12) {
 
             this.gpuForward();
         }

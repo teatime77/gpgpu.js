@@ -13,7 +13,7 @@
 </head>
 <body>
 <div id="drop_zone" style="width:100px; height:100px; background-color:darkgray">Drop files here</div>
-<canvas id="digit-canvas" width="28" height="28" style="width:28px; height:28px; background-color:aqua"/>
+<canvas id="digit-canvas" width="28" height="28" style="width:28px; height:28px; background-color:aqua"></canvas>
 <output id="list"></output>
 
     <script type="text/javascript">
@@ -46,8 +46,8 @@
 
             var net = new Network([
                 new InputLayer(28, 28),
-                //new ConvolutionalLayer(5, 20),
-                //new PoolingLayer(2),
+//                new ConvolutionalLayer(5, 20),
+//                new PoolingLayer(2),
                 new FullyConnectedLayer(30),
                 new FullyConnectedLayer(10)
             ]);
