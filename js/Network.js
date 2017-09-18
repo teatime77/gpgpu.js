@@ -329,50 +329,66 @@ class ConvolutionalLayer extends Layer{
 
     backward(Y, eta2) {
         //this.Delta = this.nextLayer.Delta.Mul(sigmoid_prime(this.z));
-        var delta_z = new Mat(this.filterCount, this.imgRows, this.imgCols, this.batchLength, this.nextLayer.Delta);
-            new Mat(this.nextLayer.DeltaT);
-        for (var i = 0; i < deltaT.length; i++) {
-            deltaT[i] *= sigmoid_primeF(this.z.dt[i]);
-        }
+        var delta_y = new Mat(this.filterCount, this.imgRows, this.imgCols, this.batchLength, this.nextLayer.Delta);
 
-        var prev_Layer = this.prevLayer;
-        var prev_activation_dt = prev_Layer.activation.dt;
+        // δz = δy * σ'(z)
+        var delta_z = delta_y.Mul(this.z.map(sigmoid_primeF));
 
-        this.nablaBiases = new Mat(this.filterCount, 1);
+        this.nablaBiases = new Mat(this.filterCount);
         this.nablaWeights = new Mat(this.filterSize, this.filterSize, this.filterCount);
-        this.costDerivative = new Mat(this.unitSize, 1);
 
+        var delta_x = new Mat(this.prevLayer.imgRows, this.prevLayer.imgCols);
+
+        // 入力の行に対し
+        for (var r = 0; r < delta_x.Rows; r++) {
+
+            // 入力の列に対し
+            for (var c = 0; c < delta_x.Cols; c++) {
+
+                var wk = 0.0;
+
+                // バッチ内のデータに対し
+                for (var batch_idx = 0; batch_idx < this.batchLength; batch_idx++) {
+
+                    // すべてのフィルターに対し
+                    for (var filter_idx = 0; filter_idx < this.filterCount; filter_idx++) {
+
+                        // フィルターの行に対し
+                        for (var p = Math.max(0, r - this.imgRows + 1) ; p < Math.min(this.filterSize, r) ; p++) {
+
+                            // フィルターの列に対し
+                            for (var q = Math.max(0, c - this.imgCols + 1) ; q < Math.min(this.filterSize, q) ; q++) {
+                                wk += delta_z.At(filter_idx, r - p, c - q, batch_idx) * this.weights.At(filter_idx, p, q);
+                            }
+                        }
+                    }
+                }
+
+                delta_x.Set(r, c) = wk;
+            }
+        }
+        
 
         // すべてのフィルターに対し
         for (var filter_idx = 0; filter_idx < this.filterCount; filter_idx++) {
 
             var nabla_b = 0.0;
 
-            // バッチ内のデータに対し
-            for (var batch_idx = 0; batch_idx < this.batchLength; batch_idx++) {
+            // 出力の行に対し
+            for (var r1 = 0; r1 < this.imgRows; r1++) {
 
-                // 出力の行に対し
-                for (var r1 = 0; r1 < this.imgRows; r1++) {
+                // 出力の列に対し
+                for (var c1 = 0; c1 < this.imgCols; c1++) {
 
-                    // 出力の列に対し
-                    for (var c1 = 0; c1 < this.imgCols; c1++) {
+                    // バッチ内のデータに対し
+                    for (var batch_idx = 0; batch_idx < this.batchLength; batch_idx++) {
 
-                        // 出力先
-                        var output_base = batch_idx * this.unitSize + this.filterCount * (r1 * this.imgCols + c1);
-                        var output_idx = output_base + filter_idx;
-
-                        //var z_val = sum + bias;
-
-                        //z_dt[output_idx] = z_val;
-                        //activation_dt[output_idx] = sigmoidF(z_val);
-
-                        nabla_b += deltaT[output_idx];
-                        this.costDerivative.dt[output_idx] = this.nextLayer.DeltaT[output_idx];
+                        nabla_b += delta_z.At(filter_idx, r1, c1, batch_idx);
                     }
                 }
             }
 
-            this.nablaBiases.Set(filter_idx, 0, nabla_b);
+            this.nablaBiases.Set(filter_idx, nabla_b);
         }
 
         // すべてのフィルターに対し
@@ -398,12 +414,11 @@ class ConvolutionalLayer extends Layer{
                                 var output_base = batch_idx * this.unitSize + this.filterCount * (r1 * this.imgCols + c1);
                                 var output_idx = output_base + filter_idx;
 
-                                var delta = deltaT[output_idx];
+                                var delta = delta_z.At(filter_idx, r1, c1, batch_idx);
                                 if (delta != 0) {
 
-                                    var prev_activation_idx = batch_idx * prev_Layer.unitSize + (r1 + r2) * prev_Layer.imgCols + (c1 + c2);
 
-                                    nabla_w += delta * prev_activation_dt[ prev_activation_idx ];
+                                    nabla_w += delta * this.prevLayer.activation.At(r1 + r2, c1 + c2, batch_idx);
                                 }
                             }
                         }
@@ -421,17 +436,15 @@ class ConvolutionalLayer extends Layer{
         // すべてのフィルターに対し
         for (var filter_idx = 0; filter_idx < this.filterCount; filter_idx++) {
 
-            this.biases[filter_idx]-= eta3 * this.nablaBiases.At(filter_idx, 0);
+            this.biases.Diff(filter_idx,  - eta3 * this.nablaBiases.At(filter_idx));
 
             // フィルターの行に対し
             for (var r2 = 0; r2 < this.filterSize; r2++) {
 
                 // フィルターの列に対し
                 for (var c2 = 0; c2 < this.filterSize; c2++) {
-                    var nabla_w = this.nablaWeights.At(filter_idx, r2, c2);
 
-                    var weight_idx = r2 * this.filterSize + c2;
-                    this.weights[filter_idx].dt[weight_idx] -= eta3 * nabla_w;
+                    this.weights.Diff(filter_idx, r2, c2, - eta3 * this.nablaWeights.At(filter_idx, r2, c2));
                 }
             }
         }

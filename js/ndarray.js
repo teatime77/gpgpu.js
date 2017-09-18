@@ -122,7 +122,7 @@
     }
 
     map(f) {
-        return new Mat(this.Rows, this.Cols, this.dt.map(f));
+        return new Mat(this.shape.concat([this.dt.map(f)]));
     }
 
     T() {
@@ -171,6 +171,14 @@
 
         var val = args.pop();
         this.dt[Idx(args)] = val;
+    }
+
+    Diff() {
+        // 引数のリストをArrayに変換します。
+        var args = Array.prototype.slice.call(arguments);
+
+        var val = args.pop();
+        this.dt[Idx(args)] += val;
     }
 
     Col(c) {
