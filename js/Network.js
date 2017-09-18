@@ -249,11 +249,15 @@ class ConvolutionalLayer extends Layer{
                             // フィルターの列に対し
                             for (var c2 = 0; c2 < this.filterSize; c2++) {
                                 var in_idx = (r1 + r2) * this.prevLayer.imgCols + (c1 + c2);
-                                sum += this.prevLayer.activation.At(in_idx, batch_idx) * this.weights.At(filter_idx, r2, c2);
+
+
+                                var i1 = in_idx * this.prevLayer.activation.sizes[1] + batch_idx;
+                                var i2 = filter_idx * this.weights.sizes[1] + r2 * this.weights.sizes[2] + c2;
+                                sum += this.prevLayer.activation.dt[i1] * this.weights.dt[i2];
                             }
                         }
 
-                        var z_val = sum + this.biases.At(filter_idx);
+                        var z_val = sum + this.biases.dt[filter_idx];
 
                         this.z.Set(filter_idx, r1, c1, batch_idx, z_val);
                         this.activation4.Set(filter_idx, r1, c1, batch_idx, sigmoidF(z_val));
@@ -342,6 +346,7 @@ class ConvolutionalLayer extends Layer{
         this.nablaBiases = new Mat(this.filterCount);
         this.nablaWeights = new Mat(this.filterCount, this.filterSize, this.filterSize);
 
+    /*
         var delta_x = new Mat(this.prevLayer.imgRows, this.prevLayer.imgCols);
 
         // 入力の行に対し
@@ -372,7 +377,7 @@ class ConvolutionalLayer extends Layer{
                 delta_x.Set(r, c, wk);
             }
         }
-        
+    */
 
         // すべてのフィルターに対し
         for (var filter_idx = 0; filter_idx < this.filterCount; filter_idx++) {
@@ -388,7 +393,8 @@ class ConvolutionalLayer extends Layer{
                     // バッチ内のデータに対し
                     for (var batch_idx = 0; batch_idx < this.batchLength; batch_idx++) {
 
-                        nabla_b += delta_z.At(filter_idx, r1, c1, batch_idx);
+                        var i1 = filter_idx * delta_z.sizes[1] + r1 * delta_z.sizes[2] + c1 * delta_z.sizes[3] + batch_idx;
+                        nabla_b += delta_z.dt[i1];
                     }
                 }
             }
@@ -416,12 +422,14 @@ class ConvolutionalLayer extends Layer{
                             // 出力の列に対し
                             for (var c1 = 0; c1 < this.imgCols; c1++) {
 
-                                var delta = delta_z.At(filter_idx, r1, c1, batch_idx);
+                                var i1 = filter_idx * delta_z.sizes[1] + r1 * delta_z.sizes[2] + c1 * delta_z.sizes[3] + batch_idx;
+                                var delta = delta_z.dt[i1];
                                 if (delta != 0) {
 
 
                                     var in_idx = (r1 + r2) * this.prevLayer.imgCols + (c1 + c2);
-                                    nabla_w += delta * this.prevLayer.activation.At(in_idx, batch_idx);
+                                    var i2 = in_idx * this.prevLayer.activation.sizes[1] + batch_idx;
+                                    nabla_w += delta * this.prevLayer.activation.dt[i2];
                                 }
                             }
                         }
@@ -439,7 +447,7 @@ class ConvolutionalLayer extends Layer{
         // すべてのフィルターに対し
         for (var filter_idx = 0; filter_idx < this.filterCount; filter_idx++) {
 
-            this.biases.Diff(filter_idx,  - eta3 * this.nablaBiases.At(filter_idx));
+            this.biases.Diff(filter_idx,  - eta3 * this.nablaBiases.dt[filter_idx]);
 
             // フィルターの行に対し
             for (var r2 = 0; r2 < this.filterSize; r2++) {
@@ -447,7 +455,8 @@ class ConvolutionalLayer extends Layer{
                 // フィルターの列に対し
                 for (var c2 = 0; c2 < this.filterSize; c2++) {
 
-                    this.weights.Diff(filter_idx, r2, c2, - eta3 * this.nablaWeights.At(filter_idx, r2, c2));
+                    var i1 = filter_idx * this.nablaWeights.sizes[1] + r2 * this.nablaWeights.sizes[2] + c2;
+                    this.weights.Diff(filter_idx, r2, c2, - eta3 * this.nablaWeights.dt[i1]);
                 }
             }
         }
@@ -599,7 +608,7 @@ class Network {
                 var X = this.Laminate(mini_batch, 0);
                 var Y = this.Laminate(mini_batch, 1);
                 this.update_mini_batch(mini_batch_size, X, Y, eta);
-                if (this.layers[1].fwCnt % 1000 == 0) {
+                if (this.layers[1].fwCnt % 100 == 0) {
 
                     var s = "" + this.layers[1].fwCnt + " ";
                     for(let layer of this.layers.slice(1)) {
