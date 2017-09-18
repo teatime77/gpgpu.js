@@ -71,15 +71,17 @@
 
         this.sizes = [];
         var n = 1;
-        for (var i = 0; i < shape.length; i++) {
+        for (var i = shape.length - 1; 0 <= i; i--) {
             
-            n *= shape[shape.length - 1 - i];
-            this.sizes.splice(i, 0, n);
+            n *= shape[i];
+            this.sizes.push(n);
         }
+        this.sizes.reverse();
+        Assert(this.nElement == this.sizes[0]);
 
         if (init) {
 
-            if ((init instanceof Float32Array || init instanceof Float64Array) && init.length == this.Rows * this.Cols * this.Depth) {
+            if ((init instanceof Float32Array || init instanceof Float64Array) && init.length == this.nElement) {
 
             }
             else {
@@ -99,12 +101,11 @@
                 }
                 console.assert(false);
             }
-            Assert((init instanceof Float32Array || init instanceof Float64Array) && init.length == this.Rows * this.Cols * this.Depth, "Mat-init");
             this.dt = init;
         }
         else {
 
-            this.dt = newFloatArray(this.Rows * this.Cols * this.Depth);
+            this.dt = newFloatArray(this.nElement);
             /*
             for (var r = 0; r < this.Rows; r++) {
                 for (var c = 0; c < this.Cols; c++) {
@@ -117,7 +118,7 @@
     }
 
     copy(m) {
-        Assert(this.Rows == m.Rows && this.Cols == m.Cols && this.Depth == m.Depth);
+        Assert(this.SameShape(m));
         this.dt.set(m.dt);
     }
 
@@ -141,19 +142,34 @@
     }
 
     Idx() {
-        Assert(arguments.length == this.shape.length)
+        var args;
+        if (arguments.length == 1 && Array.isArray(arguments[0])) {
+
+            args = arguments[0];
+        }
+        else {
+
+            // 引数のリストをArrayに変換します。
+            args = Array.prototype.slice.call(arguments);
+        }
+
+        Assert(args.length == this.shape.length)
         switch (this.shape.length) {
+            case 1:
+                Assert(args[0] < this.shape[0], "Mat-at");
+                return args[0];
+
             case 2:
-                Assert(arguments[0] < this.shape[0] && arguments[1] < this.shape[1], "Mat-at");
-                return arguments[0] * this.sizes[1] + arguments[1];
+                Assert(args[0] < this.shape[0] && args[1] < this.shape[1], "Mat-at");
+                return args[0] * this.sizes[1] + args[1];
 
             case 3:
-                Assert(arguments[0] < this.shape[0] && arguments[1] < this.shape[1] && arguments[2] < this.shape[2], "Mat-at");
-                return arguments[0] * this.sizes[1] + arguments[1] * this.sizes[2] + arguments[2];
+                Assert(args[0] < this.shape[0] && args[1] < this.shape[1] && args[2] < this.shape[2], "Mat-at");
+                return args[0] * this.sizes[1] + args[1] * this.sizes[2] + args[2];
 
             case 4:
-                Assert(arguments[0] < this.shape[0] && arguments[1] < this.shape[1] && arguments[2] < this.shape[2] && arguments[3] < this.shape[3], "Mat-at");
-                return arguments[0] * this.sizes[1] + arguments[1] * this.sizes[2] + arguments[2] * this.sizes[3] + arguments[3];
+                Assert(args[0] < this.shape[0] && args[1] < this.shape[1] && args[2] < this.shape[2] && args[3] < this.shape[3], "Mat-at");
+                return args[0] * this.sizes[1] + args[1] * this.sizes[2] + args[2] * this.sizes[3] + args[3];
 
             default:
                 Assert(false);
@@ -162,7 +178,7 @@
 
     At() {
         var args = Array.prototype.slice.call(arguments);
-        return this.dt[Idx(args)]
+        return this.dt[this.Idx(args)]
     }
 
     Set() {
@@ -170,7 +186,7 @@
         var args = Array.prototype.slice.call(arguments);
 
         var val = args.pop();
-        this.dt[Idx(args)] = val;
+        this.dt[this.Idx(args)] = val;
     }
 
     Diff() {
@@ -178,7 +194,7 @@
         var args = Array.prototype.slice.call(arguments);
 
         var val = args.pop();
-        this.dt[Idx(args)] += val;
+        this.dt[this.Idx(args)] += val;
     }
 
     Col(c) {
