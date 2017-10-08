@@ -13,7 +13,7 @@
 </head>
 <body>
 <div id="drop_zone" style="width:100px; height:100px; background-color:darkgray">Drop files here</div>
-<canvas id="digit-canvas" width="28" height="28" style="width:28px; height:28px; background-color:aqua"></canvas>
+<canvas id="digit-canvas" width="28" height="28" style="width:28px; height:28px; background-color:aqua"/>
 <output id="list"></output>
 
     <script type="text/javascript">
@@ -46,7 +46,7 @@
 
             var net = new Network([
                 new InputLayer(28, 28),
-                new ConvolutionalLayer(5, 20),
+//                new ConvolutionalLayer(2, 20),//(5, 20) //!!!!!!!!!! テスト用 !!!!!!!!!!
 //                new PoolingLayer(2),
                 new FullyConnectedLayer(30),
                 new FullyConnectedLayer(10)
@@ -154,10 +154,10 @@
 
                             for (var i = 0; i < TrainingImgCnt; i++) {
                                 var st = 16 + wh * i;
-                                var x = new Mat(wh, newFloatArray(TrainingDataImage.slice(st, st + wh)));
+                                var x = new Mat(wh, 1, newFloatArray(TrainingDataImage.slice(st, st + wh)));
                                 x.dt = x.dt.map(a => a / 256.0);
                                 var n = TrainingDataLabel[8 + i];
-                                var y = new Mat(10, newFloatArray(10));
+                                var y = new Mat(10, 1, newFloatArray(10));
                                 y.dt[n] = 1;
 
                                 TrainingData.push([x, y]);

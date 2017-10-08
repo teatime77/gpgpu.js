@@ -12,10 +12,7 @@ class TNumpy {
     }
 
     dot(A, B) {
-        if (!(A instanceof Mat && B instanceof Mat && A.Cols == B.Rows)) {
-            console.log("");
-        }
-        Assert(A instanceof Mat && B instanceof Mat && A.Cols == B.Rows, "d-o-t");
+        Assert(A instanceof Mat && B instanceof Mat && A.Cols == B.Rows && !A.columnMajor && !B.columnMajor, "d-o-t");
 
         var key = "" + A.Rows + "," + A.Cols + "," + B.Cols;
         if (vDot[key] == undefined) {
@@ -28,6 +25,7 @@ class TNumpy {
 
             var param = {};
 
+            param.elementDim = 1;
             param.elementCount = A.Rows * B.Cols;
 
             var vs_id;
@@ -114,13 +112,24 @@ class TNumpyRandom {
     }
 
     randn() {
-        if(arguments.length == 0){
+        var m;
 
-            return this.NextDouble();
+        switch (arguments.length) {
+            case 0:
+                return this.NextDouble();
+
+            case 1:
+                m = new Mat(1, arguments[0]);
+                break;
+
+            case 2:
+                m = new Mat(arguments[0], arguments[1]);
+                break;
+
+            default:
+                Assert(false, "");
+                return null;
         }
-
-        var args = Array.prototype.slice.call(arguments);
-        var m = new Mat(args);
 
         m.dt = m.dt.map(x => this.NextDouble());
 //        m.dt = m.dt.map(x => Math.random());

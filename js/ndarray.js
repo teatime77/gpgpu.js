@@ -1,200 +1,77 @@
 ﻿class Mat {
-    constructor() {
-        var args;
-        if (arguments.length == 1 && Array.isArray(arguments[0])) {
-
-            args = arguments[0];
+    constructor(rows, cols, init, column_major, depth) {
+        if(cols  == undefined){
+            cols = 1;
         }
-        else {
+        this.Rows  = rows;
+        this.Cols  = cols;
+        this.Depth = (depth == undefined ? 1 : depth);
+        this.shape = [rows, cols];
+        this.columnMajor = (column_major == undefined ? false : column_major);
 
-            // 引数のリストをArrayに変換します。
-            args = Array.prototype.slice.call(arguments);
-        }
-
-        // 引数の最後
-        var last_arg = args[args.length - 1];
-        if (typeof last_arg != 'number') {
-            // 引数の最後が数値でない場合
-
-            var init;
-
-            if(typeof last_arg == 'Mat'){
-
-                init = new Float32Array(last_arg.dt);
-            }
-            else{
-
-                Assert(last_arg instanceof Float32Array, "is Float32Array");
-                init = last_arg;
-            }
-            args.pop();
-        }
-
-        var shape = args;
-
-        switch (shape.length) {
-            case 1:
-                this.Times = 1;
-                this.Depth = 1;
-                this.Rows = 1;
-                this.Cols = shape[0];
-                break;
-
-            case 2:
-                this.Times = 1;
-                this.Depth = 1;
-                this.Rows = shape[0];
-                this.Cols = shape[1];
-                break;
-
-            case 3:
-                this.Times = 1;
-                this.Depth = shape[0];
-                this.Rows = shape[1];
-                this.Cols = shape[2];
-                break;
-
-            case 4:
-                this.Times = shape[0];
-                this.Depth = shape[1];
-                this.Rows  = shape[2];
-                this.Cols  = shape[3];
-                break;
-
-            default:
-                Assert(false, "new mat:" + String(shape.length) + ":" + typeof arguments[0] + ":" + arguments[0] + ":" + String(arguments.length))
-                break;
-        }
-
-        this.shape = shape;
-        this.nElement = shape.reduce((x, y) => x * y);
-
-        this.sizes = [];
-        var n = 1;
-        for (var i = shape.length - 1; 0 <= i; i--) {
-            
-            n *= shape[i];
-            this.sizes.push(n);
-        }
-        this.sizes.reverse();
-        Assert(this.nElement == this.sizes[0]);
+        Assert(!this.columnMajor);
 
         if (init) {
 
-            if ((init instanceof Float32Array || init instanceof Float64Array) && init.length == this.nElement) {
-
-            }
-            else {
-                console.log("--------------------------------")
-                console.log(init instanceof Float32Array);
-                console.log(init instanceof Float64Array);
-                console.log(String(init.length));
-                console.log(String(this.Rows) + ":" + String(this.Cols) + ":" + String(this.Depth));
-                console.log(init.length == this.Rows * this.Cols * this.Depth);
-
-                try {
-                    // 例外を発生させてみる。
-                    throw new Error("original Error");
-                }
-                catch (e) {
-                    printStackTrace(e);
-                }
-                console.assert(false);
-            }
+            Assert((init instanceof Float32Array || init instanceof Float64Array) && init.length == rows * cols * this.Depth, "Mat-init");
             this.dt = init;
         }
         else {
 
-            this.dt = newFloatArray(this.nElement);
+            this.dt = newFloatArray(rows * cols * this.Depth);
             /*
-            for (var r = 0; r < this.Rows; r++) {
-                for (var c = 0; c < this.Cols; c++) {
-                    //                            this.dt[r * this.Cols + c] = r * 1000 + c;
-                    this.dt[r * this.Cols + c] = Math.random();
+            for (var r = 0; r < rows; r++) {
+                for (var c = 0; c < cols; c++) {
+                    //                            this.dt[r * cols + c] = r * 1000 + c;
+                    this.dt[r * cols + c] = Math.random();
                 }
             }
             */
         }
     }
 
-    copy(m) {
-        Assert(this.SameShape(m));
-        this.dt.set(m.dt);
-    }
-
     map(f) {
-        return new Mat(this.shape.concat([this.dt.map(f)]));
+        return new Mat(this.Rows, this.Cols, this.dt.map(f), this.columnMajor);
     }
 
-    T() {
-        var v = newFloatArray(this.Cols * this.Rows);
+    T(m) {
+        if (m == undefined) {
+            m = new Mat(this.Cols, this.Rows);
+        }
         for (var r = 0; r < this.Cols; r++) {
             for (var c = 0; c < this.Rows; c++) {
-                v[r * this.Rows + c] = this.dt[c * this.Cols + r];
+                m.dt[r * this.Rows + c] = this.dt[c * this.Cols + r];
             }
         }
 
-        return new Mat(this.Cols, this.Rows, v);
+        return m;
     }
 
     transpose() {
         return this.T();
     }
 
-    Idx() {
-        var args;
-        if (arguments.length == 1 && Array.isArray(arguments[0])) {
-
-            args = arguments[0];
-        }
-        else {
-
-            // 引数のリストをArrayに変換します。
-            args = Array.prototype.slice.call(arguments);
-        }
-
-        Assert(args.length == this.shape.length)
-        switch (this.shape.length) {
-            case 1:
-                Assert(args[0] < this.shape[0], "Mat-at");
-                return args[0];
-
-            case 2:
-                Assert(args[0] < this.shape[0] && args[1] < this.shape[1], "Mat-at");
-                return args[0] * this.sizes[1] + args[1];
-
-            case 3:
-                Assert(args[0] < this.shape[0] && args[1] < this.shape[1] && args[2] < this.shape[2], "Mat-at");
-                return args[0] * this.sizes[1] + args[1] * this.sizes[2] + args[2];
-
-            case 4:
-                Assert(args[0] < this.shape[0] && args[1] < this.shape[1] && args[2] < this.shape[2] && args[3] < this.shape[3], "Mat-at");
-                return args[0] * this.sizes[1] + args[1] * this.sizes[2] + args[2] * this.sizes[3] + args[3];
-
-            default:
-                Assert(false);
-        }
+    At(r, c) {
+        Assert(r < this.Rows && c < this.Cols && this.Depth == 1, "Mat-at");
+        return this.dt[r * this.Cols + c];
     }
 
-    At() {
-        var args = Array.prototype.slice.call(arguments);
-        return this.dt[this.Idx(args)]
+    Set(r, c, val) {
+        Assert(r < this.Rows && c < this.Cols && this.Depth == 1, "Mat-set");
+
+        this.dt[r * this.Cols + c] = val;
     }
 
-    Set() {
-        // 引数のリストをArrayに変換します。
-        var args = Array.prototype.slice.call(arguments);
+    Set3(d, r, c, val) {
+        Assert(d < this.Depth && r < this.Rows && c < this.Cols, "Mat-set3");
 
-        var val = args.pop();
-        this.dt[this.Idx(args)] = val;
+        this.dt[(d * this.Rows + r) * this.Cols + c] = val;
     }
 
-    Diff() {
-        // 引数のリストをArrayに変換します。
-        var args = Array.prototype.slice.call(arguments);
+    At3(d, r, c) {
+        Assert(d < this.Depth && r < this.Rows && c < this.Cols, "Mat-at3");
 
-        var val = args.pop();
-        this.dt[this.Idx(args)] += val;
+        return this.dt[(d * this.Rows + r) * this.Cols + c];
     }
 
     Col(c) {
@@ -206,26 +83,37 @@
         return new Mat(this.Rows, 1, v);
     }
 
-    SameShape(m) {
-        if (this.shape.length != m.shape.length) {
-            return false;
-        }
-        for (var i = 0; i < this.shape.length; i++) {
-            if (this.shape[i] != m.shape[i]) {
-                return false;
+    CopyRows(m, r_src, r_dst, r_cnt) {
+        Assert(m instanceof Mat && m.Cols == this.Cols && r_src + r_cnt <= this.Rows && r_dst + r_cnt <= m.Rows, "copy-rows");
+
+        for (var r = 0; r < r_cnt; r++) {
+            for (var c = 0; c < this.Cols; c++) {
+                m.dt[(r_dst + r) * m.Cols + c] = this.dt[(r_src + r) * this.Cols + c];
             }
         }
-        return true;
+    }
+
+    CopyCols(m, c_src, c_dst, c_cnt) {
+        Assert(m instanceof Mat && m.Rows == this.Rows && c_src + c_cnt <= this.Cols && c_dst + c_cnt <= m.Cols, "copy-cols");
+
+        for (var r = 0; r < this.Rows; r++) {
+            for (var c = 0; c < c_cnt; c++) {
+                m.dt[ r * m.Cols + c_dst + c ] = this.dt[ r * this.Cols + c_src + c ];
+            }
+        }
     }
 
     Add(m) {
-        Assert(m instanceof Mat && this.SameShape(m), "Mat-add");
-        var v = newFloatArray(this.dt.length);
-        for (var i = 0; i < this.dt.length; i++) {
-            v[i] = this.dt[i] + m.dt[i];
+        Assert(m instanceof Mat && m.Rows == this.Rows && m.Cols == this.Cols, "Mat-add");
+        var v = newFloatArray(this.Rows * this.Cols);
+        for (var r = 0; r < this.Rows; r++) {
+            for (var c = 0; c < this.Cols; c++) {
+                var k = r * this.Cols + c;
+                v[k] = this.dt[k] + m.dt[k];
+            }
         }
 
-        return new Mat(this.shape.concat([v]));
+        return new Mat(this.Rows, this.Cols, v);
     }
 
     AddV(m) {
@@ -256,19 +144,15 @@
 
     reduce(f) {
         var v = newFloatArray(this.Rows);
-        // すべての行に対し
         for (var r = 0; r < this.Rows; r++) {
             var x;
-            // 列の最初の要素から順にfを適用する。
             for (var c = 0; c < this.Cols; c++) {
                 var k = r * this.Cols + c;
                 if (c == 0) {
-                    // 最初の場合
 
                     x = this.dt[k];
                 }
                 else {
-                    // 2番目以降の場合
 
                     x = f(x, this.dt[k]);
                 }
@@ -297,14 +181,16 @@
 
             return new Mat(this.Rows, this.Cols, this.dt.map(x => x * m));
         }
-
-        Assert(m instanceof Mat && this.SameShape(m), "Mat-mul");
-        var v = newFloatArray(this.dt.length);
-        for (var i = 0; i < this.dt.length; i++) {
-            v[i] = this.dt[i] * m.dt[i];
+        Assert(m instanceof Mat && m.Rows == this.Rows && m.Cols == this.Cols && m.columnMajor == this.columnMajor, "Mat-Mul");
+        var v = newFloatArray(this.Rows * this.Cols);
+        for (var r = 0; r < this.Rows; r++) {
+            for (var c = 0; c < this.Cols; c++) {
+                var k = r * this.Cols + c;
+                v[k] = this.dt[k] * m.dt[k];
+            }
         }
 
-        return new Mat(this.shape.concat([v]));
+        return new Mat(this.Rows, this.Cols, v);
     }
 
     Abs() {

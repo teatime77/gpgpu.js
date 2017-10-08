@@ -1,10 +1,33 @@
 ﻿var Shaders = {};
 
+Shaders["BatchTest"] = `#version 300 es
+
+precision highp float;
+precision highp int;
+precision highp sampler3D;
+
+uniform sampler3D tt;
+
+layout(location = 0) in float idx_f;
+
+out vec4 y;
+out vec4 z;
+
+void main() {
+    vec4  txl = 
+
+    y = texelFetch(prev_activation, ivec3(x, y, Z), 0);
+    z = vec4(5.0 * idx_f, 6.0 * idx_f, 7.0 * idx_f, 8.0 * idx_f);
+}`;
+
+
 Shaders["Test"] = `#version 300 es
 
 precision highp float;
 precision highp int;
 precision highp sampler3D;
+
+uniform float biases[4];
 
 uniform sampler3D prev_activation;
 
@@ -16,11 +39,11 @@ out float activation;
 void main() {
     uint idx = uint(idx_f);
 
-    uint Z = idx / uint(3 * 4 * 4);
-    idx %= uint(3 * 4 * 4);
+    uint Z = idx / uint(4 * 3 * 28);
+    idx %= uint(4 * 3 * 28);
 
-    uint y = idx / uint(4 * 4);
-    idx %= uint(4 * 4);
+    uint y = idx / uint(4 * 3);
+    idx %= uint(4 * 3);
 
     uint x = idx / uint(4);
     idx %= uint(4);
@@ -28,7 +51,7 @@ void main() {
     vec4  txl = texelFetch(prev_activation, ivec3(x, y, Z), 0);
 
     z = idx_f;
-    activation = txl[idx] + 0.1;
+    activation = txl[idx] + biases[idx];
 }`;
 
 
@@ -38,58 +61,73 @@ precision highp float;
 precision highp int;
 precision highp sampler3D;
 
-uniform float weights[filterCount * filterSize * filterSize];
-uniform float biases[filterCount];
+uniform float weights[featureCount * filterSize * filterSize];
+uniform float biases[featureCount];
 
 uniform sampler3D prev_activation;
 
 layout(location = 0) in float idx_f;
 
-out float z;
-out float activation;
+out vec4 z;
+out vec4 activation;
 
 void main() {
     uint idx = uint(idx_f);
 
-    uint batch_idx = idx / unitSize;
-    idx -= batch_idx * unitSize;
+    uint feature_idx  = idx / (batchVec4Count * colCount * rowCount);
+    idx -= feature_idx * (batchVec4Count * colCount * rowCount);
 
-    uint r1 = idx / imgCols_filterCount;
-    idx -= r1 * imgCols_filterCount;
+    uint r1 = idx / (batchVec4Count * colCount);
+    idx -= r1 * (batchVec4Count * colCount);
 
-    uint c1 = idx / filterCount;
-    idx -= c1 * filterCount;
+    uint c1 = idx / batchVec4Count;
+    uint batch_vec4_idx = idx - c1 * batchVec4Count;
 
-    uint filter_idx = idx;
-
-    uint weight_idx = filter_idx * filterSize_filterSize;
-
-    uint r2;
-    float sum = 0.0;
+    uint r2, c2;
+    vec4 sum = vec4(0.0);
+    int err_flg = 0;
     for (r2 = 0u; r2 < filterSize; r2++) {
-        uint x = c1 >> 2u;  // c1 / 4u
-        uint u = c1 &  3u;   // c1 % 4u
 
-        uint c2 = 0u;
-        for(; ; ) {
-            vec4  txl = texelFetch(prev_activation, ivec3(x, r1 + r2, batch_idx), 0);
-            for(; u < 4u && c2 < filterSize; u++, c2++) {
+        for (c2 = 0u; c2 < filterSize; c2++) {
 
-                sum += txl[u] * weights[weight_idx];
-                weight_idx++;
+            uint c3 = c1 + c2;
+            uint r3 = r1 + r2;
+
+/*
+            uint ii = uint(idx_f);
+            uint r3 = ii / uint(3 * 28);
+            ii %= uint(3 * 28);
+
+            uint c3 = ii / uint(3);
+            batch_vec4_idx = ii % uint(3);
+*/
+
+            if(batch_vec4_idx < 3u && c3 < 28u && r3 < 28u) {
+
+                vec4  txl = texelFetch(prev_activation, ivec3(batch_vec4_idx, c3, r3), 0);
+
+                uint weight_idx = (feature_idx * filterSize + r2) * filterSize + c2;
+                sum += txl * weights[weight_idx];
             }
+            else {
 
-            if(filterSize <= c2) {
+                err_flg = 1;
                 break;
             }
-
-            x++;
-            u = 0u;
         }
     }
 
-    z = sum + biases[filter_idx];
-    activation = 1.0 / (1.0 + exp(-z));
+    if(err_flg == 0) {
+
+        z = sum +biases[feature_idx];
+        activation = 1.0 / (1.0 +exp(-z));
+    }
+    else {
+
+        z          = vec4(12345.0);
+        activation = vec4(12345.0);
+    }
+
 }`;
 
 
