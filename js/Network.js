@@ -163,14 +163,14 @@ class ConvolutionalLayer extends Layer{
     gpuForward() {
         var prev_Layer = this.prevLayer;
 
-        var mini_batch_size;
+        var sub_batch_size;
 
         if (this.batchLength == 12 || true) {//!!!!!!!!!! テスト用 !!!!!!!!!!
 
-            mini_batch_size = this.batchLength;
+            sub_batch_size = this.batchLength;
         }
         else if (this.batchLength == 10000) {
-            mini_batch_size = 16;
+            sub_batch_size = 16;
         }
         else {
 
@@ -180,18 +180,18 @@ class ConvolutionalLayer extends Layer{
         var prev_activation = new Mat(prev_Layer.unitSize, this.batchLength, prev_Layer.activation.dt);
 
 
-        if (mini_batch_size == this.batchLength) {
+        if (sub_batch_size == this.batchLength) {
 
-            this.mini_z = this.z;
-            this.mini_activation = this.activation;
+            this.sub_z = this.z;
+            this.sub_activation = this.activation;
         }
         else {
-            this.mini_z = new Mat(mini_batch_size, this.unitSize);
-            this.mini_activation = new Mat(mini_batch_size, this.unitSize);
+            this.sub_z = new Mat(sub_batch_size, this.unitSize);
+            this.sub_activation = new Mat(sub_batch_size, this.unitSize);
         }
 
-        var batch_vec4_count = mini_batch_size / 4;
-        var param_key = vs_id + ":" + this.filterSize + ":" + this.featureCount + ":" + this.imgRows + ":" + this.imgCols + ":" + mini_batch_size;
+        var batch_vec4_count = sub_batch_size / 4;
+        var param_key = vs_id + ":" + this.filterSize + ":" + this.featureCount + ":" + this.imgRows + ":" + this.imgCols + ":" + sub_batch_size;
         var param;
         if (this.param[param_key] == undefined) {
 
@@ -206,12 +206,12 @@ class ConvolutionalLayer extends Layer{
 
             this.param[param.key] = param;
 
-            param.mini_prev_activation = new Mat(prev_Layer.imgCols, mini_batch_size, undefined, false, prev_Layer.imgRows);
+            param.sub_prev_activation = new Mat(prev_Layer.imgCols, sub_batch_size, undefined, false, prev_Layer.imgRows);
 
             param.elementDim   = 4;
             param.elementCount = this.featureCount * this.imgRows * this.imgCols * batch_vec4_count;
             param.textures = [
-                { name: "prev_activation", value: param.mini_prev_activation, dim: WebGL2.GL.TEXTURE_3D }
+                { name: "prev_activation", value: param.sub_prev_activation, dim: WebGL2.GL.TEXTURE_3D }
             ];
 
             param.uniforms = [
@@ -233,32 +233,32 @@ class ConvolutionalLayer extends Layer{
             param.vsrc = this.forwardSrc;
 
             param.varyings = ["z", "activation"];
-            param.arrayBuffers = [this.mini_z.dt, this.mini_activation.dt];
+            param.arrayBuffers = [this.sub_z.dt, this.sub_activation.dt];
         }
         else {
 
             param = this.param[param_key];
         }
 
-        for (var mini_batch_base = 0; mini_batch_base < this.batchLength; mini_batch_base += mini_batch_size) {
+        for (var sub_batch_base = 0; sub_batch_base < this.batchLength; sub_batch_base += sub_batch_size) {
 
             //!!!!!!!!!!!!!!!!!!!!!!!!!!
-            var src = mini_batch_base;
+            var src = sub_batch_base;
             var dst = 0;
             for (var i = 0; i < prev_Layer.unitSize; i++) {
-                for (var j = 0; j < mini_batch_size; j++) {
-                    param.mini_prev_activation.dt[dst] = prev_activation.dt[src + j];
+                for (var j = 0; j < sub_batch_size; j++) {
+                    param.sub_prev_activation.dt[dst] = prev_activation.dt[src + j];
                     dst++;
                 }
-                src += mini_batch_size;
+                src += sub_batch_size;
             }
 
             var ret = WebGL2.Calc(this.param[param_key]);
 
-            if (mini_batch_size != this.batchLength) {
+            if (sub_batch_size != this.batchLength) {
 
-                this.mini_z.CopyRows(this.z, 0, mini_batch_base, mini_batch_size);
-                this.mini_activation.CopyRows(this.activation, 0, mini_batch_base, mini_batch_size);
+                this.sub_z.CopyRows(this.z, 0, sub_batch_base, sub_batch_size);
+                this.sub_activation.CopyRows(this.activation, 0, sub_batch_base, sub_batch_size);
             }
         }
     }
