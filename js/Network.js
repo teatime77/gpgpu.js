@@ -387,7 +387,7 @@ class ConvolutionalLayer extends Layer{
                     for (var batch_idx = 0; batch_idx < this.batchLength; batch_idx++) {
                         var diff = Math.max(Math.abs(z_gpu_dt[output_idx] - this.z.dt[output_idx]), Math.abs(activation_gpu_dt[output_idx] - this.activation.dt[output_idx]));
                         if (max_diff < diff) {
-                            if(0.00001 < diff){
+                            if(0.0001 < diff){
                                 console.log("");
                             }
                             max_diff = diff;
@@ -397,7 +397,7 @@ class ConvolutionalLayer extends Layer{
                 }
             }
         }
-        Assert(max_diff < 0.00001, "Convolutional-Layer-forward-diff");
+        Assert(max_diff < 0.0001, "Convolutional-Layer-forward-diff");
         this.forwardCnt++;
         this.forwardGPU += t1 - t0;
         this.forwardCPU += t2 - t1;
@@ -495,7 +495,7 @@ class ConvolutionalLayer extends Layer{
     }
 
     updateParameter(eta2) {
-        var eta3 = eta2 / (this.filterSize * this.filterSize);
+        var eta3 = eta2;// / (this.filterSize * this.filterSize);
 
         // すべての特徴マップに対し
         var weights_idx = 0;
@@ -528,34 +528,46 @@ class PoolingLayer extends Layer {
 
         Assert(this.prevLayer instanceof ConvolutionalLayer, "Pooling-Layer-init");
 
+        this.featureCount = this.prevLayer.featureCount;
         this.imgRows = this.prevLayer.imgRows / this.filterSize;
         this.imgCols = this.prevLayer.imgCols / this.filterSize;
-        this.featureCount = this.prevLayer.featureCount;
 
-        this.unitSize = this.imgRows * this.imgCols * this.featureCount;
+        Assert(Math.ceil(this.imgRows) == this.imgRows && Math.ceil(this.imgCols) == this.imgCols);
+
+        this.unitSize = this.featureCount * this.imgRows * this.imgCols;
     }
 
     forward() {
         var prev_Layer = this.prevLayer;
-        var prev_activation_dt = prev_Layer.activation.dt;
+
         this.batchLength = prev_Layer.batchLength;
-        var out_dt = newFloatArray(this.unitSize * this.batchLength);
 
-        this.maxIdx = new Int8Array(this.unitSize * this.batchLength);
+        var prev_activation_dt = prev_Layer.activation.dt;
 
-        // バッチ内のデータに対し
-        for (var batch_idx = 0; batch_idx < this.batchLength; batch_idx++) {
+        if(this.activation == undefined || this.activation.Cols != this.batchLength ){
 
-            // すべての行に対し
+            this.activation = new Mat(this.unitSize, this.batchLength);
+            this.maxIdx     = new Int8Array(this.unitSize * this.batchLength);
+
+            this.deltaX = new Mat(prev_Layer.unitSize, this.batchLength);
+        }
+
+        // 出力先
+        var output_idx = 0;
+
+        // すべての特徴マップに対し
+        for (var feature_idx = 0; feature_idx < this.featureCount; feature_idx++) {
+
+            // 出力の行に対し
             for (var r1 = 0; r1 < this.imgRows; r1++) {
+                var r0 = r1 * this.filterSize;
 
-                // すべての列に対し
+                // 出力の列に対し
                 for (var c1 = 0; c1 < this.imgCols; c1++) {
+                    var c0 = c1 * this.filterSize;
 
-                    var output_base = batch_idx * this.unitSize + this.featureCount * (r1 * this.imgCols + c1);
-
-                    // すべての特徴マップに対し
-                    for (var feature_idx = 0; feature_idx < this.featureCount; feature_idx++) {
+                    // バッチ内のデータに対し
+                    for (var batch_idx = 0; batch_idx < this.batchLength; batch_idx++) {
 
                         var max_val = -10000;
                         var max_idx;
@@ -566,7 +578,7 @@ class PoolingLayer extends Layer {
                             // フィルターの列に対し
                             for (var c2 = 0; c2 < this.filterSize; c2++) {
 
-                                var prev_activation_idx = batch_idx * prev_Layer.unitSize + prev_Layer.featureCount * ((r1 + r2) * prev_Layer.imgCols + (c1 + c2)) + feature_idx;
+                                var prev_activation_idx = ( (feature_idx * prev_Layer.imgRows + (r0 + r2)) * prev_Layer.imgCols + (c0 + c2) ) * this.batchLength + batch_idx;
                                 var val = prev_activation_dt[prev_activation_idx];
                                 if (max_val < val) {
 
@@ -576,55 +588,61 @@ class PoolingLayer extends Layer {
                             }
                         }
 
-                        // 出力先
-                        var output_idx = output_base + feature_idx;
-
-                        out_dt[output_idx] = max_val;
+                        this.activation.dt[output_idx] = max_val;
                         this.maxIdx[output_idx] = max_idx;
+
+                        output_idx++;
                     }
                 }
             }
         }
-
-        this.activationT = new Mat(this.batchLength, this.unitSize, out_dt);
-        this.activation = this.activationT.T();
     }
 
     backward(Y, eta2) {
         var prev_Layer = this.prevLayer;
 
-        this.costDerivative = np.dot(this.nextLayer.weight.transpose(), this.nextLayer.Delta);
-        var deltaT = this.costDerivative.T();
-        Assert(deltaT.Rows == this.batchLength && deltaT.Cols == this.unitSize, "Pooling-Layer-backward");
+        Assert(this.activation.dt.length == this.nextLayer.deltaX.dt.length);
 
-        this.DeltaT = newFloatArray(this.prevLayer.activation.dt.length);
+        for(var i = 0; i < this.deltaX.dt.length; i++){
+            this.deltaX.dt[i] = 0;
+        }
 
-        // バッチ内のデータに対し
-        for (var batch_idx = 0; batch_idx < this.batchLength; batch_idx++) {
+        // 出力先
+        var output_idx = 0;
 
-            // すべての行に対し
+        // すべての特徴マップに対し
+        for (var feature_idx = 0; feature_idx < this.featureCount; feature_idx++) {
+
+            // 出力の行に対し
             for (var r1 = 0; r1 < this.imgRows; r1++) {
+                var r0 = r1 * this.filterSize;
 
-                // すべての列に対し
+                // 出力の列に対し
                 for (var c1 = 0; c1 < this.imgCols; c1++) {
+                    var c0 = c1 * this.filterSize;
 
-                    var output_base = batch_idx * this.unitSize + this.featureCount * (r1 * this.imgCols + c1);
+                    // バッチ内のデータに対し
+                    for (var batch_idx = 0; batch_idx < this.batchLength; batch_idx++) {
 
-                    // すべての特徴マップに対し
-                    for (var feature_idx = 0; feature_idx < this.featureCount; feature_idx++) {
+                        var delta = this.nextLayer.deltaX.dt[output_idx];
+                        if(delta != 0){
 
-                        // 出力先
-                        var output_idx = output_base + feature_idx;
-                        var max_idx = this.maxIdx[output_idx];
-                        var r2 = Math.floor(max_idx / this.filterSize);
-                        var c2 = max_idx - r2 * this.filterSize;
-                        var prev_activation_idx = batch_idx * prev_Layer.unitSize + prev_Layer.featureCount * ((r1 + r2) * prev_Layer.imgCols + (c1 + c2)) + feature_idx;
+                            var max_idx = this.maxIdx[output_idx];
 
-                        this.DeltaT[prev_activation_idx] = deltaT.dt[output_idx];
+                            var r2 = Math.floor(max_idx / this.filterSize);
+                            var c2 = max_idx - r2 * this.filterSize;
+                            var prev_activation_idx = ( (feature_idx * prev_Layer.imgRows + (r0 + r2)) * prev_Layer.imgCols + (c0 + c2) ) * this.batchLength + batch_idx;
+
+                            this.deltaX.dt[prev_activation_idx] = delta;
+                        }
+
+                        output_idx++;
                     }
                 }
             }
         }
+
+        Assert(output_idx == this.nextLayer.deltaX.dt.length);
     }
 }
 

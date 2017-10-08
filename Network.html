@@ -63,34 +63,35 @@
 
             Net = new Network([
                 new InputLayer(28, 28),
-                new ConvolutionalLayer(5, 20),//(5, 20) //!!!!!!!!!! テスト用 !!!!!!!!!!
-//                new PoolingLayer(2),
-                new FullyConnectedLayer(30),
+                new ConvolutionalLayer(5, 20),
+                new PoolingLayer(2),
+                new FullyConnectedLayer(100),
                 new FullyConnectedLayer(10)
             ]);
 
+            var epochs = 10000;
             if(Net.layers.length == 3){
 
-//???            StartSGD(Net, TrainingData, 30, 10, 3.0, TestData)
+//???            StartSGD(Net, TrainingData, epochs, 10, 3.0, TestData)
                 if (!isDebug) {
 
-                    StartSGD(Net, TrainingData, 30, 12, 10.0, TestData)
+                    StartSGD(Net, TrainingData, epochs, 12, 10.0, TestData)
                 }
                 else {
 
-                    StartSGD(Net, TrainingData, 30, 1, 10.0, TestData)
+                    StartSGD(Net, TrainingData, epochs, 1, 10.0, TestData)
                 }
             }
             else{
 
                 if (!isDebug) {
 
-    //                StartSGD(Net, TrainingData, 30, 12, 0.1, TestData)
-                    StartSGD(Net, TrainingData, 30, 12, 3.0, TestData)
+    //                StartSGD(Net, TrainingData, epochs, 12, 0.1, TestData)
+                    StartSGD(Net, TrainingData, epochs, 12, 1.0, TestData)
                 }
                 else {
 
-                    StartSGD(Net, TrainingData, 30, 1, 3.0, TestData)
+                    StartSGD(Net, TrainingData, epochs, 1, 1.0, TestData)
                 }
             }
         }
