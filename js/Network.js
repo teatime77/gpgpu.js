@@ -366,6 +366,11 @@ class ConvolutionalLayer extends Layer{
         this.gpuForward();
         var t1 = new Date();
 
+        if(0.1 < Math.random()){
+
+            return;
+        }
+
         var z_gpu_dt = newFloatArray(this.z.dt);
         var activation_gpu_dt = newFloatArray(this.activation.dt);
 
@@ -687,63 +692,6 @@ class Network {
             Assert(ret[0][i] == i && Math.abs(dt[i] + biases[i % 4] - ret[1][i]) < 0.00001);
         }
         console.log("gpu Test OK");
-    }
-
-    SGD(training_data, epochs, mini_batch_size, eta, test_data) {
-//        this.gpuBatchTest();
-        this.gpuTest();
-
-        this.miniBatchSize = mini_batch_size;
-        var n_test;//??
-        if(test_data == undefined){ test_data = None;}
-        if(test_data){
-            n_test = test_data["count"];
-        }
-        var n=len(training_data);//??
-        for (let j of xrange(epochs)) {
-
-            var startTime = new Date();
-            np.random.shuffle(training_data);//??
-            console.log("shuffle:" + (new Date() - startTime) + "ms");
-
-            startTime = new Date();
-            var mini_batches = xrange(0, n, mini_batch_size).map(k => Slice(training_data, [k, k + mini_batch_size]));//??
-            console.log("mini_batches:" + (new Date() - startTime) + "ms");
-
-            startTime = new Date();
-            for (let mini_batch of mini_batches) {
-                var X = this.Laminate(mini_batch, 0);
-                var Y = this.Laminate(mini_batch, 1);
-                this.update_mini_batch(X, Y, eta);
-                if (this.layers[1].fwCnt % 1000 == 0) {
-
-                    var s = "" + this.layers[1].fwCnt + " ";
-                    for(let layer of this.layers.slice(1)) {
-                        s += " (" + Math.floor(layer.fwTime / layer.fwCnt) + " " + Math.floor(layer.bwTime / layer.bwCnt) + ")";
-                    }
-                    console.log("update mini batch:" + s);
-
-                    if (this.layers[1] instanceof ConvolutionalLayer) {
-
-                        break;//!!!!!!!!!!!!!!!!!!!! テスト用 !!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                    }
-                }
-            }
-            console.log("update_mini_batch:" + (new Date() - startTime) + "ms");
-
-            if(test_data){
-                //??                console.log("Epoch {0}: {1} / {2}".format(j, this.evaluate(test_data), n_test));
-                startTime = new Date();
-                var e = this.evaluate(test_data);
-                console.log("evaluate:" + (new Date() - startTime) + "ms");
-
-                console.log("Epoch %d: %d / %d", j, e, n_test);
-            }
-            else{
-//??                console.log("Epoch {0} complete".format(j));
-                console.log("Epoch %d complete", j);
-            }
-        }
     }
 
     Laminate(mini_batch, i) {
@@ -1155,6 +1103,68 @@ class Network {
 //        return sum(test_results.map($ => {var x = $[0];var y = $[1];return /*int*/(x == y ? 1 : 0);}));
     }
 }
+
+
+function* SGD(net, training_data, epochs, mini_batch_size, eta, test_data) {
+    //        net.gpuBatchTest();
+    net.gpuTest();
+
+    net.miniBatchSize = mini_batch_size;
+    var n_test;//??
+    if(test_data == undefined){ test_data = None;}
+    if(test_data){
+        n_test = test_data["count"];
+    }
+    var n=len(training_data);//??
+    for (let j of xrange(epochs)) {
+
+        var startTime = new Date();
+        np.random.shuffle(training_data);//??
+        console.log("shuffle:" + (new Date() - startTime) + "ms");
+
+        startTime = new Date();
+        var mini_batches = xrange(0, n, mini_batch_size).map(k => Slice(training_data, [k, k + mini_batch_size]));//??
+        console.log("mini_batches:" + (new Date() - startTime) + "ms");
+
+        startTime = new Date();
+        for (let mini_batch of mini_batches) {
+            var X = net.Laminate(mini_batch, 0);
+            var Y = net.Laminate(mini_batch, 1);
+            net.update_mini_batch(X, Y, eta);
+            show_cnt = (net.layers[1] instanceof ConvolutionalLayer ? 100 : 1000);
+            if (net.layers[1].fwCnt % show_cnt == 0) {
+
+                var s = "" + net.layers[1].fwCnt + " ";
+                for(let layer of net.layers.slice(1)) {
+                    s += " (" + Math.floor(layer.fwTime / layer.fwCnt) + " " + Math.floor(layer.bwTime / layer.bwCnt) + ")";
+                }
+                console.log("update mini batch:" + s);
+                yield 1;
+            }
+        }
+        yield 2;
+
+        console.log("update_mini_batch:" + (new Date() - startTime) + "ms");
+
+        if(test_data){
+            //??                console.log("Epoch {0}: {1} / {2}".format(j, net.evaluate(test_data), n_test));
+            startTime = new Date();
+            var e = net.evaluate(test_data);
+            console.log("evaluate:" + (new Date() - startTime) + "ms");
+
+            console.log("Epoch %d: %d / %d", j, e, n_test);
+        }
+        else{
+            //??                console.log("Epoch {0} complete".format(j));
+            console.log("Epoch %d complete", j);
+        }
+
+        yield 3;
+    }
+
+    yield 0;
+}
+
 
 function cost_derivative(output_activations, y){
     return (output_activations.Sub(y));

@@ -21,6 +21,8 @@
         var TrainingData, TestData = {};
         var TrainingDataImage, TrainingDataLabel;
         var Net;
+        var GenSGD;
+        var TimerSGD;
 
         var ret = np.random.RandomSampling(6, 6);
         for(let i of ret) {
@@ -40,6 +42,20 @@
         var Ctx = null;
         var imageData;
 
+        function StartSGD(net, training_data, epochs, mini_batch_size, eta, test_data) {
+            GenSGD = SGD(net, training_data, epochs, mini_batch_size, eta, test_data);
+
+            TimerSGD = setInterval(function () {
+                var ret = GenSGD.next().value;
+                if (ret == 0) {
+
+                    clearInterval(TimerSGD);
+
+                    WebGL2.WebGLClear();
+                }
+            }, 1)
+        }
+
         function RunNetwork() {
             console.log("Training:%d Test:%d", TrainingData.length, TestData["count"]);
 
@@ -47,7 +63,7 @@
 
             Net = new Network([
                 new InputLayer(28, 28),
-//                new ConvolutionalLayer(5, 20),//(5, 20) //!!!!!!!!!! テスト用 !!!!!!!!!!
+                new ConvolutionalLayer(5, 20),//(5, 20) //!!!!!!!!!! テスト用 !!!!!!!!!!
 //                new PoolingLayer(2),
                 new FullyConnectedLayer(30),
                 new FullyConnectedLayer(10)
@@ -55,30 +71,28 @@
 
             if(Net.layers.length == 3){
 
-//???            Net.SGD(TrainingData, 30, 10, 3.0, TestData)
+//???            StartSGD(Net, TrainingData, 30, 10, 3.0, TestData)
                 if (!isDebug) {
 
-                    Net.SGD(TrainingData, 30, 12, 10.0, TestData)
+                    StartSGD(Net, TrainingData, 30, 12, 10.0, TestData)
                 }
                 else {
 
-                    Net.SGD(TrainingData, 30, 1, 10.0, TestData)
+                    StartSGD(Net, TrainingData, 30, 1, 10.0, TestData)
                 }
             }
             else{
 
                 if (!isDebug) {
 
-    //                Net.SGD(TrainingData, 30, 12, 0.1, TestData)
-                    Net.SGD(TrainingData, 30, 12, 3.0, TestData)
+    //                StartSGD(Net, TrainingData, 30, 12, 0.1, TestData)
+                    StartSGD(Net, TrainingData, 30, 12, 3.0, TestData)
                 }
                 else {
 
-                    Net.SGD(TrainingData, 30, 1, 3.0, TestData)
+                    StartSGD(Net, TrainingData, 30, 1, 3.0, TestData)
                 }
             }
-
-            WebGL2.WebGLClear();
         }
 
         // MNIST http://yann.lecun.com/exdb/mnist/
