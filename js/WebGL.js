@@ -233,7 +233,14 @@ class WebGLLib {
             var u = param.uniforms[i];
             if (u.value instanceof Mat) {
 
-                gl.uniform4fv(gpu.locUniforms[i], newFloatArray(u.value.dt)); gg();
+                if (u.type == "vec4") {
+
+//                    gl.uniform4fv(gpu.locUniforms[i], newFloatArray(u.value.dt)); gg();
+                    gl.uniform4fv(gpu.locUniforms[i], u.value.dt); gg();
+                }
+                else {
+                    gl.uniform1fv(gpu.locUniforms[i], u.value.dt); gg();
+                }
             }
             else if (u.value instanceof Float32Array) {
 
@@ -266,9 +273,13 @@ class WebGLLib {
             // 処理結果を表示
             gl.bindBuffer(gl.ARRAY_BUFFER, gpu.outBuffers[i]); gg();
 
-            gl.getBufferSubData(gl.ARRAY_BUFFER, 0, gpu.arrayBuffers[i]); gg();
+            var out_buf = gpu.arrayBuffers[i];
+            if (out_buf instanceof Mat) {
+                out_buf = out_buf.dt;
+            }
 
-            ret.push( newFloatArray(gpu.arrayBuffers[i]) );
+            gl.getBufferSubData(gl.ARRAY_BUFFER, 0, out_buf); gg();
+            ret.push(out_buf);
 
             gl.bindBuffer(gl.ARRAY_BUFFER, null); gg();
         }

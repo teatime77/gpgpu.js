@@ -165,12 +165,12 @@ class ConvolutionalLayer extends Layer{
 
         var sub_batch_size;
 
-        if (this.batchLength == 12 || true) {//!!!!!!!!!! テスト用 !!!!!!!!!!
+        if (this.batchLength == 12) {
 
             sub_batch_size = this.batchLength;
         }
         else if (this.batchLength == 10000) {
-            sub_batch_size = 16;
+            sub_batch_size = 200;// 16;
         }
         else {
 
@@ -178,17 +178,6 @@ class ConvolutionalLayer extends Layer{
         }
 
         var prev_activation = new Mat(prev_Layer.unitSize, this.batchLength, prev_Layer.activation.dt);
-
-
-        if (sub_batch_size == this.batchLength) {
-
-            this.sub_z = this.z;
-            this.sub_activation = this.activation;
-        }
-        else {
-            this.sub_z = new Mat(sub_batch_size, this.unitSize);
-            this.sub_activation = new Mat(sub_batch_size, this.unitSize);
-        }
 
         var batch_vec4_count = sub_batch_size / 4;
         var param_key = vs_id + ":" + this.filterSize + ":" + this.featureCount + ":" + this.imgRows + ":" + this.imgCols + ":" + sub_batch_size;
@@ -207,6 +196,8 @@ class ConvolutionalLayer extends Layer{
             this.param[param.key] = param;
 
             param.sub_prev_activation = new Mat(prev_Layer.imgCols, sub_batch_size, undefined, false, prev_Layer.imgRows);
+            param.sub_z = new Mat(this.unitSize, sub_batch_size);
+            param.sub_activation = new Mat(this.unitSize, sub_batch_size);
 
             param.elementDim   = 4;
             param.elementCount = this.featureCount * this.imgRows * this.imgCols * batch_vec4_count;
@@ -219,46 +210,57 @@ class ConvolutionalLayer extends Layer{
                 { name: "biases", value: this.biases.dt }
             ];
 
-            if (this.forwardSrc == undefined) {
+            var shader_src = Shaders[vs_id]
+                .replace(/featureCount/g, this.featureCount.toString() + "u")
+                .replace(/rowCount/g, this.imgRows.toString() + "u")
+                .replace(/colCount/g, this.imgCols.toString() + "u")
+                .replace(/batchVec4Count/g, batch_vec4_count.toString() + "u")
+                .replace(/filterSize/g, this.filterSize.toString() + "u");
 
-                this.forwardSrc = Shaders[vs_id]
-
-                    .replace(/featureCount/g, this.featureCount.toString() + "u")
-                    .replace(/rowCount/g, this.imgRows.toString() + "u")
-                    .replace(/colCount/g, this.imgCols.toString() + "u")
-                    .replace(/batchVec4Count/g, batch_vec4_count.toString() + "u")
-                    .replace(/filterSize/g, this.filterSize.toString() + "u");
-            }
-            console.log(this.forwardSrc);
-            param.vsrc = this.forwardSrc;
+            console.log(shader_src);
+            param.vsrc = shader_src;
 
             param.varyings = ["z", "activation"];
-            param.arrayBuffers = [this.sub_z.dt, this.sub_activation.dt];
+            param.arrayBuffers = [param.sub_z, param.sub_activation ];
         }
         else {
 
             param = this.param[param_key];
         }
 
-        for (var sub_batch_base = 0; sub_batch_base < this.batchLength; sub_batch_base += sub_batch_size) {
+        if (sub_batch_size == this.batchLength) {
 
-            //!!!!!!!!!!!!!!!!!!!!!!!!!!
-            var src = sub_batch_base;
-            var dst = 0;
-            for (var i = 0; i < prev_Layer.unitSize; i++) {
-                for (var j = 0; j < sub_batch_size; j++) {
-                    param.sub_prev_activation.dt[dst] = prev_activation.dt[src + j];
-                    dst++;
-                }
-                src += sub_batch_size;
-            }
-
+            param.sub_prev_activation.dt = prev_activation.dt;
+            param.sub_z.dt = this.z.dt;
+            param.sub_activation.dt = this.activation.dt;
             var ret = WebGL2.Calc(this.param[param_key]);
+        }
+        else {
 
-            if (sub_batch_size != this.batchLength) {
+            for (var sub_batch_base = 0; sub_batch_base < this.batchLength; sub_batch_base += sub_batch_size) {
 
-                this.sub_z.CopyRows(this.z, 0, sub_batch_base, sub_batch_size);
-                this.sub_activation.CopyRows(this.activation, 0, sub_batch_base, sub_batch_size);
+                var all_idx = sub_batch_base;
+                var sub_idx = 0;
+                for (var i = 0; i < prev_Layer.unitSize; i++) {
+                    for (var j = 0; j < sub_batch_size; j++) {
+                        param.sub_prev_activation.dt[sub_idx] = prev_activation.dt[all_idx + j];
+                        sub_idx++;
+                    }
+                    all_idx += this.batchLength;
+                }
+
+                var ret = WebGL2.Calc(this.param[param_key]);
+                
+                all_idx = sub_batch_base;
+                sub_idx = 0;
+                for (var i = 0; i < this.unitSize; i++) {
+                    for (var j = 0; j < sub_batch_size; j++) {
+                        this.z.dt[all_idx + j]          = param.sub_z.dt[sub_idx];
+                        this.activation.dt[all_idx + j] = param.sub_activation.dt[sub_idx];
+                        sub_idx++;
+                    }
+                    all_idx += this.batchLength;
+                }
             }
         }
     }
@@ -311,6 +313,13 @@ class ConvolutionalLayer extends Layer{
     }
 
     forward() {
+        if (this.forwardCnt == undefined || this.batchLength != this.prevLayer.activation.Cols) {
+
+            this.forwardCnt = 0;
+            this.forwardGPU = 0;
+            this.forwardCPU = 0;
+        }
+
         this.batchLength = this.prevLayer.activation.Cols;
 
         if (!this.z || this.z.Rows != this.unitSize || this.z.Cols != this.batchLength){
@@ -331,7 +340,7 @@ class ConvolutionalLayer extends Layer{
         for (var r = 0; r < this.prevLayer.imgRows; r++) {
             for (var c = 0; c < this.prevLayer.imgCols; c++) {
                 for (var b = 0; b < this.batchLength; b++) {
-                    this.prevLayer.activation.dt[prev_idx] = Math.random();// + r * 0.1 + (c + b) * 0.001;
+                    this.prevLayer.activation.dt[prev_idx] = r * 0.1 + (c + b) * 0.001;
                     prev_idx++;
                 }
             }
@@ -340,11 +349,11 @@ class ConvolutionalLayer extends Layer{
         var weight_idx = 0;
         for (var feature_idx = 0; feature_idx < this.featureCount; feature_idx++) {
 
-            this.biases.dt[feature_idx] = Math.random();// + feature_idx * 0.1;
+            this.biases.dt[feature_idx] = 0;//(1 + feature_idx) * 0.1;
 
             for (var r = 0; r < this.filterSize; r++) {
                 for (var c = 0; c < this.filterSize; c++) {
-                    this.weights.dt[weight_idx] = Math.random();// 1.23 + (weight_idx % 10) * 0.1;
+                    this.weights.dt[weight_idx] = (r == 0 && c == 0 ? 1.0 : 0);// + (weight_idx % 10) * 0.1;
                     weight_idx++;
                 }
             }
@@ -373,6 +382,9 @@ class ConvolutionalLayer extends Layer{
                     for (var batch_idx = 0; batch_idx < this.batchLength; batch_idx++) {
                         var diff = Math.max(Math.abs(z_gpu_dt[output_idx] - this.z.dt[output_idx]), Math.abs(activation_gpu_dt[output_idx] - this.activation.dt[output_idx]));
                         if (max_diff < diff) {
+                            if(0.00001 < diff){
+                                console.log("");
+                            }
                             max_diff = diff;
                         }
                         output_idx++;
@@ -381,16 +393,10 @@ class ConvolutionalLayer extends Layer{
             }
         }
         Assert(max_diff < 0.00001, "Convolutional-Layer-forward-diff");
-        if (this.forwardCnt == undefined) {
-
-            this.forwardCnt = 0;
-            this.forwardGPU = 0;
-            this.forwardCPU = 0;
-        }
         this.forwardCnt++;
         this.forwardGPU += t1 - t0;
         this.forwardCPU += t2 - t1;
-        if (this.forwardCnt % 100 == 0) {
+        if (this.forwardCnt % 100 == 0 || 100 <= this.batchLength) {
 
             console.log("forward diff:%f cnt:%d GPU:%dms CPU:%dms", max_diff, this.forwardCnt, Math.round(this.forwardGPU / this.forwardCnt), Math.round(this.forwardCPU / this.forwardCnt));
         }

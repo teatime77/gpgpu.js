@@ -20,6 +20,7 @@
         var WebGL2;
         var TrainingData, TestData = {};
         var TrainingDataImage, TrainingDataLabel;
+        var Net;
 
         var ret = np.random.RandomSampling(6, 6);
         for(let i of ret) {
@@ -44,36 +45,36 @@
 
             WebGL2 = new WebGLLib();
 
-            var net = new Network([
+            Net = new Network([
                 new InputLayer(28, 28),
-                new ConvolutionalLayer(2, 20),//(5, 20) //!!!!!!!!!! テスト用 !!!!!!!!!!
+//                new ConvolutionalLayer(5, 20),//(5, 20) //!!!!!!!!!! テスト用 !!!!!!!!!!
 //                new PoolingLayer(2),
                 new FullyConnectedLayer(30),
                 new FullyConnectedLayer(10)
             ]);
 
-            if(net.layers.length == 3){
+            if(Net.layers.length == 3){
 
-//???            net.SGD(TrainingData, 30, 10, 3.0, TestData)
+//???            Net.SGD(TrainingData, 30, 10, 3.0, TestData)
                 if (!isDebug) {
 
-                    net.SGD(TrainingData, 30, 12, 10.0, TestData)
+                    Net.SGD(TrainingData, 30, 12, 10.0, TestData)
                 }
                 else {
 
-                    net.SGD(TrainingData, 30, 1, 10.0, TestData)
+                    Net.SGD(TrainingData, 30, 1, 10.0, TestData)
                 }
             }
             else{
 
                 if (!isDebug) {
 
-    //                net.SGD(TrainingData, 30, 12, 0.1, TestData)
-                    net.SGD(TrainingData, 30, 12, 3.0, TestData)
+    //                Net.SGD(TrainingData, 30, 12, 0.1, TestData)
+                    Net.SGD(TrainingData, 30, 12, 3.0, TestData)
                 }
                 else {
 
-                    net.SGD(TrainingData, 30, 1, 3.0, TestData)
+                    Net.SGD(TrainingData, 30, 1, 3.0, TestData)
                 }
             }
 

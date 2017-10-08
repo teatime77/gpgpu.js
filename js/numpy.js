@@ -49,8 +49,8 @@ class TNumpy {
 
                 param.uniforms = [
                     { name:"B_Cols", value:B.Cols },
-                    { name:"A", value:A },
-                    { name:"B", value: B.T() }
+                    { name: "A", value: A, type: "vec4" },
+                    { name: "B", value: B.T(), type: "vec4" }
                 ];
             }
 

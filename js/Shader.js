@@ -102,7 +102,7 @@ void main() {
             batch_vec4_idx = ii % uint(3);
 */
 
-            if(batch_vec4_idx < 3u && c3 < 28u && r3 < 28u) {
+            if(batch_vec4_idx < batchVec4Count && c3 < colCount + filterSize - 1u  && r3 < rowCount + filterSize - 1u) {
 
                 vec4  txl = texelFetch(prev_activation, ivec3(batch_vec4_idx, c3, r3), 0);
 
