@@ -131,6 +131,83 @@ void main() {
 }`;
 
 
+
+
+
+
+
+
+
+
+
+
+Shaders["ConvolutionalLayer-backward"] = `#version 300 es
+
+precision highp float;
+precision highp int;
+precision highp sampler3D;
+
+uniform float weights[featureCount * filterSize * filterSize];
+uniform float biases[featureCount];
+
+uniform sampler3D prev_activation;
+
+layout(location = 0) in float idx_f;
+
+out vec4 z;
+out vec4 activation;
+
+void main() {
+    uint idx = uint(idx_f);
+
+    uint feature_idx  = idx / (filterSize * filterSize);
+    idx -= feature_idx * (filterSize * filterSize);
+
+    uint r2 = idx / filterSize;
+    uint c2 = idx - r2 * filterSize;
+
+    uint c1 = idx / batchVec4Count;
+    uint batch_vec4_idx = idx - c1 * batchVec4Count;
+
+    uint r1, c1;
+    vec4 sum = vec4(0.0);
+    int err_flg = 0;
+    for (r1 = 0u; r1 < rowCount; r1++) {
+
+        for (c1 = 0u; c1 < colCount; c1++) {
+
+            uint c3 = c1 + c2;
+            uint r3 = r1 + r2;
+
+            if(batch_vec4_idx < batchVec4Count && c3 < colCount + filterSize - 1u  && r3 < rowCount + filterSize - 1u) {
+
+                vec4  txl = texelFetch(prev_activation, ivec3(batch_vec4_idx, c3, r3), 0);
+
+                uint weight_idx = (feature_idx * filterSize + r2) * filterSize + c2;
+                sum += txl * weights[weight_idx];
+            }
+            else {
+
+                err_flg = 1;
+                break;
+            }
+        }
+    }
+
+    if(err_flg == 0) {
+
+        z = sum +biases[feature_idx];
+        activation = 1.0 / (1.0 +exp(-z));
+    }
+    else {
+
+        z          = vec4(12345.0);
+        activation = vec4(12345.0);
+    }
+
+}`;
+
+
 Shaders["vs-Texture"] = `#version 300 es
 
 precision highp float;

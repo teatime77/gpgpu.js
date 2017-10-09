@@ -14,12 +14,46 @@ function newFloatArray(x) {
     }
 }
 
+
+function Stats(tm, idx){
+    switch(tm.length){
+    case 0:
+        return "-"
+    case 1:
+        return "" + Math.floor(tm[0] / idx)
+    default:
+        return "[" + tm.map(x => Math.floor(x / idx)).reduce((x,y) => x + "," + y) + "]";
+    }
+}
+
+class Lap {
+    constructor(v){
+        this.lastTime = new Date();
+        this.lapIdx = 0;
+        this.Times = v;
+    }
+
+    Time(){
+        var prev_last_time = this.lastTime;
+        this.lastTime = new Date();
+
+        if(this.Times.length <= this.lapIdx){
+            this.Times.push(0);
+        }
+        this.Times[this.lapIdx] += this.lastTime - prev_last_time;
+        this.lapIdx++;
+    }
+}
+
 class Layer {
+    clearStats(){
+        this.fwTime = [];
+        this.bwTime = [];
+        this.udTime = [];
+    }
+
     constructor() {
-        this.fwCnt = 0;
-        this.fwTime = 0;
-        this.bwCnt = 0;
-        this.bwTime = 0;
+        this.clearStats();
     }
 
     init(prev_layer) {
@@ -33,20 +67,6 @@ class Layer {
     }
 
     backward(Y, eta2) {
-    }
-
-    forward2() {
-        var startTime = new Date();
-        this.forward();
-        this.fwCnt++;
-        this.fwTime += new Date() - startTime;
-    }
-
-    backward2(Y, eta2) {
-        var startTime = new Date();
-        this.backward(Y, eta2);
-        this.bwCnt++;
-        this.bwTime += new Date() - startTime;
     }
 
     updateParameter(eta2) {
@@ -78,12 +98,21 @@ class FullyConnectedLayer extends Layer{
     }
 
     forward() {
+        var lap = new Lap(this.fwTime);
+
         this.batchLength = this.prevLayer.activation.Cols;
+        lap.Time();
+
         this.z = np.dot(this.weight, this.prevLayer.activation).AddV(this.bias);
+        lap.Time();
+
         this.activation = sigmoid(this.z);
+        lap.Time();
     }
 
     backward(Y, eta2) {
+        var lap = new Lap(this.bwTime);
+
         if (!this.nextLayer) {
             // 最後のレイヤーの場合
 
@@ -100,10 +129,15 @@ class FullyConnectedLayer extends Layer{
 
             this.costDerivative = this.nextLayer.deltaX;
         }
+
         this.Delta = this.costDerivative.Mul(sigmoid_prime(this.z));
+        lap.Time();
 
         this.nabla_b = this.Delta.reduce((x, y) => x + y);
+        lap.Time();
+
         this.nabla_w = np.dot(this.Delta, this.prevLayer.activation.transpose());
+        lap.Time();
 
         if (isDebug) {
 
@@ -122,11 +156,25 @@ class FullyConnectedLayer extends Layer{
 
         //!!!!! 直前が入力層なら必要なし !!!!!
         this.deltaX = np.dot(this.weight.transpose(), this.Delta);
+        lap.Time();
     }
 
     updateParameter(eta2) {
-        this.weight = this.weight.Sub(eta2.Mul(this.nabla_w));
-        this.bias = this.bias.Sub(eta2.Mul(this.nabla_b));
+
+//        this.weight = this.weight.Sub(eta2.Mul(this.nabla_w));
+//        this.bias = this.bias.Sub(eta2.Mul(this.nabla_b));
+
+        var lap = new Lap(this.udTime);
+
+        for(var i = 0; i < this.weight.dt.length; i++){
+            this.weight.dt[i] -= eta2 * this.nabla_w.dt[i];
+        }
+        lap.Time();
+
+        for(var i = 0; i < this.bias.dt.length; i++){
+            this.bias.dt[i] -= eta2 * this.nabla_b.dt[i];
+        }
+        lap.Time();
     }
 }
 
@@ -180,14 +228,11 @@ class ConvolutionalLayer extends Layer{
         var prev_activation = new Mat(prev_Layer.unitSize, this.batchLength, prev_Layer.activation.dt);
 
         var batch_vec4_count = sub_batch_size / 4;
+        var vs_id = "ConvolutionalLayer-forward";
         var param_key = vs_id + ":" + this.filterSize + ":" + this.featureCount + ":" + this.imgRows + ":" + this.imgCols + ":" + sub_batch_size;
         var param;
+
         if (this.param[param_key] == undefined) {
-
-            // (rows, cols, init, column_major, depth)
-
-
-            var vs_id = "ConvolutionalLayer-forward";
 
             param = {};
 
@@ -313,6 +358,8 @@ class ConvolutionalLayer extends Layer{
     }
 
     forward() {
+        var lap = new Lap(this.fwTime);
+
         if (this.forwardCnt == undefined || this.batchLength != this.prevLayer.activation.Cols) {
 
             this.forwardCnt = 0;
@@ -366,6 +413,8 @@ class ConvolutionalLayer extends Layer{
         this.gpuForward();
         var t1 = new Date();
 
+        lap.Time();
+
         if(0.1 < Math.random()){
 
             return;
@@ -407,20 +456,78 @@ class ConvolutionalLayer extends Layer{
         }
     }
 
+    gpuBackward() {
+        var prev_Layer = this.prevLayer;
+
+        var prev_activation = new Mat(prev_Layer.imgCols, sub_batch_size, prev_Layer.activation.dt, false, prev_Layer.imgRows);
+
+        var batch_vec4_count = this.batchLength / 4;
+        var vs_id = "ConvolutionalLayer-backward";
+        var param_key = vs_id + ":" + this.filterSize + ":" + this.featureCount + ":" + this.imgRows + ":" + this.imgCols + ":" + sub_batch_size;
+        var param;
+
+        if (this.param[param_key] == undefined) {
+
+            param = {};
+
+            param.key = param_key;
+
+            this.param[param.key] = param;
+
+            param.elementDim   = 1;
+            param.elementCount = this.featureCount * this.filterSize * this.filterSize;
+            param.textures = [
+                { name: "prev_activation", value: prev_activation, dim: WebGL2.GL.TEXTURE_3D },
+                { name: "delta_z", value: delta_z, dim: WebGL2.GL.TEXTURE_3D }
+            ];
+
+            param.uniforms = [
+                { name: "weights", value: this.weights.dt },
+            ];
+
+            var shader_src = Shaders[vs_id]
+                .replace(/featureCount/g, this.featureCount.toString() + "u")
+                .replace(/rowCount/g, this.imgRows.toString() + "u")
+                .replace(/colCount/g, this.imgCols.toString() + "u")
+                .replace(/batchVec4Count/g, batch_vec4_count.toString() + "u")
+                .replace(/filterSize/g, this.filterSize.toString() + "u");
+
+            console.log(shader_src);
+            param.vsrc = shader_src;
+
+            param.varyings = ["nablaWeights"];
+            param.arrayBuffers = [this.nablaWeights ];
+        }
+        else {
+
+            param = this.param[param_key];
+        }
+
+        param.sub_prev_activation.dt = prev_activation.dt;
+        param.sub_z.dt = this.z.dt;
+        param.sub_activation.dt = this.activation.dt;
+        var ret = WebGL2.Calc(this.param[param_key]);
+    }
+
     backward(Y, eta2) {
+        var lap = new Lap(this.bwTime);
+
         var batch_length = this.batchLength;
         //this.Delta = this.nextLayer.Delta.Mul(sigmoid_prime(this.z));
         var delta_z = new Mat(this.unitSize, batch_length, new Float32Array(this.nextLayer.deltaX.dt));
+        lap.Time();
 
         for (var i = 0; i < delta_z.dt.length; i++) {
             delta_z.dt[i] *= sigmoid_primeF(this.z.dt[i]);
         }
+        lap.Time();
 
         var prev_Layer = this.prevLayer;
 
         this.nablaBiases = new Mat(this.featureCount, 1);
         this.nablaWeights = new Mat(this.filterSize, this.filterSize, null, false, this.featureCount);
         this.costDerivative = new Mat(this.unitSize, 1);
+        lap.Time();
 
 
         // すべての特徴マップに対し
@@ -450,6 +557,7 @@ class ConvolutionalLayer extends Layer{
             this.nablaBiases.dt[feature_idx] = nabla_b;
         }
         Assert(delta_z_idx == delta_z.dt.length);
+        lap.Time();
 
         // すべての特徴マップに対し
         var delta_z_idx_sv = 0;
@@ -492,9 +600,12 @@ class ConvolutionalLayer extends Layer{
             delta_z_idx_sv = delta_z_idx;
         }
         Assert(delta_z_idx == delta_z.dt.length && weights_idx == this.nablaWeights.dt.length);
+        lap.Time();
     }
 
     updateParameter(eta2) {
+        var lap = new Lap(this.udTime);
+
         var eta3 = eta2;// / (this.filterSize * this.filterSize);
 
         // すべての特徴マップに対し
@@ -514,6 +625,7 @@ class ConvolutionalLayer extends Layer{
             }
         }
         Assert(weights_idx == this.weights.dt.length);
+        lap.Time();
     }
 }
 
@@ -538,6 +650,8 @@ class PoolingLayer extends Layer {
     }
 
     forward() {
+        var lap = new Lap(this.fwTime);
+
         var prev_Layer = this.prevLayer;
 
         this.batchLength = prev_Layer.batchLength;
@@ -596,9 +710,12 @@ class PoolingLayer extends Layer {
                 }
             }
         }
+        lap.Time();
     }
 
     backward(Y, eta2) {
+        var lap = new Lap(this.bwTime);
+
         var prev_Layer = this.prevLayer;
 
         Assert(this.activation.dt.length == this.nextLayer.deltaX.dt.length);
@@ -606,6 +723,7 @@ class PoolingLayer extends Layer {
         for(var i = 0; i < this.deltaX.dt.length; i++){
             this.deltaX.dt[i] = 0;
         }
+        lap.Time();
 
         // 出力先
         var output_idx = 0;
@@ -643,6 +761,7 @@ class PoolingLayer extends Layer {
         }
 
         Assert(output_idx == this.nextLayer.deltaX.dt.length);
+        lap.Time();
     }
 }
 
@@ -771,10 +890,10 @@ class Network {
             }
         }
 
-        this.layers.forEach(x => x.forward2());
+        this.layers.forEach(x => x.forward());
 
         for (var i = this.layers.length - 1; 1 <= i; i--) {
-            this.layers[i].backward2(Y, eta2);
+            this.layers[i].backward(Y, eta2);
         }
 
                             
@@ -935,7 +1054,7 @@ class Network {
                 }
 
                 for (var l = layer.nextLayer; l; l = l.nextLayer) {
-                    l.forward2();
+                    l.forward();
                 }
 
                 if(layer.nextLayer.maxIdx){
@@ -956,7 +1075,7 @@ class Network {
                 }
 
                 for (var i = this.layers.length - 1; 1 <= i; i--) {
-                    this.layers[i].backward2(Y, eta2);
+                    this.layers[i].backward(Y, eta2);
                 }
 
                 //-------------------- ΔC
@@ -1010,12 +1129,12 @@ class Network {
 
     update_mini_batch(X, Y, eta) {
         this.layers[0].activation = X;
-        this.layers.forEach(x => x.forward2());
+        this.layers.forEach(x => x.forward());
 
         var eta2 = eta / X.Cols;
 
         for (var i = this.layers.length - 1; 1 <= i; i--) {
-            this.layers[i].backward2(Y, eta2);
+            this.layers[i].backward(Y, eta2);
         }
 
 
@@ -1136,39 +1255,45 @@ function* SGD(net, training_data, epochs, mini_batch_size, eta, test_data) {
     var n=len(training_data);//??
     for (let j of xrange(epochs)) {
 
-        var startTime = new Date();
+        var start_time = new Date();
         np.random.shuffle(training_data);//??
-        console.log("shuffle:" + (new Date() - startTime) + "ms");
+        console.log("shuffle:" + (new Date() - start_time) + "ms");
 
-        startTime = new Date();
+        start_time = new Date();
         var mini_batches = xrange(0, n, mini_batch_size).map(k => Slice(training_data, [k, k + mini_batch_size]));//??
-        console.log("mini_batches:" + (new Date() - startTime) + "ms");
+        console.log("mini_batches:" + (new Date() - start_time) + "ms");
 
-        startTime = new Date();
-        for (let mini_batch of mini_batches) {
+        start_time = new Date();
+        show_time = new Date();
+        net.layers.forEach(x => x.clearStats());
+
+        for (var idx = 0; idx < mini_batches.length; idx++) {
+            mini_batch = mini_batches[idx];
             var X = net.Laminate(mini_batch, 0);
             var Y = net.Laminate(mini_batch, 1);
             net.update_mini_batch(X, Y, eta);
             show_cnt = (net.layers[1] instanceof ConvolutionalLayer ? 100 : 1000);
-            if (net.layers[1].fwCnt % show_cnt == 0) {
+            if (10000 < new Date() - show_time) {
 
-                var s = "" + net.layers[1].fwCnt + " ";
+                var s = "" + idx + " ";
                 for(let layer of net.layers.slice(1)) {
-                    s += " (" + Math.floor(layer.fwTime / layer.fwCnt) + " " + Math.floor(layer.bwTime / layer.bwCnt) + ")";
+                    s += " (" + Stats(layer.fwTime, idx) + " " + Stats(layer.bwTime, idx) + " " + Stats(layer.udTime, idx) + ")";
                 }
                 console.log("update mini batch:" + s);
                 yield 1;
+
+                show_time = new Date();
             }
         }
         yield 2;
 
-        console.log("update_mini_batch:" + (new Date() - startTime) + "ms");
+        console.log("update_mini_batch:" + (new Date() - start_time) + "ms");
 
         if(test_data){
             //??                console.log("Epoch {0}: {1} / {2}".format(j, net.evaluate(test_data), n_test));
-            startTime = new Date();
+            start_time = new Date();
             var e = net.evaluate(test_data);
-            console.log("evaluate:" + (new Date() - startTime) + "ms");
+            console.log("evaluate:" + (new Date() - start_time) + "ms");
 
             console.log("Epoch %d: %d / %d", j, e, n_test);
         }
