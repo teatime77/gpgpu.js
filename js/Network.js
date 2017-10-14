@@ -236,7 +236,7 @@ class ConvolutionalLayer extends Layer{
             param.elementDim   = 4;
             param.elementCount = this.featureCount * this.imgRows * this.imgCols * batch_vec4_count;
             param.textures = [
-                { name: "prev_activation", value: param.sub_prev_activation, dim: WebGL2.GL.TEXTURE_3D }
+                { name: "prev_activation", value: param.sub_prev_activation }
             ];
 
             param.uniforms = [
@@ -467,8 +467,8 @@ class ConvolutionalLayer extends Layer{
             param.elementDim   = 1;
             param.elementCount = this.featureCount * this.filterSize * this.filterSize;
             param.textures = [
-                { name: "prev_activation", value: prev_activation, dim: WebGL2.GL.TEXTURE_3D },
-                { name: "delta_z", value: delta_z_3D, dim: WebGL2.GL.TEXTURE_3D }
+                { name: "prev_activation", value: prev_activation },
+                { name: "delta_z", value: delta_z_3D }
             ];
 
             param.uniforms = [
@@ -806,7 +806,7 @@ class Network {
 
         var vs_id = "Test";
         param.textures = [
-            { name: "prev_activation", value: m, dim: WebGL2.GL.TEXTURE_3D }
+            { name: "prev_activation", value: m }
         ];
 
         var biases = new Float32Array(4);

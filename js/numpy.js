@@ -33,8 +33,8 @@ class TNumpy {
 
                 vs_id = "vs-Texture";
                 param.textures = [
-                    { name: "A_Tex", value: A, dim: WebGL2.GL.TEXTURE_2D },
-                    { name: "B_Tex", value: B.T(), dim: WebGL2.GL.TEXTURE_2D }
+                    { name: "A_Tex", value: A },
+                    { name: "B_Tex", value: B.T() }
                 ];
 
                 param.uniforms = [

@@ -31,8 +31,6 @@ function CreateWebGLLib() {
             }
 
             this.TEXTUREs = [gl.TEXTURE0, gl.TEXTURE1, gl.TEXTURE2, gl.TEXTURE3];
-
-            this.GL = gl;
         }
 
         WebGLClear() {
@@ -104,7 +102,9 @@ function CreateWebGLLib() {
             return shader;
         }
 
-        makeTexture(tex_id, dim) {
+        makeTexture(tex_id, texture_value) {
+            var dim = texture_value.shape.length == 3 ? gl.TEXTURE_3D : gl.TEXTURE_2D;
+
             var texture = gl.createTexture(); chk();
 
             gl.activeTexture(tex_id); chk();
@@ -118,17 +118,19 @@ function CreateWebGLLib() {
             return texture;
         }
 
-        setTextureData(m, tex_id, dim, texture) {
+        setTextureData(texture_value, tex_id, texture) {
+            var dim = texture_value.shape.length == 3 ? gl.TEXTURE_3D : gl.TEXTURE_2D;
+
             gl.activeTexture(tex_id); chk();
             gl.bindTexture(dim, texture); chk();
             if (dim == gl.TEXTURE_2D) {
 
-                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, m.Cols / 4, m.Rows, 0, gl.RGBA, gl.FLOAT, m.dt); chk();
+                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, texture_value.Cols / 4, texture_value.Rows, 0, gl.RGBA, gl.FLOAT, texture_value.dt); chk();
             }
             else {
                 Assert(dim == gl.TEXTURE_3D, "Set-Tex");
 
-                gl.texImage3D(gl.TEXTURE_3D, 0, gl.RGBA32F, m.Cols / 4, m.Rows, m.Depth, 0, gl.RGBA, gl.FLOAT, m.dt); chk();
+                gl.texImage3D(gl.TEXTURE_3D, 0, gl.RGBA32F, texture_value.Cols / 4, texture_value.Rows, texture_value.Depth, 0, gl.RGBA, gl.FLOAT, texture_value.dt); chk();
             }
         }
 
@@ -162,7 +164,7 @@ function CreateWebGLLib() {
                 var loc = gl.getUniformLocation(pkg.program, param.textures[i].name); chk();
                 pkg.locTextures.push(loc);
 
-                var tex = this.makeTexture(this.TEXTUREs[i], param.textures[i].dim);
+                var tex = this.makeTexture(this.TEXTUREs[i], param.textures[i].value);
                 pkg.Textures.push(tex);
             }
 
@@ -176,7 +178,7 @@ function CreateWebGLLib() {
             }
             else {
 
-                pkg.arrayBuffers = xrange(param.varyings.length).map(x => new Float32Array(param.elementCount));    // new ArrayBuffer(out_buffer_size)
+                pkg.arrayBuffers = xrange(param.varyings.length).map(x => new Float32Array(param.elementCount));
             }
 
             for (var i = 0; i < param.varyings.length; i++) {
@@ -222,7 +224,7 @@ function CreateWebGLLib() {
             // テクスチャの値のセット
             for (var i = 0; i < param.textures.length; i++) {
 
-                this.setTextureData(param.textures[i].value, this.TEXTUREs[i], param.textures[i].dim, pkg.Textures[i]);
+                this.setTextureData(param.textures[i].value, this.TEXTUREs[i], pkg.Textures[i]);
                 gl.uniform1i(pkg.locTextures[i], i); chk();
             }
 
