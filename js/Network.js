@@ -456,14 +456,15 @@ class ConvolutionalLayer extends Layer{
         }
     }
 
-    gpuBackward() {
+    gpuNablaWeights(delta_z) {
         var prev_Layer = this.prevLayer;
 
-        var prev_activation = new Mat(prev_Layer.imgCols, sub_batch_size, prev_Layer.activation.dt, false, prev_Layer.imgRows);
+        var prev_activation = new Mat(prev_Layer.imgCols, this.batchLength, prev_Layer.activation.dt, false, prev_Layer.imgRows);
+        var delta_z_3D = new Mat(this.imgRows, this.imgCols * this.batchLength, delta_z.dt, false, this.featureCount);
 
         var batch_vec4_count = this.batchLength / 4;
         var vs_id = "ConvolutionalLayer-backward";
-        var param_key = vs_id + ":" + this.filterSize + ":" + this.featureCount + ":" + this.imgRows + ":" + this.imgCols + ":" + sub_batch_size;
+        var param_key = vs_id + ":" + this.featureCount + ":" + this.filterSize + ":" + this.imgRows + ":" + this.imgCols + ":" + this.batchLength;
         var param;
 
         if (this.param[param_key] == undefined) {
@@ -478,11 +479,10 @@ class ConvolutionalLayer extends Layer{
             param.elementCount = this.featureCount * this.filterSize * this.filterSize;
             param.textures = [
                 { name: "prev_activation", value: prev_activation, dim: WebGL2.GL.TEXTURE_3D },
-                { name: "delta_z", value: delta_z, dim: WebGL2.GL.TEXTURE_3D }
+                { name: "delta_z", value: delta_z_3D, dim: WebGL2.GL.TEXTURE_3D }
             ];
 
             param.uniforms = [
-                { name: "weights", value: this.weights.dt },
             ];
 
             var shader_src = Shaders[vs_id]
@@ -503,63 +503,14 @@ class ConvolutionalLayer extends Layer{
             param = this.param[param_key];
         }
 
-        param.sub_prev_activation.dt = prev_activation.dt;
-        param.sub_z.dt = this.z.dt;
-        param.sub_activation.dt = this.activation.dt;
-        var ret = WebGL2.Calc(this.param[param_key]);
+        var ret = WebGL2.Calc(param);
     }
 
-    backward(Y, eta2) {
-        var lap = new Lap(this.bwTime);
-
-        var batch_length = this.batchLength;
-        //this.Delta = this.nextLayer.Delta.Mul(sigmoid_prime(this.z));
-        var delta_z = new Mat(this.unitSize, batch_length, new Float32Array(this.nextLayer.deltaX.dt));
-        lap.Time();
-
-        for (var i = 0; i < delta_z.dt.length; i++) {
-            delta_z.dt[i] *= sigmoid_primeF(this.z.dt[i]);
-        }
-        lap.Time();
-
+    cpuNablaWeights(delta_z) {
         var prev_Layer = this.prevLayer;
-
-        this.nablaBiases = new Mat(this.featureCount, 1);
-        this.nablaWeights = new Mat(this.filterSize, this.filterSize, null, false, this.featureCount);
-        this.costDerivative = new Mat(this.unitSize, 1);
-        lap.Time();
-
 
         // すべての特徴マップに対し
         var delta_z_idx = 0;
-        for (var feature_idx = 0; feature_idx < this.featureCount; feature_idx++) {
-
-            var nabla_b = 0.0;
-
-            // 出力の行に対し
-            for (var r1 = 0; r1 < this.imgRows; r1++) {
-
-                // 出力の列に対し
-                for (var c1 = 0; c1 < this.imgCols; c1++) {
-
-                    // バッチ内のデータに対し
-                    for (var batch_idx = 0; batch_idx < batch_length; batch_idx++) {
-
-                        nabla_b += delta_z.dt[delta_z_idx];
-                        delta_z_idx++;
-
-                        //!!!!!! 直前が入力層なら必要なし !!!!!
-                        // this.costDerivative.dt[output_idx] = this.nextLayer.DeltaT[output_idx];
-                    }
-                }
-            }
-
-            this.nablaBiases.dt[feature_idx] = nabla_b;
-        }
-        Assert(delta_z_idx == delta_z.dt.length);
-        lap.Time();
-
-        // すべての特徴マップに対し
         var delta_z_idx_sv = 0;
         var weights_idx = 0;
         for (var feature_idx = 0; feature_idx < this.featureCount; feature_idx++) {
@@ -600,6 +551,63 @@ class ConvolutionalLayer extends Layer{
             delta_z_idx_sv = delta_z_idx;
         }
         Assert(delta_z_idx == delta_z.dt.length && weights_idx == this.nablaWeights.dt.length);
+    }
+
+    cpuNablaBiases(delta_z){
+        // すべての特徴マップに対し
+        var delta_z_idx = 0;
+        for (var feature_idx = 0; feature_idx < this.featureCount; feature_idx++) {
+
+            var nabla_b = 0.0;
+
+            // 出力の行に対し
+            for (var r1 = 0; r1 < this.imgRows; r1++) {
+
+                // 出力の列に対し
+                for (var c1 = 0; c1 < this.imgCols; c1++) {
+
+                    // バッチ内のデータに対し
+                    for (var batch_idx = 0; batch_idx < this.batchLength; batch_idx++) {
+
+                        nabla_b += delta_z.dt[delta_z_idx];
+                        delta_z_idx++;
+
+                        //!!!!!! 直前が入力層なら必要なし !!!!!
+                        // this.costDerivative.dt[output_idx] = this.nextLayer.DeltaT[output_idx];
+                    }
+                }
+            }
+
+            this.nablaBiases.dt[feature_idx] = nabla_b;
+        }
+        Assert(delta_z_idx == delta_z.dt.length);
+    }
+
+    backward(Y, eta2) {
+        var lap = new Lap(this.bwTime);
+
+        var delta_z = new Mat(this.unitSize, this.batchLength, new Float32Array(this.nextLayer.deltaX.dt));
+        lap.Time();
+
+        for (var i = 0; i < delta_z.dt.length; i++) {
+            delta_z.dt[i] *= sigmoid_primeF(this.z.dt[i]);
+        }
+        lap.Time();
+
+        this.nablaBiases = new Mat(this.featureCount, 1);
+        this.nablaWeights = new Mat(this.filterSize, this.filterSize, null, false, this.featureCount);
+        this.costDerivative = new Mat(this.unitSize, 1);
+        lap.Time();
+
+        this.cpuNablaBiases(delta_z);
+        lap.Time();
+
+        //this.gpuNablaWeights(delta_z);
+        //var gpu_nabla_weights = new Float32Array(this.nablaWeights.dt);
+        //lap.Time();
+
+        this.cpuNablaWeights(delta_z);
+//        AssertEq(gpu_nabla_weights, this.nablaWeights.dt);
         lap.Time();
     }
 

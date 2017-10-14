@@ -13,6 +13,15 @@ function Assert(b, msg) {
     if (!b) {
         console.log(msg + " " + this.LineText);
     }
+};
+
+function AssertEq(u, v) {
+    Assert(u.length == v.length);
+    for (var i = 0; i < u.length; i++) {
+        if (0.0001 <= Math.abs(u[i] - v[i])) {
+            Assert(false);
+        }
+    }
 }
 
 function len(x) {
