@@ -171,10 +171,20 @@ function CreateWebGLLib() {
             if (param.attributes) {
 
                 pkg.AttribBuffers = [];
-                for (var i = 0; i < param.attributes.length; i++) {
-                    var vbo = gl.createBuffer();
-//                    gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+                for (let attrib of param.attributes) {
+                    var attrib_dim = attrib.dim ? attrib.dim : 1;
+                    var attrib_len = attrib.value instanceof Mat ? attrib.value.dt.length : attrib.value.length;
+                    var elemen_count = attrib_len / attrib_dim;
 
+                    if (param.elementCount == undefined) {
+                        param.elementCount = elemen_count;
+                    }
+                    else {
+
+                        Assert(param.elementCount == elemen_count);
+                    }
+
+                    var vbo = gl.createBuffer();
                     pkg.AttribBuffers.push(vbo);
                 }
             }
@@ -224,9 +234,10 @@ function CreateWebGLLib() {
 
                 for (var i = 0; i < param.attributes.length; i++) {
                     var attrib = param.attributes[i];
+                    var dim = attrib.dim ? attrib.dim : 1;
 
                     gl.bindBuffer(gl.ARRAY_BUFFER, pkg.AttribBuffers[i]); chk();
-                    gl.vertexAttribPointer(i, 1, gl.FLOAT, false, 4, 0); chk();
+                    gl.vertexAttribPointer(i, dim, gl.FLOAT, false, 4 * dim, 0); chk();
                     gl.enableVertexAttribArray(i); chk();
                     gl.bindAttribLocation(pkg.program, i, attrib.name);
                     gl.bufferData(gl.ARRAY_BUFFER, attrib.value, gl.STATIC_DRAW);

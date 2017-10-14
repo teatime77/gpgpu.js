@@ -4,10 +4,10 @@ Shaders["AttribTest"] = `#version 300 es
 precision highp float;
 precision highp int;
 
-in float x;
-in float y;
+in vec4 x;
+in vec4 y;
 
-out float z;
+out vec4 z;
 
 void main() {
     z = x + y;

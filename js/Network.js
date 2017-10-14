@@ -1246,9 +1246,9 @@ class Network {
 }
 
 function AttribTest(){
-    var x = new Float32Array(10);
-    var y = new Float32Array(10);
-    var z = new Float32Array(10);
+    var x = new Float32Array(4 * 3);
+    var y = new Float32Array(4 * 3);
+    var z = new Float32Array(4 * 3);
     for (var i = 0; i < x.length; i++) {
         x[i] = i;
         y[i] = i * 100;
@@ -1256,13 +1256,11 @@ function AttribTest(){
 
     var param = {};
 
-    param.elementCount =x.length;
-
     var vs_id = "AttribTest";
     
     param.attributes = [
-        { name: "x", value: x }, 
-        { name: "y", value: y }, 
+        { name: "x", value: x, dim: 4 }, 
+        { name: "y", value: y, dim: 4 }, 
     ];
     
     param.textures = [
@@ -1273,7 +1271,7 @@ function AttribTest(){
 
     param.shaderText = Shaders[vs_id];
     param.varyings = [
-        { name: "z", value: z }, 
+        { name: "z", value: z, dim: 4 }, 
     ];
     param.key = vs_id;
 
