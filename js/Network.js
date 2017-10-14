@@ -233,7 +233,6 @@ class ConvolutionalLayer extends Layer{
             param.sub_z = new Mat(this.unitSize, sub_batch_size);
             param.sub_activation = new Mat(this.unitSize, sub_batch_size);
 
-            param.elementDim   = 4;
             param.elementCount = this.featureCount * this.imgRows * this.imgCols * batch_vec4_count;
             param.textures = [
                 { name: "prev_activation", value: param.sub_prev_activation }
@@ -255,8 +254,8 @@ class ConvolutionalLayer extends Layer{
             param.shaderText = shader_src;
 
             param.varyings = [
-                { name: "z", value: param.sub_z }, 
-                { name: "activation", value: param.sub_activation }
+                { name: "z", value: param.sub_z, dim: 4 }, 
+                { name: "activation", value: param.sub_activation, dim: 4 }
             ];
         }
         else {
@@ -466,7 +465,6 @@ class ConvolutionalLayer extends Layer{
 
             this.param[param.key] = param;
 
-            param.elementDim   = 1;
             param.elementCount = this.featureCount * this.filterSize * this.filterSize;
             param.textures = [
                 { name: "prev_activation", value: prev_activation },
@@ -779,18 +777,17 @@ class Network {
     gpuBatchTest() {
         var param = {};
 
-        param.elementDim = 4;
         param.elementCount = 16;
 
-        var y = new Float32Array(param.elementDim * param.elementCount);
-        var z = new Float32Array(param.elementDim * param.elementCount);
+        var y = new Float32Array(4 * param.elementCount);
+        var z = new Float32Array(4 * param.elementCount);
 
         param.textures = [];
         param.uniforms = [];
         param.shaderText = Shaders["BatchTest"];
         param.varyings = [
-            { name: "y", value: y }, 
-            { name: "z", value: z }
+            { name: "y", value: y, dim: 4 }, 
+            { name: "z", value: z, dim: 4 }
         ];
         param.key = "BatchTest";
 
@@ -809,7 +806,6 @@ class Network {
 
         var param = {};
 
-        param.elementDim = 1;
         param.elementCount = m.dt.length;
 
         var vs_id = "Test";
@@ -1260,7 +1256,6 @@ function AttribTest(){
 
     var param = {};
 
-    param.elementDim = 1;
     param.elementCount =x.length;
 
     var vs_id = "AttribTest";

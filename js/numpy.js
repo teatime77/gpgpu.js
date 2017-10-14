@@ -26,7 +26,6 @@ class TNumpy {
 
             var param = {};
 
-            param.elementDim = 1;
             param.elementCount = A.Rows * B.Cols;
 
             var vs_id;

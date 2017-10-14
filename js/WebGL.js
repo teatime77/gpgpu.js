@@ -185,9 +185,12 @@ function CreateWebGLLib() {
 
             pkg.feedbackBuffers = [];
 
-            var out_buffer_size = param.elementDim * param.elementCount * Float32Array.BYTES_PER_ELEMENT;
-
             for (let varying of param.varyings) {
+                var out_buffer_size = param.elementCount * Float32Array.BYTES_PER_ELEMENT;
+                if (varying.dim) {
+
+                    out_buffer_size *= varying.dim;
+                }
 
                 // Feedback empty buffer
                 var buf = gl.createBuffer(); chk();
