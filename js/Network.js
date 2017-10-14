@@ -4,17 +4,6 @@ var isDebug = false;
 var isFloat64 = false;// true;// isDebug;
 var DebugOut = true;
 
-function newFloatArray(x) {
-    if(isFloat64){
-        return new Float64Array(x);
-    }
-    else {
-
-        return new Float32Array(x);
-    }
-}
-
-
 function Stats(tm, idx){
     switch(tm.length){
     case 0:
@@ -420,8 +409,8 @@ class ConvolutionalLayer extends Layer{
             return;
         }
 
-        var z_gpu_dt = newFloatArray(this.z.dt);
-        var activation_gpu_dt = newFloatArray(this.activation.dt);
+        var z_gpu_dt = new Float32Array(this.z.dt);
+        var activation_gpu_dt = new Float32Array(this.activation.dt);
 
         this.cpuForward();
         var t2 = new Date();
@@ -804,7 +793,7 @@ class Network {
     }
 
     gpuTest() {
-        var dt = newFloatArray(4 * 3 * 28 * 28);
+        var dt = new Float32Array(4 * 3 * 28 * 28);
         for (var i = 0; i < dt.length; i++) {
             dt[i] = Math.random();// i + 0.123;
         }
@@ -1152,20 +1141,20 @@ class Network {
         else {
 
             var last_layer = this.layers[this.layers.length - 1];
-            var cost_sv = newFloatArray( last_layer.cost );
+            var cost_sv = new Float32Array( last_layer.cost );
             var max_err = 0;
 
             this.layers.forEach(layer => {
                 if (!(layer instanceof InputLayer)) {
                     if (layer.z) {
 
-                        layer.z_sv = newFloatArray(layer.z.dt);
+                        layer.z_sv = new Float32Array(layer.z.dt);
                     }
                     if (layer.maxIdx) {
                         layer.maxIdx_sv = new Int8Array(layer.maxIdx);
                     }
-                    layer.activation_sv = newFloatArray(layer.activation.dt);
-                    layer.costDerivative_sv = newFloatArray(layer.costDerivative.dt);
+                    layer.activation_sv = new Float32Array(layer.activation.dt);
+                    layer.costDerivative_sv = new Float32Array(layer.costDerivative.dt);
                 }
             });
 

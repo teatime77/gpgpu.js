@@ -81,20 +81,10 @@ function CreateWebGLLib() {
             return prg;
         }
 
-        MakeFloat32Array(n) {
-            var v = newFloatArray(n);
-
-            for (var k = 0; k < n; k++) {
-                v[k] = k;
-            }
-
-            return v;
-        }
-
         MakeIdxBuffer(gpu, element_count) {
             var idx_buffer = gl.createBuffer(); chk();
             gl.bindBuffer(gl.ARRAY_BUFFER, idx_buffer); chk();
-            gpu.vidx = this.MakeFloat32Array(element_count);
+            gpu.vidx = new Float32Array(element_count);
             for (var i = 0; i < element_count; i++) {
                 gpu.vidx[i] = i;
             }
@@ -235,7 +225,7 @@ function CreateWebGLLib() {
 
                     if (u.type == "vec4") {
 
-    //                    gl.uniform4fv(gpu.locUniforms[i], newFloatArray(u.value.dt)); chk();
+    //                    gl.uniform4fv(gpu.locUniforms[i], new Float32Array(u.value.dt)); chk();
                         gl.uniform4fv(gpu.locUniforms[i], u.value.dt); chk();
                     }
                     else {
@@ -244,7 +234,7 @@ function CreateWebGLLib() {
                 }
                 else if (u.value instanceof Float32Array) {
 
-    //                gl.uniform1fv(gpu.locUniforms[i], newFloatArray(u.value)); chk();
+    //                gl.uniform1fv(gpu.locUniforms[i], new Float32Array(u.value)); chk();
                     gl.uniform1fv(gpu.locUniforms[i], u.value); chk();
                 }
                 else {
