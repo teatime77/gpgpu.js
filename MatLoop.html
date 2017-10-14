@@ -33,7 +33,7 @@
                 for(var i = 0; i < 10; i++){
 
                     startTime = new Date();
-                    C2 = A.Calc(B, (idx == 0));
+                    C2 = A.compute(B, (idx == 0));
 
                     diff = Math.max(diff, C1.Sub(C2).Abs().Sum() / (C1.Rows * C1.Cols));
                     time = Math.max(time, new Date() - startTime);
@@ -49,7 +49,7 @@
 
 /*
             console.log("START Uniform ----- ");
-            C2 = A.Calc(B);
+            C2 = A.compute(B);
             console.log("誤差 " + (C1.Sub(C2).Abs().Sum() / (C1.Rows * C1.Cols)).toFixed(7));
 */
         }

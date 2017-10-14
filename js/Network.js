@@ -267,7 +267,7 @@ class ConvolutionalLayer extends Layer{
             param.sub_prev_activation.dt = prev_activation.dt;
             param.sub_z.dt = this.z.dt;
             param.sub_activation.dt = this.activation.dt;
-            var ret = WebGL2.Calc(this.param[param_key]);
+            var ret = WebGL2.compute(this.param[param_key]);
         }
         else {
 
@@ -283,7 +283,7 @@ class ConvolutionalLayer extends Layer{
                     all_idx += this.batchLength;
                 }
 
-                var ret = WebGL2.Calc(this.param[param_key]);
+                var ret = WebGL2.compute(this.param[param_key]);
                 
                 all_idx = sub_batch_base;
                 sub_idx = 0;
@@ -492,7 +492,7 @@ class ConvolutionalLayer extends Layer{
             param = this.param[param_key];
         }
 
-        var ret = WebGL2.Calc(param);
+        var ret = WebGL2.compute(param);
     }
 
     cpuNablaWeights(delta_z) {
@@ -789,7 +789,7 @@ class Network {
         param.arrayBuffers = [y, z];
         param.key = "BatchTest";
 
-        var ret = WebGL2.Calc(param);
+        var ret = WebGL2.compute(param);
     }
 
     gpuTest() {
@@ -821,7 +821,7 @@ class Network {
         param.varyings = ["z", "activation"];
         param.key = vs_id;
 
-        var ret = WebGL2.Calc(param);
+        var ret = WebGL2.compute(param);
         for (var i = 0; i < dt.length; i++) {
             Assert(ret[0][i] == i && Math.abs(dt[i] + biases[i % 4] - ret[1][i]) < 0.00001);
         }

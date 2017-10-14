@@ -65,7 +65,7 @@ class TNumpy {
 
 
             var startTime = new Date();
-            var ret = WebGL2.Calc(param);
+            var ret = WebGL2.compute(param);
             var C1 = new Mat(A.Rows, B.Cols, ret[0]);
 
             var t1 = new Date() - startTime;

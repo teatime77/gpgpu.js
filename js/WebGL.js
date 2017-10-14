@@ -12,7 +12,7 @@ function CreateWebGLLib() {
         constructor() {
             console.log("init WebGL");
 
-            this.Prg = {};
+            this.packages = {};
 
             // -- Init Canvas
             var canvas = document.createElement('canvas');
@@ -30,33 +30,35 @@ function CreateWebGLLib() {
                 throw "WebGL 2 is not available.";
             }
 
+            this.TEXTUREs = [gl.TEXTURE0, gl.TEXTURE1, gl.TEXTURE2, gl.TEXTURE3];
+
             this.GL = gl;
         }
 
         WebGLClear() {
-            for (var key in this.Prg) {
-                var gpu = this.Prg[key];
+            for (var key in this.packages) {
+                var pkg = this.packages[key];
 
                 gl.bindBuffer(gl.ARRAY_BUFFER, null); chk();
-                gl.deleteBuffer(gpu.idxBuffer); chk();
-                for(let buf of gpu.outBuffers) {
+                gl.deleteBuffer(pkg.idxBuffer); chk();
+                for(let buf of pkg.outBuffers) {
                     gl.deleteBuffer(buf); chk();
                 }
-                gl.deleteTransformFeedback(gpu.transformFeedback); chk();
+                gl.deleteTransformFeedback(pkg.transformFeedback); chk();
 
                 gl.bindTexture(gl.TEXTURE_2D, null); chk();
                 gl.bindTexture(gl.TEXTURE_3D, null); chk();
-                for(let tex of gpu.Textures) {
+                for(let tex of pkg.Textures) {
 
                     gl.deleteTexture(tex); chk();
                 }
 
-                gl.deleteProgram(gpu.program); chk();
-                console.log("clear gpu:" + gpu.key);
+                gl.deleteProgram(pkg.program); chk();
+                console.log("clear pkg:" + pkg.key);
             }
         }
 
-        MakeProgram(vshaderTransform, fshaderTransform, varyings) {
+        makeProgram(vshaderTransform, fshaderTransform, varyings) {
             var prg = gl.createProgram(); chk();
             gl.attachShader(prg, vshaderTransform); chk();
             gl.attachShader(prg, fshaderTransform); chk();
@@ -81,20 +83,20 @@ function CreateWebGLLib() {
             return prg;
         }
 
-        MakeIdxBuffer(gpu, element_count) {
+        MakeIdxBuffer(pkg, element_count) {
             var idx_buffer = gl.createBuffer(); chk();
             gl.bindBuffer(gl.ARRAY_BUFFER, idx_buffer); chk();
-            gpu.vidx = new Float32Array(element_count);
+            pkg.vidx = new Float32Array(element_count);
             for (var i = 0; i < element_count; i++) {
-                gpu.vidx[i] = i;
+                pkg.vidx[i] = i;
             }
-            gl.bufferData(gl.ARRAY_BUFFER, gpu.vidx, gl.STATIC_DRAW); chk();
+            gl.bufferData(gl.ARRAY_BUFFER, pkg.vidx, gl.STATIC_DRAW); chk();
             gl.bindBuffer(gl.ARRAY_BUFFER, null); chk();
 
             return idx_buffer;
         }
 
-        MakeShader(type, source) {
+        makeShader(type, source) {
             var shader = gl.createShader(type); chk();
             gl.shaderSource(shader, source); chk();
             gl.compileShader(shader); chk();
@@ -102,7 +104,7 @@ function CreateWebGLLib() {
             return shader;
         }
 
-        MakeTex(tex_id, dim) {
+        makeTexture(tex_id, dim) {
             var texture = gl.createTexture(); chk();
 
             gl.activeTexture(tex_id); chk();
@@ -116,7 +118,7 @@ function CreateWebGLLib() {
             return texture;
         }
 
-        SetTex(m, tex_id, dim, texture) {
+        setTextureData(m, tex_id, dim, texture) {
             gl.activeTexture(tex_id); chk();
             gl.bindTexture(dim, texture); chk();
             if (dim == gl.TEXTURE_2D) {
@@ -130,92 +132,98 @@ function CreateWebGLLib() {
             }
         }
 
-        Calc(param) {
-            var TEXTUREs = [gl.TEXTURE0, gl.TEXTURE1, gl.TEXTURE2, gl.TEXTURE3];
+        makePackage(param) {
+            var pkg = {};
+            this.packages[param.key] = pkg;
 
-            var gpu = this.Prg[param.key];
-            if (!gpu) {
+            pkg.key = param.key;
 
-                gpu = {};
-                this.Prg[param.key] = gpu;
+            var fsrc = Shaders['fs-transform'];
+            var vertex_shader = this.makeShader(gl.VERTEX_SHADER, param.vsrc);
 
-                gpu.key = param.key;
+            var fragment_shader = this.makeShader(gl.FRAGMENT_SHADER, fsrc);
 
-                var fsrc = Shaders['fs-transform'];
-                var vshader = this.MakeShader(gl.VERTEX_SHADER, param.vsrc);
-                var fshader = this.MakeShader(gl.FRAGMENT_SHADER, fsrc);
-                gpu.program = this.MakeProgram(vshader, fshader, param.varyings);
-                gl.useProgram(gpu.program); chk();
+            pkg.program = this.makeProgram(vertex_shader, fragment_shader, param.varyings);
+            gl.useProgram(pkg.program); chk();
 
-                // ユニフォーム変数の初期処理
-                gpu.locUniforms = [];
-                for(let u of param.uniforms) {
+            // ユニフォーム変数の初期処理
+            pkg.locUniforms = [];
+            for(let u of param.uniforms) {
 
-                    var loc = gl.getUniformLocation(gpu.program, u.name); chk();
-                    gpu.locUniforms.push(loc);
-                }
+                var loc = gl.getUniformLocation(pkg.program, u.name); chk();
+                pkg.locUniforms.push(loc);
+            }
 
-                // テクスチャの初期処理
-                gpu.locTextures = [];
-                gpu.Textures = [];
-                for (var i = 0; i < param.textures.length; i++) {
+            // テクスチャの初期処理
+            pkg.locTextures = [];
+            pkg.Textures = [];
+            for (var i = 0; i < param.textures.length; i++) {
 
-                    var loc = gl.getUniformLocation(gpu.program, param.textures[i].name); chk();
-                    gpu.locTextures.push(loc);
+                var loc = gl.getUniformLocation(pkg.program, param.textures[i].name); chk();
+                pkg.locTextures.push(loc);
 
-                    var tex = this.MakeTex(TEXTUREs[i], param.textures[i].dim);
-                    gpu.Textures.push(tex);
-                }
+                var tex = this.makeTexture(this.TEXTUREs[i], param.textures[i].dim);
+                pkg.Textures.push(tex);
+            }
 
-                gpu.idxBuffer = this.MakeIdxBuffer(gpu, param.elementCount);
-                gpu.outBuffers = [];
+            pkg.idxBuffer = this.MakeIdxBuffer(pkg, param.elementCount);
+            pkg.outBuffers = [];
 
-                var out_buffer_size = param.elementDim * param.elementCount * Float32Array.BYTES_PER_ELEMENT;
-                if (param.arrayBuffers) {
+            var out_buffer_size = param.elementDim * param.elementCount * Float32Array.BYTES_PER_ELEMENT;
+            if (param.arrayBuffers) {
 
-                    gpu.arrayBuffers = param.arrayBuffers;
-                }
-                else{
-
-                    gpu.arrayBuffers = xrange(param.varyings.length).map(x => new Float32Array(param.elementCount));    // new ArrayBuffer(out_buffer_size)
-                }
-
-                for (var i = 0; i < param.varyings.length; i++) {
-
-                    // Feedback empty buffer
-                    var buf = gl.createBuffer(); chk();
-                    gl.bindBuffer(gl.ARRAY_BUFFER, buf); chk();
-                    gl.bufferData(gl.ARRAY_BUFFER, out_buffer_size, gl.STATIC_COPY); chk();
-                    gl.bindBuffer(gl.ARRAY_BUFFER, null); chk();
-
-                    gpu.outBuffers.push(buf);
-                }
-
-                // -- Init TransformFeedback 
-                gpu.transformFeedback = gl.createTransformFeedback(); chk();
+                pkg.arrayBuffers = param.arrayBuffers;
             }
             else {
 
-                gl.useProgram(gpu.program); chk();
+                pkg.arrayBuffers = xrange(param.varyings.length).map(x => new Float32Array(param.elementCount));    // new ArrayBuffer(out_buffer_size)
+            }
+
+            for (var i = 0; i < param.varyings.length; i++) {
+
+                // Feedback empty buffer
+                var buf = gl.createBuffer(); chk();
+                gl.bindBuffer(gl.ARRAY_BUFFER, buf); chk();
+                gl.bufferData(gl.ARRAY_BUFFER, out_buffer_size, gl.STATIC_COPY); chk();
+                gl.bindBuffer(gl.ARRAY_BUFFER, null); chk();
+
+                pkg.outBuffers.push(buf);
+            }
+
+            // -- Init TransformFeedback 
+            pkg.transformFeedback = gl.createTransformFeedback(); chk();
+
+            return pkg;
+        }
+
+        compute(param) {
+            var pkg = this.packages[param.key];
+            if (!pkg) {
+
+                pkg = this.makePackage(param);
+            }
+            else {
+
+                gl.useProgram(pkg.program); chk();
             }
 
             // -- Init Buffer
 
-            gl.bindBuffer(gl.ARRAY_BUFFER, gpu.idxBuffer); chk();
+            gl.bindBuffer(gl.ARRAY_BUFFER, pkg.idxBuffer); chk();
             gl.vertexAttribPointer(0, 1, gl.FLOAT, false, 0, 0); chk();
             gl.enableVertexAttribArray(0); chk();
 
-            gl.useProgram(gpu.program); chk();
+            gl.useProgram(pkg.program); chk();
 
             gl.enable(gl.RASTERIZER_DISCARD); chk();
 
-            gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, gpu.transformFeedback); chk();
+            gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, pkg.transformFeedback); chk();
 
             // テクスチャの値のセット
             for (var i = 0; i < param.textures.length; i++) {
 
-                this.SetTex(param.textures[i].value, TEXTUREs[i], param.textures[i].dim, gpu.Textures[i]);
-                gl.uniform1i(gpu.locTextures[i], i); chk();
+                this.setTextureData(param.textures[i].value, this.TEXTUREs[i], param.textures[i].dim, pkg.Textures[i]);
+                gl.uniform1i(pkg.locTextures[i], i); chk();
             }
 
             // ユニフォーム変数のセット
@@ -225,27 +233,27 @@ function CreateWebGLLib() {
 
                     if (u.type == "vec4") {
 
-    //                    gl.uniform4fv(gpu.locUniforms[i], new Float32Array(u.value.dt)); chk();
-                        gl.uniform4fv(gpu.locUniforms[i], u.value.dt); chk();
+    //                    gl.uniform4fv(pkg.locUniforms[i], new Float32Array(u.value.dt)); chk();
+                        gl.uniform4fv(pkg.locUniforms[i], u.value.dt); chk();
                     }
                     else {
-                        gl.uniform1fv(gpu.locUniforms[i], u.value.dt); chk();
+                        gl.uniform1fv(pkg.locUniforms[i], u.value.dt); chk();
                     }
                 }
                 else if (u.value instanceof Float32Array) {
 
-    //                gl.uniform1fv(gpu.locUniforms[i], new Float32Array(u.value)); chk();
-                    gl.uniform1fv(gpu.locUniforms[i], u.value); chk();
+    //                gl.uniform1fv(pkg.locUniforms[i], new Float32Array(u.value)); chk();
+                    gl.uniform1fv(pkg.locUniforms[i], u.value); chk();
                 }
                 else {
 
-                    gl.uniform1i(gpu.locUniforms[i], u.value); chk();
+                    gl.uniform1i(pkg.locUniforms[i], u.value); chk();
                 }
             }
 
             for (var i = 0; i < param.varyings.length; i++) {
 
-                gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, i, gpu.outBuffers[i]); chk();
+                gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, i, pkg.outBuffers[i]); chk();
             }
 
             // 計算開始
@@ -261,9 +269,9 @@ function CreateWebGLLib() {
                 gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, i, null); chk();
 
                 // 処理結果を表示
-                gl.bindBuffer(gl.ARRAY_BUFFER, gpu.outBuffers[i]); chk();
+                gl.bindBuffer(gl.ARRAY_BUFFER, pkg.outBuffers[i]); chk();
 
-                var out_buf = gpu.arrayBuffers[i];
+                var out_buf = pkg.arrayBuffers[i];
                 if (out_buf instanceof Mat) {
                     out_buf = out_buf.dt;
                 }
