@@ -1,5 +1,20 @@
 ﻿var Shaders = {};
 
+Shaders["AttribTest"] = `#version 300 es
+precision highp float;
+precision highp int;
+
+in float x;
+in float y;
+
+out float z;
+
+void main() {
+    z = x + y;
+}`;
+
+
+
 Shaders["BatchTest"] = `#version 300 es
 
 precision highp float;

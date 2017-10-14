@@ -1249,8 +1249,57 @@ class Network {
     }
 }
 
+function AttribTest(){
+    var x = new Float32Array(10);
+    var y = new Float32Array(10);
+    var z = new Float32Array(10);
+    for (var i = 0; i < x.length; i++) {
+        x[i] = i;
+        y[i] = i * 100;
+    }
+
+    var param = {};
+
+    param.elementDim = 1;
+    param.elementCount =x.length;
+
+    var vs_id = "AttribTest";
+    
+    param.attributes = [
+        { name: "x", value: x }, 
+        { name: "y", value: y }, 
+    ];
+    
+    param.textures = [
+    ];
+
+    param.uniforms = [
+    ];
+
+    param.shaderText = Shaders[vs_id];
+    param.varyings = [
+        { name: "z", value: z }, 
+    ];
+    param.key = vs_id;
+
+    WebGL2.compute(param);
+    for (var i = 0; i < x.length; i++) {
+        console.log("attrib Test " + x[i] + " " + y[i] + " " + z[i]);
+    }
+
+    for (var i = 0; i < x.length; i++) {
+        x[i] = i * 2;
+        y[i] = i * 2 * 100;
+    }
+
+    WebGL2.compute(param);
+    for (var i = 0; i < x.length; i++) {
+        console.log("attrib Test " + x[i] + " " + y[i] + " " + z[i]);
+    }
+}
 
 function* SGD(net, training_data, epochs, mini_batch_size, eta, test_data) {
+    AttribTest();
     //        net.gpuBatchTest();
     net.gpuTest();
 

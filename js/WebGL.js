@@ -83,16 +83,15 @@ function CreateWebGLLib() {
         }
 
         MakeIdxBuffer(pkg, element_count) {
-            var idx_buffer = gl.createBuffer(); chk();
-            gl.bindBuffer(gl.ARRAY_BUFFER, idx_buffer); chk();
+            pkg.idxBuffer = gl.createBuffer(); chk();
+            gl.bindBuffer(gl.ARRAY_BUFFER, pkg.idxBuffer); chk();
+
             pkg.vidx = new Float32Array(element_count);
             for (var i = 0; i < element_count; i++) {
                 pkg.vidx[i] = i;
             }
             gl.bufferData(gl.ARRAY_BUFFER, pkg.vidx, gl.STATIC_DRAW); chk();
             gl.bindBuffer(gl.ARRAY_BUFFER, null); chk();
-
-            return idx_buffer;
         }
 
         makeShader(type, source) {
@@ -169,7 +168,21 @@ function CreateWebGLLib() {
                 pkg.Textures.push(tex);
             }
 
-            pkg.idxBuffer = this.MakeIdxBuffer(pkg, param.elementCount);
+            if (param.attributes) {
+
+                pkg.AttribBuffers = [];
+                for (var i = 0; i < param.attributes.length; i++) {
+                    var vbo = gl.createBuffer();
+//                    gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+
+                    pkg.AttribBuffers.push(vbo);
+                }
+            }
+            else {
+
+                this.MakeIdxBuffer(pkg, param.elementCount);
+            }
+
             pkg.feedbackBuffers = [];
 
             var out_buffer_size = param.elementDim * param.elementCount * Float32Array.BYTES_PER_ELEMENT;
@@ -204,9 +217,24 @@ function CreateWebGLLib() {
 
             // -- Init Buffer
 
-            gl.bindBuffer(gl.ARRAY_BUFFER, pkg.idxBuffer); chk();
-            gl.vertexAttribPointer(0, 1, gl.FLOAT, false, 0, 0); chk();
-            gl.enableVertexAttribArray(0); chk();
+            if (param.attributes) {
+
+                for (var i = 0; i < param.attributes.length; i++) {
+                    var attrib = param.attributes[i];
+
+                    gl.bindBuffer(gl.ARRAY_BUFFER, pkg.AttribBuffers[i]); chk();
+                    gl.vertexAttribPointer(i, 1, gl.FLOAT, false, 4, 0); chk();
+                    gl.enableVertexAttribArray(i); chk();
+                    gl.bindAttribLocation(pkg.program, i, attrib.name);
+                    gl.bufferData(gl.ARRAY_BUFFER, attrib.value, gl.STATIC_DRAW);
+                }
+            }
+            else {
+
+                gl.bindBuffer(gl.ARRAY_BUFFER, pkg.idxBuffer); chk();
+                gl.vertexAttribPointer(0, 1, gl.FLOAT, false, 0, 0); chk();
+                gl.enableVertexAttribArray(0); chk();
+            }
 
             gl.useProgram(pkg.program); chk();
 
