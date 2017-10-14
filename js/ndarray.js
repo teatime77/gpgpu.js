@@ -1,37 +1,82 @@
 ﻿class Mat {
-    constructor(rows, cols, init, column_major, depth) {
-        if(cols  == undefined){
-            cols = 1;
-        }
-        this.Rows  = rows;
-        this.Cols  = cols;
-        this.Depth = (depth == undefined ? 1 : depth);
-        this.shape = [rows, cols];
-        this.columnMajor = (column_major == undefined ? false : column_major);
+    constructor() {
+        var args;
+        if (arguments.length == 1 && Array.isArray(arguments[0])) {
 
-        Assert(!this.columnMajor);
-
-        if (init) {
-
-            Assert((init instanceof Float32Array || init instanceof Float64Array) && init.length == rows * cols * this.Depth, "Mat-init");
-            this.dt = init;
+            args = arguments[0];
         }
         else {
 
-            this.dt = newFloatArray(rows * cols * this.Depth);
-            /*
-            for (var r = 0; r < rows; r++) {
-                for (var c = 0; c < cols; c++) {
-                    //                            this.dt[r * cols + c] = r * 1000 + c;
-                    this.dt[r * cols + c] = Math.random();
-                }
+            // 引数のリストをArrayに変換します。
+            args = Array.prototype.slice.call(arguments);
+        }
+
+        // 引数の最後
+        var last_arg = args[args.length - 1];
+        if (typeof last_arg != 'number') {
+            // 引数の最後が数値でない場合
+
+            if (typeof last_arg == 'Mat') {
+
+                this.dt = new Float32Array(last_arg.dt);
             }
-            */
+            else {
+
+                Assert(last_arg instanceof Float32Array, "is Float32Array");
+                this.dt = last_arg;
+            }
+            args.pop();
+        }
+
+        this.shape = args;
+
+        switch (this.shape.length) {
+            case 1:
+                this.Times = 1;
+                this.Depth = 1;
+                this.Rows = 1;
+                this.Cols = this.shape[0];
+                break;
+
+            case 2:
+                this.Times = 1;
+                this.Depth = 1;
+                this.Rows = this.shape[0];
+                this.Cols = this.shape[1];
+                break;
+
+            case 3:
+                this.Times = 1;
+                this.Depth = this.shape[0];
+                this.Rows = this.shape[1];
+                this.Cols = this.shape[2];
+                break;
+
+            case 4:
+                this.Times = this.shape[0];
+                this.Depth = this.shape[1];
+                this.Rows = this.shape[2];
+                this.Cols = this.shape[3];
+                break;
+
+            default:
+                Assert(false, "new mat:" + String(this.shape.length) + ":" + typeof arguments[0] + ":" + arguments[0] + ":" + String(arguments.length))
+                break;
+        }
+
+        this.nElement = this.shape.reduce((x, y) => x * y);
+
+        if (this.dt) {
+
+            Assert(this.dt.length == this.nElement);
+        }
+        else {
+            this.dt = new Float32Array(this.nElement);
         }
     }
 
     map(f) {
-        return new Mat(this.Rows, this.Cols, this.dt.map(f), this.columnMajor);
+        return new Mat(this.Rows, this.Cols, this.dt.map(f));
     }
 
     T(m) {

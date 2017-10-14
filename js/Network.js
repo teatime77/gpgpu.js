@@ -143,7 +143,7 @@ class FullyConnectedLayer extends Layer{
 
             this.nablaBiases = this.Delta;
             // constructor(rows, cols, init, column_major, depth)
-            this.nablaWeights = new Mat(this.weight.Rows, this.weight.Cols, null, false, this.batchLength);
+            this.nablaWeights = new Mat(this.batchLength, this.weight.Rows, this.weight.Cols);
             for (var batch_idx = 0; batch_idx < this.batchLength; batch_idx++) {
                 for (var r = 0; r < this.weight.Rows; r++) {
                     for (var c = 0; c < this.weight.Cols; c++) {
@@ -202,7 +202,7 @@ class ConvolutionalLayer extends Layer{
             this.biases.dt[i] = np.random.randn();
         }
 
-        this.weights = new Mat(this.filterSize, this.filterSize, null, false, this.featureCount);
+        this.weights = new Mat(this.featureCount, this.filterSize, this.filterSize);
         for (var i = 0; i < this.weights.dt.length; i++) {
             this.weights.dt[i] = np.random.randn();
         }
@@ -240,7 +240,7 @@ class ConvolutionalLayer extends Layer{
 
             this.param[param.key] = param;
 
-            param.sub_prev_activation = new Mat(prev_Layer.imgCols, sub_batch_size, undefined, false, prev_Layer.imgRows);
+            param.sub_prev_activation = new Mat(prev_Layer.imgRows, prev_Layer.imgCols, sub_batch_size);
             param.sub_z = new Mat(this.unitSize, sub_batch_size);
             param.sub_activation = new Mat(this.unitSize, sub_batch_size);
 
@@ -459,8 +459,8 @@ class ConvolutionalLayer extends Layer{
     gpuNablaWeights(delta_z) {
         var prev_Layer = this.prevLayer;
 
-        var prev_activation = new Mat(prev_Layer.imgCols, this.batchLength, prev_Layer.activation.dt, false, prev_Layer.imgRows);
-        var delta_z_3D = new Mat(this.imgRows, this.imgCols * this.batchLength, delta_z.dt, false, this.featureCount);
+        var prev_activation = new Mat(prev_Layer.imgRows, prev_Layer.imgCols, this.batchLength, prev_Layer.activation.dt);
+        var delta_z_3D = new Mat(this.featureCount, this.imgRows, this.imgCols * this.batchLength, delta_z.dt);
 
         var batch_vec4_count = this.batchLength / 4;
         var vs_id = "ConvolutionalLayer-backward";
@@ -595,7 +595,7 @@ class ConvolutionalLayer extends Layer{
         lap.Time();
 
         this.nablaBiases = new Mat(this.featureCount, 1);
-        this.nablaWeights = new Mat(this.filterSize, this.filterSize, null, false, this.featureCount);
+        this.nablaWeights = new Mat(this.featureCount, this.filterSize, this.filterSize);
         this.costDerivative = new Mat(this.unitSize, 1);
         lap.Time();
 
@@ -809,7 +809,7 @@ class Network {
             dt[i] = Math.random();// i + 0.123;
         }
         // (rows, cols, init, column_major, depth)
-        var m = new Mat(28, 12, dt, false, 28);
+        var m = new Mat(28, 28, 12, dt);
         var param = {};
 
         param.elementDim = 1;
