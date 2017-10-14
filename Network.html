@@ -59,7 +59,7 @@
         function RunNetwork() {
             console.log("Training:%d Test:%d", TrainingData.length, TestData["count"]);
 
-            WebGL2 = new WebGLLib();
+            WebGL2 = CreateWebGLLib();
 
             Net = new Network([
                 new InputLayer(28, 28),
