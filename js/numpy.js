@@ -22,6 +22,7 @@ class TNumpy {
             vDot[key]++;
 
             var use_tex = (10 * 12 * 30 < A.Rows * A.Cols * B.Cols);
+            var dot_val = new Float32Array(A.Rows * B.Cols);
 
             var param = {};
 
@@ -59,14 +60,16 @@ class TNumpy {
             var repeat = (A.Cols / 4).toString();
             //        console.log("A_len:[" + A_len + "] B_len:[" + B_len + "] repeat:[" + repeat + "]");
 
-            param.vsrc = Shaders[vs_id].replace(/_repeat_/g, repeat).replace(/_A_len_/g, A_len).replace(/_B_len_/g, B_len);
-            param.varyings = ['dot_val'];
+            param.shaderText = Shaders[vs_id].replace(/_repeat_/g, repeat).replace(/_A_len_/g, A_len).replace(/_B_len_/g, B_len);
+            param.varyings = [
+                { name: 'dot_val', value: dot_val }
+            ];
             param.key = vs_id + ":" + A.Rows + "," + A.Cols + "," + B.Rows + "," + B.Cols;
 
 
             var startTime = new Date();
-            var ret = WebGL2.compute(param);
-            var C1 = new Mat(A.Rows, B.Cols, ret[0]);
+            WebGL2.compute(param);
+            var C1 = new Mat(A.Rows, B.Cols, dot_val);
 
             var t1 = new Date() - startTime;
 

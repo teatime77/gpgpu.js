@@ -39,7 +39,7 @@ function CreateWebGLLib() {
 
                 gl.bindBuffer(gl.ARRAY_BUFFER, null); chk();
                 gl.deleteBuffer(pkg.idxBuffer); chk();
-                for(let buf of pkg.outBuffers) {
+                for(let buf of pkg.feedbackBuffers) {
                     gl.deleteBuffer(buf); chk();
                 }
                 gl.deleteTransformFeedback(pkg.transformFeedback); chk();
@@ -61,7 +61,8 @@ function CreateWebGLLib() {
             gl.attachShader(prg, vshaderTransform); chk();
             gl.attachShader(prg, fshaderTransform); chk();
 
-            gl.transformFeedbackVaryings(prg, varyings, gl.SEPARATE_ATTRIBS); chk();   // gl.INTERLEAVED_ATTRIBS 
+            var varying_names = varyings.map(x => x.name);
+            gl.transformFeedbackVaryings(prg, varying_names, gl.SEPARATE_ATTRIBS); chk();   // gl.INTERLEAVED_ATTRIBS 
             gl.linkProgram(prg); chk();
 
             // check
@@ -141,7 +142,7 @@ function CreateWebGLLib() {
             pkg.key = param.key;
 
             var fsrc = Shaders['fs-transform'];
-            var vertex_shader = this.makeShader(gl.VERTEX_SHADER, param.vsrc);
+            var vertex_shader = this.makeShader(gl.VERTEX_SHADER, param.shaderText);
 
             var fragment_shader = this.makeShader(gl.FRAGMENT_SHADER, fsrc);
 
@@ -169,19 +170,11 @@ function CreateWebGLLib() {
             }
 
             pkg.idxBuffer = this.MakeIdxBuffer(pkg, param.elementCount);
-            pkg.outBuffers = [];
+            pkg.feedbackBuffers = [];
 
             var out_buffer_size = param.elementDim * param.elementCount * Float32Array.BYTES_PER_ELEMENT;
-            if (param.arrayBuffers) {
 
-                pkg.arrayBuffers = param.arrayBuffers;
-            }
-            else {
-
-                pkg.arrayBuffers = xrange(param.varyings.length).map(x => new Float32Array(param.elementCount));
-            }
-
-            for (var i = 0; i < param.varyings.length; i++) {
+            for (let varying of param.varyings) {
 
                 // Feedback empty buffer
                 var buf = gl.createBuffer(); chk();
@@ -189,7 +182,7 @@ function CreateWebGLLib() {
                 gl.bufferData(gl.ARRAY_BUFFER, out_buffer_size, gl.STATIC_COPY); chk();
                 gl.bindBuffer(gl.ARRAY_BUFFER, null); chk();
 
-                pkg.outBuffers.push(buf);
+                pkg.feedbackBuffers.push(buf);
             }
 
             // -- Init TransformFeedback 
@@ -255,7 +248,7 @@ function CreateWebGLLib() {
 
             for (var i = 0; i < param.varyings.length; i++) {
 
-                gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, i, pkg.outBuffers[i]); chk();
+                gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, i, pkg.feedbackBuffers[i]); chk();
             }
 
             // 計算開始
@@ -265,21 +258,19 @@ function CreateWebGLLib() {
 
             gl.disable(gl.RASTERIZER_DISCARD); chk();
 
-            var ret = [];
             for (var i = 0; i < param.varyings.length; i++) {
 
                 gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, i, null); chk();
 
                 // 処理結果を表示
-                gl.bindBuffer(gl.ARRAY_BUFFER, pkg.outBuffers[i]); chk();
+                gl.bindBuffer(gl.ARRAY_BUFFER, pkg.feedbackBuffers[i]); chk();
 
-                var out_buf = pkg.arrayBuffers[i];
+                var out_buf = param.varyings[i].value;
                 if (out_buf instanceof Mat) {
                     out_buf = out_buf.dt;
                 }
 
                 gl.getBufferSubData(gl.ARRAY_BUFFER, 0, out_buf); chk();
-                ret.push(out_buf);
 
                 gl.bindBuffer(gl.ARRAY_BUFFER, null); chk();
             }
@@ -288,8 +279,6 @@ function CreateWebGLLib() {
             gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null); chk();
 
             gl.useProgram(null); chk();
-
-            return ret;
         }
     }
 

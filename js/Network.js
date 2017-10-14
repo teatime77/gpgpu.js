@@ -252,10 +252,12 @@ class ConvolutionalLayer extends Layer{
                 .replace(/filterSize/g, this.filterSize.toString() + "u");
 
             console.log(shader_src);
-            param.vsrc = shader_src;
+            param.shaderText = shader_src;
 
-            param.varyings = ["z", "activation"];
-            param.arrayBuffers = [param.sub_z, param.sub_activation ];
+            param.varyings = [
+                { name: "z", value: param.sub_z }, 
+                { name: "activation", value: param.sub_activation }
+            ];
         }
         else {
 
@@ -267,7 +269,7 @@ class ConvolutionalLayer extends Layer{
             param.sub_prev_activation.dt = prev_activation.dt;
             param.sub_z.dt = this.z.dt;
             param.sub_activation.dt = this.activation.dt;
-            var ret = WebGL2.compute(this.param[param_key]);
+            WebGL2.compute(this.param[param_key]);
         }
         else {
 
@@ -283,7 +285,7 @@ class ConvolutionalLayer extends Layer{
                     all_idx += this.batchLength;
                 }
 
-                var ret = WebGL2.compute(this.param[param_key]);
+                WebGL2.compute(this.param[param_key]);
                 
                 all_idx = sub_batch_base;
                 sub_idx = 0;
@@ -482,17 +484,18 @@ class ConvolutionalLayer extends Layer{
                 .replace(/filterSize/g, this.filterSize.toString() + "u");
 
             console.log(shader_src);
-            param.vsrc = shader_src;
+            param.shaderText = shader_src;
 
-            param.varyings = ["nablaWeights"];
-            param.arrayBuffers = [this.nablaWeights ];
+            param.varyings = [
+                { name: "nablaWeights", value: this.nablaWeights }
+            ];
         }
         else {
 
             param = this.param[param_key];
         }
 
-        var ret = WebGL2.compute(param);
+        WebGL2.compute(param);
     }
 
     cpuNablaWeights(delta_z) {
@@ -784,12 +787,14 @@ class Network {
 
         param.textures = [];
         param.uniforms = [];
-        param.vsrc = Shaders["BatchTest"];
-        param.varyings = ["y", "z"];
-        param.arrayBuffers = [y, z];
+        param.shaderText = Shaders["BatchTest"];
+        param.varyings = [
+            { name: "y", value: y }, 
+            { name: "z", value: z }
+        ];
         param.key = "BatchTest";
 
-        var ret = WebGL2.compute(param);
+        WebGL2.compute(param);
     }
 
     gpuTest() {
@@ -799,6 +804,9 @@ class Network {
         }
         // (rows, cols, init, column_major, depth)
         var m = new Mat(28, 28, 12, dt);
+        var z = new Float32Array(m.dt.length);
+        var activation = new Float32Array(m.dt.length);
+
         var param = {};
 
         param.elementDim = 1;
@@ -817,13 +825,16 @@ class Network {
             { name: "biases", value: biases }
         ];
 
-        param.vsrc = Shaders[vs_id];
-        param.varyings = ["z", "activation"];
+        param.shaderText = Shaders[vs_id];
+        param.varyings = [
+            { name: "z", value: z }, 
+            { name: "activation", value: activation }
+        ];
         param.key = vs_id;
 
-        var ret = WebGL2.compute(param);
+        WebGL2.compute(param);
         for (var i = 0; i < dt.length; i++) {
-            Assert(ret[0][i] == i && Math.abs(dt[i] + biases[i % 4] - ret[1][i]) < 0.00001);
+            Assert(z[i] == i && Math.abs(dt[i] + biases[i % 4] - activation[i]) < 0.00001);
         }
         console.log("gpu Test OK");
     }
