@@ -1,5 +1,14 @@
 ﻿// JavaScript source code
 
+function MakeFloat32Index(n) {
+    var v = new Float32Array(n);
+    for (var i = 0; i < n; i++) {
+        v[i] = i;
+    }
+
+    return v;
+}
+
 function CreateWebGLLib() {
     let gl;
 
@@ -104,7 +113,8 @@ function CreateWebGLLib() {
                 switch (tokens[0]) {
                     case "in":
                         pkg.attributes.push(arg_inf);
-                    break;
+                        break;
+
                     case "uniform":
                         if (tkn1 == "sampler2D" || tkn1 == "sampler3D") {
 
@@ -113,11 +123,12 @@ function CreateWebGLLib() {
                         else {
                             pkg.uniforms.push(arg_inf);
 
-}
-                    break;
-                case "out":
-                    pkg.varyings.push(arg_inf);
-                    break;
+                        }
+                        break;
+
+                    case "out":
+                        pkg.varyings.push(arg_inf);
+                        break;
                 }
             }
         }
@@ -146,18 +157,6 @@ function CreateWebGLLib() {
             gl.deleteShader(fshaderTransform); chk();
 
             return prg;
-        }
-
-        MakeIdxBuffer(pkg, element_count) {
-            pkg.idxBuffer = gl.createBuffer(); chk();
-            gl.bindBuffer(gl.ARRAY_BUFFER, pkg.idxBuffer); chk();
-
-            pkg.vidx = new Float32Array(element_count);
-            for (var i = 0; i < element_count; i++) {
-                pkg.vidx[i] = i;
-            }
-            gl.bufferData(gl.ARRAY_BUFFER, pkg.vidx, gl.STATIC_DRAW); chk();
-            gl.bindBuffer(gl.ARRAY_BUFFER, null); chk();
         }
 
         makeShader(type, source) {
@@ -200,23 +199,28 @@ function CreateWebGLLib() {
             }
         }
 
+        vecDim(tp) {
+            if (tp == "vec4") {
+                return 4;
+            }
+            else if (tp == "vec3") {
+                return 3;
+            }
+            else if (tp == "vec2") {
+                return 2;
+            }
+            else {
+                return 1;
+            }
+        }
+
         makePackage(param) {
             var pkg = {};
             this.packages[param.key] = pkg;
 
             pkg.key = param.key;
 
-            if (param.args) {
-
-                this.parseShader(pkg, param);
-            }
-            else {
-                pkg.attributes = param.attributes;
-                pkg.uniforms = param.uniforms;
-                pkg.textures = param.textures;
-                pkg.varyings = param.varyings;
-            }
-
+            this.parseShader(pkg, param);
 
             var fsrc = Shaders['fs-transform'];
             var vertex_shader = this.makeShader(gl.VERTEX_SHADER, param.shaderText);
@@ -247,39 +251,29 @@ function CreateWebGLLib() {
             }
 
             pkg.attribElementCount = param.elementCount;
-            if (pkg.attributes) {
 
-                pkg.AttribBuffers = [];
-                for (let attrib of pkg.attributes) {
-                    var attrib_dim = attrib.type == "vec4" ? 4 : 1;
-                    var attrib_len = attrib.value instanceof Mat ? attrib.value.dt.length : attrib.value.length;
-                    var elemen_count = attrib_len / attrib_dim;
+            pkg.AttribBuffers = [];
+            for (let attrib of pkg.attributes) {
+                var attrib_dim = this.vecDim(attrib.type);
+                var attrib_len = attrib.value instanceof Mat ? attrib.value.dt.length : attrib.value.length;
+                var elemen_count = attrib_len / attrib_dim;
 
-                    if (pkg.elementCount == undefined) {
-                        pkg.attribElementCount = elemen_count;
-                    }
-                    else {
-
-                        Assert(pkg.elementCount == elemen_count);
-                    }
-
-                    var vbo = gl.createBuffer();
-                    pkg.AttribBuffers.push(vbo);
+                if (pkg.elementCount == undefined) {
+                    pkg.attribElementCount = elemen_count;
                 }
-            }
-            else {
+                else {
 
-                this.MakeIdxBuffer(pkg, pkg.attribElementCount);
+                    Assert(pkg.elementCount == elemen_count);
+                }
+
+                var vbo = gl.createBuffer();
+                pkg.AttribBuffers.push(vbo);
             }
 
             pkg.feedbackBuffers = [];
 
             for (let varying of pkg.varyings) {
-                var out_buffer_size = pkg.attribElementCount * Float32Array.BYTES_PER_ELEMENT;
-                if (varying.type == "vec4") {
-
-                    out_buffer_size *= 4;
-                }
+                var out_buffer_size = this.vecDim(varying.type) * pkg.attribElementCount * Float32Array.BYTES_PER_ELEMENT;
 
                 // Feedback empty buffer
                 var buf = gl.createBuffer(); chk();
@@ -294,6 +288,71 @@ function CreateWebGLLib() {
             pkg.transformFeedback = gl.createTransformFeedback(); chk();
 
             return pkg;
+        }
+
+        setUniformsData(pkg) {
+            for (var i = 0; i < pkg.uniforms.length; i++) {
+                var u = pkg.uniforms[i];
+                if (u.value instanceof Mat || u.value instanceof Float32Array) {
+
+                    var val = u.value instanceof Mat ? u.value.dt : u.value;
+
+                    switch (this.vecDim(u.type)) {
+                        case 4:
+                            if (u.isArray) {
+
+                                gl.uniform4fv(pkg.locUniforms[i], val); chk();
+                            }
+                            else {
+
+                                gl.uniform4f(pkg.locUniforms[i], val[0], val[1], val[2], val[3]); chk();
+                            }
+                            break;
+
+                        case 3:
+                            if (u.isArray) {
+
+                                gl.uniform3fv(pkg.locUniforms[i], val); chk();
+                            }
+                            else {
+
+                                gl.uniform3f(pkg.locUniforms[i], val[0], val[1], val[2]); chk();
+                            }
+                            break;
+                        case 2:
+                            if (u.isArray) {
+
+                                gl.uniform2fv(pkg.locUniforms[i], val); chk();
+                            }
+                            else {
+
+                                gl.uniform2f(pkg.locUniforms[i], val[0], val[1]); chk();
+                            }
+                            break;
+                        case 1:
+                            if (u.isArray) {
+
+                                gl.uniform1fv(pkg.locUniforms[i], val); chk();
+                            }
+                            else {
+
+                                gl.uniform1f(pkg.locUniforms[i], val[0]); chk();
+                            }
+                            break;
+                    }
+                }
+                else {
+
+                    if (u.type == "int") {
+
+                        gl.uniform1i(pkg.locUniforms[i], u.value); chk();
+                    }
+                    else {
+
+                        gl.uniform1f(pkg.locUniforms[i], u.value); chk();
+                    }
+                }
+            }
         }
 
         compute(param) {
@@ -316,25 +375,15 @@ function CreateWebGLLib() {
             }
 
             // -- Init Buffer
+            for (var i = 0; i < pkg.attributes.length; i++) { 
+                var attrib = pkg.attributes[i];
+                var dim = this.vecDim(attrib.type);
 
-            if (pkg.attributes) {
-
-                for (var i = 0; i < pkg.attributes.length; i++) {
-                    var attrib = pkg.attributes[i];
-                    var dim = attrib.type == "vec4" ? 4 : 1;
-
-                    gl.bindBuffer(gl.ARRAY_BUFFER, pkg.AttribBuffers[i]); chk();
-                    gl.vertexAttribPointer(i, dim, gl.FLOAT, false, 4 * dim, 0); chk();
-                    gl.enableVertexAttribArray(i); chk();
-                    gl.bindAttribLocation(pkg.program, i, attrib.name);
-                    gl.bufferData(gl.ARRAY_BUFFER, attrib.value, gl.STATIC_DRAW);
-                }
-            }
-            else {
-
-                gl.bindBuffer(gl.ARRAY_BUFFER, pkg.idxBuffer); chk();
-                gl.vertexAttribPointer(0, 1, gl.FLOAT, false, 0, 0); chk();
-                gl.enableVertexAttribArray(0); chk();
+                gl.bindBuffer(gl.ARRAY_BUFFER, pkg.AttribBuffers[i]); chk();
+                gl.vertexAttribPointer(i, dim, gl.FLOAT, false, 4 * dim, 0); chk();
+                gl.enableVertexAttribArray(i); chk();
+                gl.bindAttribLocation(pkg.program, i, attrib.name);
+                gl.bufferData(gl.ARRAY_BUFFER, attrib.value, gl.STATIC_DRAW);
             }
 
             gl.useProgram(pkg.program); chk();
@@ -351,39 +400,7 @@ function CreateWebGLLib() {
             }
 
             // ユニフォーム変数のセット
-            for (var i = 0; i < pkg.uniforms.length; i++) {
-                var u = pkg.uniforms[i];
-                if (u.value instanceof Mat || u.value instanceof Float32Array) {
-
-                    var val = u.value instanceof Mat ? u.value.dt : u.value;
-
-                    if (u.type == "vec4") {
-
-                        if (val.length == 4) {
-
-                            gl.uniform4f(pkg.locUniforms[i], val[0], val[1], val[2], val[3]); chk();
-                        }
-                        else {
-
-                            gl.uniform4fv(pkg.locUniforms[i], val); chk();
-                        }
-                    }
-                    else {
-                        gl.uniform1fv(pkg.locUniforms[i], val); chk();
-                    }
-                }
-                else {
-
-                    if (u.type == "int") {
-
-                        gl.uniform1i(pkg.locUniforms[i], u.value); chk();
-                    }
-                    else {
-
-                        gl.uniform1f(pkg.locUniforms[i], u.value); chk();
-                    }
-                }
-            }
+            this.setUniformsData(pkg);
 
             for (var i = 0; i < pkg.varyings.length; i++) {
 

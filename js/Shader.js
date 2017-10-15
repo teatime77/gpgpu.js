@@ -24,37 +24,17 @@ void main() {
 }`;
 
 
-
-Shaders["BatchTest"] = `#version 300 es
-
-precision highp float;
-precision highp int;
-precision highp sampler3D;
-
-uniform sampler3D tt;
-
-layout(location = 0) in float idx_f;
-
-out vec4 y;
-out vec4 z;
-
-void main() {
-    y = texelFetch(prev_activation, ivec3(x, y, Z), 0);
-    z = vec4(5.0 * idx_f, 6.0 * idx_f, 7.0 * idx_f, 8.0 * idx_f);
-}`;
-
-
 Shaders["Test"] = `#version 300 es
 
 precision highp float;
 precision highp int;
 precision highp sampler3D;
 
+in float idx_f;
+
 uniform float biases[4];
 
 uniform sampler3D prev_activation;
-
-layout(location = 0) in float idx_f;
 
 out float z;
 out float activation;
@@ -89,7 +69,7 @@ uniform float biases[featureCount];
 
 uniform sampler3D prev_activation;
 
-layout(location = 0) in float idx_f;
+in float idx_f;
 
 out vec4 z;
 out vec4 activation;
@@ -165,7 +145,7 @@ uniform float weights[featureCount * filterSize * filterSize];
 uniform sampler3D prev_activation;
 uniform sampler3D delta_z;
 
-layout(location = 0) in float idx_f;
+in float idx_f;
 
 out float nablaWeights;
 
@@ -214,7 +194,7 @@ uniform int B_Cols;
 uniform sampler2D A_Tex;
 uniform sampler2D B_Tex;
 
-layout(location = 0) in float idx_f;
+in float idx_f;
 
 out float dot_val;
 
@@ -246,7 +226,7 @@ uniform int B_Cols;
 uniform vec4 A[_A_len_];
 uniform vec4 B[_B_len_];
 
-layout(location = 0) in float idx_f;
+in float idx_f;
 
 out float dot_val;
 

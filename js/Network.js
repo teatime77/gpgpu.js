@@ -234,14 +234,15 @@ class ConvolutionalLayer extends Layer{
             param.sub_activation = new Mat(this.unitSize, sub_batch_size);
 
             param.elementCount = this.featureCount * this.imgRows * this.imgCols * batch_vec4_count;
-            param.textures = [
-                { name: "prev_activation", value: param.sub_prev_activation }
-            ];
 
-            param.uniforms = [
-                { name: "weights", value: this.weights.dt },
-                { name: "biases", value: this.biases.dt }
-            ];
+            param.args = {
+                "idx_f": MakeFloat32Index(param.elementCount),
+                "prev_activation": param.sub_prev_activation,
+                "weights": this.weights.dt,
+                "biases": this.biases.dt,
+                "z": param.sub_z,
+                "activation": param.sub_activation
+            };
 
             var shader_src = Shaders[vs_id]
                 .replace(/featureCount/g, this.featureCount.toString() + "u")
@@ -252,11 +253,6 @@ class ConvolutionalLayer extends Layer{
 
             console.log(shader_src);
             param.shaderText = shader_src;
-
-            param.varyings = [
-                { name: "z", value: param.sub_z, type: "vec4" }, 
-                { name: "activation", value: param.sub_activation, type: "vec4" }
-            ];
         }
         else {
 
@@ -466,13 +462,13 @@ class ConvolutionalLayer extends Layer{
             this.param[param.key] = param;
 
             param.elementCount = this.featureCount * this.filterSize * this.filterSize;
-            param.textures = [
-                { name: "prev_activation", value: prev_activation },
-                { name: "delta_z", value: delta_z_3D }
-            ];
 
-            param.uniforms = [
-            ];
+            param.args = {
+                "idx_f": MakeFloat32Index(param.elementCount),
+                "prev_activation": prev_activation,
+                "delta_z": delta_z_3D,
+                "nablaWeights": this.nablaWeights,
+            };
 
             var shader_src = Shaders[vs_id]
                 .replace(/featureCount/g, this.featureCount.toString() + "u")
@@ -483,10 +479,6 @@ class ConvolutionalLayer extends Layer{
 
             console.log(shader_src);
             param.shaderText = shader_src;
-
-            param.varyings = [
-                { name: "nablaWeights", value: this.nablaWeights }
-            ];
         }
         else {
 
@@ -774,26 +766,6 @@ class Network {
         }
     }
 
-    gpuBatchTest() {
-        var param = {};
-
-        param.elementCount = 16;
-
-        var y = new Float32Array(4 * param.elementCount);
-        var z = new Float32Array(4 * param.elementCount);
-
-        param.textures = [];
-        param.uniforms = [];
-        param.shaderText = Shaders["BatchTest"];
-        param.varyings = [
-            { name: "y", value: y, type: "vec4" }, 
-            { name: "z", value: z, type: "vec4" }
-        ];
-        param.key = "BatchTest";
-
-        WebGL2.compute(param);
-    }
-
     gpuTest() {
         var dt = new Float32Array(4 * 3 * 28 * 28);
         for (var i = 0; i < dt.length; i++) {
@@ -804,28 +776,25 @@ class Network {
         var z = new Float32Array(m.dt.length);
         var activation = new Float32Array(m.dt.length);
 
+        var biases = new Float32Array(4);
+        for (var i = 0; i < biases.length; i++) {
+            biases[i] = i;
+        }
+
         var param = {};
 
         param.elementCount = m.dt.length;
 
         var vs_id = "Test";
-        param.textures = [
-            { name: "prev_activation", value: m }
-        ];
-
-        var biases = new Float32Array(4);
-        for (var i = 0; i < biases.length; i++) {
-            biases[i] = i;
-        }
-        param.uniforms = [
-            { name: "biases", value: biases }
-        ];
+        param.args = {
+            "idx_f": MakeFloat32Index(m.dt.length),
+            "biases": biases,
+            "prev_activation": m,
+            "z": z,
+            "activation": activation,
+        };
 
         param.shaderText = Shaders[vs_id];
-        param.varyings = [
-            { name: "z", value: z }, 
-            { name: "activation", value: activation }
-        ];
         param.key = vs_id;
 
         WebGL2.compute(param);
@@ -1305,7 +1274,6 @@ function* SGD(net, training_data, epochs, mini_batch_size, eta, test_data) {
     AttribTest(0);
     AttribTest(10);
     console.log("Attrib Test OK");
-    //        net.gpuBatchTest();
     net.gpuTest();
 
     net.miniBatchSize = mini_batch_size;

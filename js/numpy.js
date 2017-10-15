@@ -32,26 +32,24 @@ class TNumpy {
             if (use_tex) {
 
                 vs_id = "vs-Texture";
-                param.textures = [
-                    { name: "A_Tex", value: A },
-                    { name: "B_Tex", value: B.T() }
-                ];
-
-                param.uniforms = [
-                    { name:"B_Cols", value:B.Cols, type:"int" }
-                ];
+                param.args = {
+                    "idx_f": MakeFloat32Index(param.elementCount),
+                    "A_Tex": A,
+                    "B_Tex": B.T(),
+                    "B_Cols": B.Cols,
+                    'dot_val': dot_val,
+                };
             }
             else {
                 vs_id = "vs-Uniform";
 
-                param.textures = [
-                ];
-
-                param.uniforms = [
-                    { name: "B_Cols", value: B.Cols, type: "int" },
-                    { name: "A", value: A, type: "vec4" },
-                    { name: "B", value: B.T(), type: "vec4" }
-                ];
+                param.args = {
+                    "idx_f": MakeFloat32Index(param.elementCount),
+                    "B_Cols": B.Cols,
+                    "A": A,
+                    "B": B.T(),
+                    'dot_val': dot_val,
+                };
             }
 
             var A_len = (A.Rows * A.Cols / 4).toString();
@@ -60,11 +58,7 @@ class TNumpy {
             //        console.log("A_len:[" + A_len + "] B_len:[" + B_len + "] repeat:[" + repeat + "]");
 
             param.shaderText = Shaders[vs_id].replace(/_repeat_/g, repeat).replace(/_A_len_/g, A_len).replace(/_B_len_/g, B_len);
-            param.varyings = [
-                { name: 'dot_val', value: dot_val }
-            ];
             param.key = vs_id + ":" + A.Rows + "," + A.Cols + "," + B.Rows + "," + B.Cols;
-
 
             var startTime = new Date();
             WebGL2.compute(param);
