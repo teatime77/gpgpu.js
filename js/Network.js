@@ -1245,13 +1245,25 @@ class Network {
     }
 }
 
-function AttribTest(){
-    var x = new Float32Array(4 * 3);
-    var y = new Float32Array(4 * 3);
-    var z = new Float32Array(4 * 3);
-    for (var i = 0; i < x.length; i++) {
-        x[i] = i;
-        y[i] = i * 100;
+function AttribTest(n){
+    var w = new Float32Array(4);
+    var ff = new Float32Array(4);
+    var x = new Float32Array(4 * 4);
+    var y = new Float32Array(4 * 4);
+    var z = new Float32Array(4 * 4);
+    var biases = new Float32Array(4);
+
+    var idx = 0;
+    for (var j = 0; j < 4; j++) {
+        w[j] = j;
+        ff[j] = j * 10;
+        biases[j] = j;
+        for (var k = 0; k < 4; k++) {
+            x[idx] = idx + n;
+            y[idx] = idx * 100;
+
+            idx++;
+        }
     }
 
     var param = {};
@@ -1259,6 +1271,7 @@ function AttribTest(){
     var vs_id = "AttribTest";
     
     param.attributes = [
+        { name: "w", value: w }, 
         { name: "x", value: x, dim: 4 }, 
         { name: "y", value: y, dim: 4 }, 
     ];
@@ -1267,6 +1280,9 @@ function AttribTest(){
     ];
 
     param.uniforms = [
+        { name: "biases", value: biases },
+        { name: "f", value: n },
+        { name: "ff", value: ff, type:"vec4" }
     ];
 
     param.shaderText = Shaders[vs_id];
@@ -1276,23 +1292,21 @@ function AttribTest(){
     param.key = vs_id;
 
     WebGL2.compute(param);
-    for (var i = 0; i < x.length; i++) {
-        console.log("attrib Test " + x[i] + " " + y[i] + " " + z[i]);
-    }
 
-    for (var i = 0; i < x.length; i++) {
-        x[i] = i * 2;
-        y[i] = i * 2 * 100;
-    }
+    idx = 0;
+    for (var j = 0; j < 4; j++) {
+        for (var k = 0; k < 4; k++) {
+            Assert( z[idx] == x[idx] + y[idx] + ff[k % 4] + biases[j % 4] + n );
 
-    WebGL2.compute(param);
-    for (var i = 0; i < x.length; i++) {
-        console.log("attrib Test " + x[i] + " " + y[i] + " " + z[i]);
+            idx++;
+        }
     }
 }
 
 function* SGD(net, training_data, epochs, mini_batch_size, eta, test_data) {
-    AttribTest();
+    AttribTest(0);
+    AttribTest(10);
+    console.log("Attrib Test OK");
     //        net.gpuBatchTest();
     net.gpuTest();
 

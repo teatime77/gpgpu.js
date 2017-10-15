@@ -4,13 +4,20 @@ Shaders["AttribTest"] = `#version 300 es
 precision highp float;
 precision highp int;
 
+in float w;
 in vec4 x;
 in vec4 y;
+
+uniform float biases[4];
+uniform float f;
+uniform vec4 ff;
 
 out vec4 z;
 
 void main() {
-    z = x + y;
+    uint idx = uint(w) % 4u;
+
+    z = (x + y + ff) + biases[idx] + f;
 }`;
 
 
@@ -29,8 +36,6 @@ out vec4 y;
 out vec4 z;
 
 void main() {
-    vec4  txl = 
-
     y = texelFetch(prev_activation, ivec3(x, y, Z), 0);
     z = vec4(5.0 * idx_f, 6.0 * idx_f, 7.0 * idx_f, 8.0 * idx_f);
 }`;

@@ -168,6 +168,7 @@ function CreateWebGLLib() {
                 pkg.Textures.push(tex);
             }
 
+            pkg.attribElementCount = param.elementCount;
             if (param.attributes) {
 
                 pkg.AttribBuffers = [];
@@ -176,12 +177,12 @@ function CreateWebGLLib() {
                     var attrib_len = attrib.value instanceof Mat ? attrib.value.dt.length : attrib.value.length;
                     var elemen_count = attrib_len / attrib_dim;
 
-                    if (param.elementCount == undefined) {
-                        param.elementCount = elemen_count;
+                    if (pkg.elementCount == undefined) {
+                        pkg.attribElementCount = elemen_count;
                     }
                     else {
 
-                        Assert(param.elementCount == elemen_count);
+                        Assert(pkg.elementCount == elemen_count);
                     }
 
                     var vbo = gl.createBuffer();
@@ -190,13 +191,13 @@ function CreateWebGLLib() {
             }
             else {
 
-                this.MakeIdxBuffer(pkg, param.elementCount);
+                this.MakeIdxBuffer(pkg, pkg.attribElementCount);
             }
 
             pkg.feedbackBuffers = [];
 
             for (let varying of param.varyings) {
-                var out_buffer_size = param.elementCount * Float32Array.BYTES_PER_ELEMENT;
+                var out_buffer_size = pkg.attribElementCount * Float32Array.BYTES_PER_ELEMENT;
                 if (varying.dim) {
 
                     out_buffer_size *= varying.dim;
@@ -266,25 +267,35 @@ function CreateWebGLLib() {
             // ユニフォーム変数のセット
             for (var i = 0; i < param.uniforms.length; i++) {
                 var u = param.uniforms[i];
-                if (u.value instanceof Mat) {
+                if (u.value instanceof Mat || u.value instanceof Float32Array) {
+
+                    var val = u.value instanceof Mat ? u.value.dt : u.value;
 
                     if (u.type == "vec4") {
 
-    //                    gl.uniform4fv(pkg.locUniforms[i], new Float32Array(u.value.dt)); chk();
-                        gl.uniform4fv(pkg.locUniforms[i], u.value.dt); chk();
+                        if (val.length == 4) {
+
+                            gl.uniform4f(pkg.locUniforms[i], val[0], val[1], val[2], val[3]); chk();
+                        }
+                        else {
+
+                            gl.uniform4fv(pkg.locUniforms[i], val); chk();
+                        }
                     }
                     else {
-                        gl.uniform1fv(pkg.locUniforms[i], u.value.dt); chk();
+                        gl.uniform1fv(pkg.locUniforms[i], val); chk();
                     }
-                }
-                else if (u.value instanceof Float32Array) {
-
-    //                gl.uniform1fv(pkg.locUniforms[i], new Float32Array(u.value)); chk();
-                    gl.uniform1fv(pkg.locUniforms[i], u.value); chk();
                 }
                 else {
 
-                    gl.uniform1i(pkg.locUniforms[i], u.value); chk();
+                    if (u.type == "int") {
+
+                        gl.uniform1i(pkg.locUniforms[i], u.value); chk();
+                    }
+                    else {
+
+                        gl.uniform1f(pkg.locUniforms[i], u.value); chk();
+                    }
                 }
             }
 
@@ -295,7 +306,7 @@ function CreateWebGLLib() {
 
             // 計算開始
             gl.beginTransformFeedback(gl.POINTS); chk();    // TRIANGLES
-            gl.drawArrays(gl.POINTS, 0, param.elementCount); chk();
+            gl.drawArrays(gl.POINTS, 0, pkg.attribElementCount); chk();
             gl.endTransformFeedback(); chk();
 
             gl.disable(gl.RASTERIZER_DISCARD); chk();

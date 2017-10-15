@@ -38,7 +38,7 @@ class TNumpy {
                 ];
 
                 param.uniforms = [
-                    { name:"B_Cols", value:B.Cols }
+                    { name:"B_Cols", value:B.Cols, type:"int" }
                 ];
             }
             else {
@@ -48,7 +48,7 @@ class TNumpy {
                 ];
 
                 param.uniforms = [
-                    { name:"B_Cols", value:B.Cols },
+                    { name: "B_Cols", value: B.Cols, type: "int" },
                     { name: "A", value: A, type: "vec4" },
                     { name: "B", value: B.T(), type: "vec4" }
                 ];
