@@ -56,6 +56,72 @@ function CreateWebGLLib() {
             }
         }
 
+        parseShader(pkg, param) {
+            pkg.attributes = [];
+            pkg.uniforms = [];
+            pkg.textures = [];
+            pkg.varyings = [];
+            var lines = param.shaderText.split(/(\r\n|\r|\n)+/);
+            for(let line of lines) {
+
+                var tokens = line.split(/[\s\t]+/);
+                if (tokens.length < 3) {
+                    continue;
+                }
+
+                var tkn0 = tokens[0];
+                var tkn1 = tokens[1];
+                var tkn2 = tokens[2];
+
+                if (tkn0 != "in" && tkn0 != "uniform" && tkn0 != "out") {
+                    continue;
+                }
+                Assert(tkn1 == "int" || tkn1 == "float" || tkn1 == "vec2" || tkn1 == "vec3" || tkn1 == "vec4" || tkn1 == "sampler2D" || tkn1 == "sampler3D");
+
+
+                var arg_name;
+                var is_array = false;
+                var k1 = tkn2.indexOf("[");
+                if (k1 != -1) {
+                    arg_name = tkn2.substring(0, k1);
+                    is_array = true;
+                }
+                else{
+                    var k2 = tkn2.indexOf(";");
+                    if (k2 != -1) {
+                        arg_name = tkn2.substring(0, k2);
+                    }
+                    else{
+                        arg_name = tkn2;
+                    }
+                }
+
+                var arg_val = param.args[arg_name];
+                Assert(arg_val != undefined);
+
+                var arg_inf = { name: arg_name, value: arg_val, type: tkn1, isArray: is_array };
+
+                switch (tokens[0]) {
+                    case "in":
+                        pkg.attributes.push(arg_inf);
+                    break;
+                    case "uniform":
+                        if (tkn1 == "sampler2D" || tkn1 == "sampler3D") {
+
+                            pkg.textures.push(arg_inf);
+                        }
+                        else {
+                            pkg.uniforms.push(arg_inf);
+
+}
+                    break;
+                case "out":
+                    pkg.varyings.push(arg_inf);
+                    break;
+                }
+            }
+        }
+
         makeProgram(vshaderTransform, fshaderTransform, varyings) {
             var prg = gl.createProgram(); chk();
             gl.attachShader(prg, vshaderTransform); chk();
@@ -102,8 +168,8 @@ function CreateWebGLLib() {
             return shader;
         }
 
-        makeTexture(tex_id, texture_value) {
-            var dim = texture_value.shape.length == 3 ? gl.TEXTURE_3D : gl.TEXTURE_2D;
+        makeTexture(tex_id, texture_inf) {
+            var dim = texture_inf.type == "sampler3D" ? gl.TEXTURE_3D : gl.TEXTURE_2D;
 
             var texture = gl.createTexture(); chk();
 
@@ -118,19 +184,19 @@ function CreateWebGLLib() {
             return texture;
         }
 
-        setTextureData(texture_value, tex_id, texture) {
-            var dim = texture_value.shape.length == 3 ? gl.TEXTURE_3D : gl.TEXTURE_2D;
+        setTextureData(texture_inf, tex_id, texture) {
+            var dim = texture_inf.type == "sampler3D" ? gl.TEXTURE_3D : gl.TEXTURE_2D;
 
             gl.activeTexture(tex_id); chk();
             gl.bindTexture(dim, texture); chk();
             if (dim == gl.TEXTURE_2D) {
 
-                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, texture_value.Cols / 4, texture_value.Rows, 0, gl.RGBA, gl.FLOAT, texture_value.dt); chk();
+                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, texture_inf.value.Cols / 4, texture_inf.value.Rows, 0, gl.RGBA, gl.FLOAT, texture_inf.value.dt); chk();
             }
             else {
                 Assert(dim == gl.TEXTURE_3D, "Set-Tex");
 
-                gl.texImage3D(gl.TEXTURE_3D, 0, gl.RGBA32F, texture_value.Cols / 4, texture_value.Rows, texture_value.Depth, 0, gl.RGBA, gl.FLOAT, texture_value.dt); chk();
+                gl.texImage3D(gl.TEXTURE_3D, 0, gl.RGBA32F, texture_inf.value.Cols / 4, texture_inf.value.Rows, texture_inf.value.Depth, 0, gl.RGBA, gl.FLOAT, texture_inf.value.dt); chk();
             }
         }
 
@@ -140,17 +206,29 @@ function CreateWebGLLib() {
 
             pkg.key = param.key;
 
+            if (param.args) {
+
+                this.parseShader(pkg, param);
+            }
+            else {
+                pkg.attributes = param.attributes;
+                pkg.uniforms = param.uniforms;
+                pkg.textures = param.textures;
+                pkg.varyings = param.varyings;
+            }
+
+
             var fsrc = Shaders['fs-transform'];
             var vertex_shader = this.makeShader(gl.VERTEX_SHADER, param.shaderText);
 
             var fragment_shader = this.makeShader(gl.FRAGMENT_SHADER, fsrc);
 
-            pkg.program = this.makeProgram(vertex_shader, fragment_shader, param.varyings);
+            pkg.program = this.makeProgram(vertex_shader, fragment_shader, pkg.varyings);
             gl.useProgram(pkg.program); chk();
 
             // ユニフォーム変数の初期処理
             pkg.locUniforms = [];
-            for(let u of param.uniforms) {
+            for(let u of pkg.uniforms) {
 
                 var loc = gl.getUniformLocation(pkg.program, u.name); chk();
                 pkg.locUniforms.push(loc);
@@ -159,21 +237,21 @@ function CreateWebGLLib() {
             // テクスチャの初期処理
             pkg.locTextures = [];
             pkg.Textures = [];
-            for (var i = 0; i < param.textures.length; i++) {
+            for (var i = 0; i < pkg.textures.length; i++) {
 
-                var loc = gl.getUniformLocation(pkg.program, param.textures[i].name); chk();
+                var loc = gl.getUniformLocation(pkg.program, pkg.textures[i].name); chk();
                 pkg.locTextures.push(loc);
 
-                var tex = this.makeTexture(this.TEXTUREs[i], param.textures[i].value);
+                var tex = this.makeTexture(this.TEXTUREs[i], pkg.textures[i]);
                 pkg.Textures.push(tex);
             }
 
             pkg.attribElementCount = param.elementCount;
-            if (param.attributes) {
+            if (pkg.attributes) {
 
                 pkg.AttribBuffers = [];
-                for (let attrib of param.attributes) {
-                    var attrib_dim = attrib.dim ? attrib.dim : 1;
+                for (let attrib of pkg.attributes) {
+                    var attrib_dim = attrib.type == "vec4" ? 4 : 1;
                     var attrib_len = attrib.value instanceof Mat ? attrib.value.dt.length : attrib.value.length;
                     var elemen_count = attrib_len / attrib_dim;
 
@@ -196,11 +274,11 @@ function CreateWebGLLib() {
 
             pkg.feedbackBuffers = [];
 
-            for (let varying of param.varyings) {
+            for (let varying of pkg.varyings) {
                 var out_buffer_size = pkg.attribElementCount * Float32Array.BYTES_PER_ELEMENT;
-                if (varying.dim) {
+                if (varying.type == "vec4") {
 
-                    out_buffer_size *= varying.dim;
+                    out_buffer_size *= 4;
                 }
 
                 // Feedback empty buffer
@@ -229,13 +307,21 @@ function CreateWebGLLib() {
                 gl.useProgram(pkg.program); chk();
             }
 
+            for(let args of[ pkg.attributes, pkg.uniforms, pkg.textures, pkg.varyings ]) {
+                for (let arg of args) {
+                    var val = param.args[arg.name];
+                    Assert(val != undefined);
+                    arg.value = val;
+                }
+            }
+
             // -- Init Buffer
 
-            if (param.attributes) {
+            if (pkg.attributes) {
 
-                for (var i = 0; i < param.attributes.length; i++) {
-                    var attrib = param.attributes[i];
-                    var dim = attrib.dim ? attrib.dim : 1;
+                for (var i = 0; i < pkg.attributes.length; i++) {
+                    var attrib = pkg.attributes[i];
+                    var dim = attrib.type == "vec4" ? 4 : 1;
 
                     gl.bindBuffer(gl.ARRAY_BUFFER, pkg.AttribBuffers[i]); chk();
                     gl.vertexAttribPointer(i, dim, gl.FLOAT, false, 4 * dim, 0); chk();
@@ -258,15 +344,15 @@ function CreateWebGLLib() {
             gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, pkg.transformFeedback); chk();
 
             // テクスチャの値のセット
-            for (var i = 0; i < param.textures.length; i++) {
+            for (var i = 0; i < pkg.textures.length; i++) {
 
-                this.setTextureData(param.textures[i].value, this.TEXTUREs[i], pkg.Textures[i]);
+                this.setTextureData(pkg.textures[i], this.TEXTUREs[i], pkg.Textures[i]);
                 gl.uniform1i(pkg.locTextures[i], i); chk();
             }
 
             // ユニフォーム変数のセット
-            for (var i = 0; i < param.uniforms.length; i++) {
-                var u = param.uniforms[i];
+            for (var i = 0; i < pkg.uniforms.length; i++) {
+                var u = pkg.uniforms[i];
                 if (u.value instanceof Mat || u.value instanceof Float32Array) {
 
                     var val = u.value instanceof Mat ? u.value.dt : u.value;
@@ -299,7 +385,7 @@ function CreateWebGLLib() {
                 }
             }
 
-            for (var i = 0; i < param.varyings.length; i++) {
+            for (var i = 0; i < pkg.varyings.length; i++) {
 
                 gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, i, pkg.feedbackBuffers[i]); chk();
             }
@@ -311,14 +397,14 @@ function CreateWebGLLib() {
 
             gl.disable(gl.RASTERIZER_DISCARD); chk();
 
-            for (var i = 0; i < param.varyings.length; i++) {
+            for (var i = 0; i < pkg.varyings.length; i++) {
 
                 gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, i, null); chk();
 
                 // 処理結果を表示
                 gl.bindBuffer(gl.ARRAY_BUFFER, pkg.feedbackBuffers[i]); chk();
 
-                var out_buf = param.varyings[i].value;
+                var out_buf = pkg.varyings[i].value;
                 if (out_buf instanceof Mat) {
                     out_buf = out_buf.dt;
                 }

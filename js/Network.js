@@ -254,8 +254,8 @@ class ConvolutionalLayer extends Layer{
             param.shaderText = shader_src;
 
             param.varyings = [
-                { name: "z", value: param.sub_z, dim: 4 }, 
-                { name: "activation", value: param.sub_activation, dim: 4 }
+                { name: "z", value: param.sub_z, type: "vec4" }, 
+                { name: "activation", value: param.sub_activation, type: "vec4" }
             ];
         }
         else {
@@ -786,8 +786,8 @@ class Network {
         param.uniforms = [];
         param.shaderText = Shaders["BatchTest"];
         param.varyings = [
-            { name: "y", value: y, dim: 4 }, 
-            { name: "z", value: z, dim: 4 }
+            { name: "y", value: y, type: "vec4" }, 
+            { name: "z", value: z, type: "vec4" }
         ];
         param.key = "BatchTest";
 
@@ -1252,6 +1252,7 @@ function AttribTest(n){
     var y = new Float32Array(4 * 4);
     var z = new Float32Array(4 * 4);
     var biases = new Float32Array(4);
+    var tt = new Mat(10, 10, 12);
 
     var idx = 0;
     for (var j = 0; j < 4; j++) {
@@ -1266,29 +1267,26 @@ function AttribTest(n){
         }
     }
 
+    for(var i = 0; i < tt.dt.length; i++){
+        tt.dt[i] = i;
+    }
+
     var param = {};
 
     var vs_id = "AttribTest";
     
-    param.attributes = [
-        { name: "w", value: w }, 
-        { name: "x", value: x, dim: 4 }, 
-        { name: "y", value: y, dim: 4 }, 
-    ];
-    
-    param.textures = [
-    ];
-
-    param.uniforms = [
-        { name: "biases", value: biases },
-        { name: "f", value: n },
-        { name: "ff", value: ff, type:"vec4" }
-    ];
+    param.args = {
+        "w": w,
+        "x": x,
+        "y": y,
+        "biases": biases,
+        "f": n,
+        "ff": ff,
+        "tt":tt,
+        "z": z
+    };
 
     param.shaderText = Shaders[vs_id];
-    param.varyings = [
-        { name: "z", value: z, dim: 4 }, 
-    ];
     param.key = vs_id;
 
     WebGL2.compute(param);
@@ -1296,7 +1294,7 @@ function AttribTest(n){
     idx = 0;
     for (var j = 0; j < 4; j++) {
         for (var k = 0; k < 4; k++) {
-            Assert( z[idx] == x[idx] + y[idx] + ff[k % 4] + biases[j % 4] + n );
+            Assert( z[idx] == x[idx] + y[idx] + ff[k % 4] + biases[j % 4] + n + (120 + 3 * 12 + 2 * 4 + k) );
 
             idx++;
         }
