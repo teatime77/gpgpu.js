@@ -1,23 +1,20 @@
 ﻿// JavaScript source code
 
+
 function webGLStart() {
+    var WebGL2;
     var gl;
     var shaderProgram;
     var crateTexture;
     var imageLoaded = false;
     var mvMatrix = mat4.create();
-    var mvMatrixStack = [];
     var pMatrix = mat4.create();
     var xRot = 0;
-    var xSpeed = 3;
 
     var yRot = 0;
-    var ySpeed = -3;
 
     var z = -5.0;
 
-    var currentlyPressedKeys = {};
-    var mouseDown = false;
     var lastMouseX = null;
     var lastMouseY = null;
 
@@ -146,61 +143,9 @@ function webGLStart() {
         console.log(output);
     }
 
-    function initGL(canvas) {
-        try {
-//            gl = canvas.getContext("experimental-webgl");
-            gl = canvas.getContext("webgl2");
-            gl.viewportWidth = canvas.width;
-            gl.viewportHeight = canvas.height;
-
-            gl.getExtension("OES_standard_derivatives");
-        } catch (e) {
-        }
-        if (!gl) {
-            alert("Could not initialise WebGL, sorry :-(");
-        }
-    }
-
-    function getShader(gl, id) {
-        var shaderScript = document.getElementById(id);
-        if (!shaderScript) {
-            return null;
-        }
-
-        var str = "";
-        var k = shaderScript.firstChild;
-        while (k) {
-            if (k.nodeType == 3) {
-                str += k.textContent;
-            }
-            k = k.nextSibling;
-        }
-
-        var shader;
-        if (shaderScript.type == "x-shader/x-fragment") {
-            shader = gl.createShader(gl.FRAGMENT_SHADER);
-        } else if (shaderScript.type == "x-shader/x-vertex") {
-            shader = gl.createShader(gl.VERTEX_SHADER);
-        } else {
-            return null;
-        }
-
-        gl.shaderSource(shader, str);
-        gl.compileShader(shader);
-
-        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-            alert(gl.getShaderInfoLog(shader));
-            return null;
-        }
-
-        return shader;
-    }
-
-
-
     function initShaders() {
-        var fragmentShader = getShader(gl, "shader-fs");
-        var vertexShader = getShader(gl, "shader-vs");
+        var fragmentShader = WebGL2.makeShader(gl.FRAGMENT_SHADER, fragmentShaderText);
+        var vertexShader = WebGL2.makeShader(gl.VERTEX_SHADER, vertexShaderText);
 
         shaderProgram = gl.createProgram();
         gl.attachShader(shaderProgram, vertexShader);
@@ -259,20 +204,6 @@ function webGLStart() {
         crateTexture.image.src = "world.topo.bathy.200408.2048x2048.png";// "earth.png";// "crate.gif";
     }
 
-    function mvPushMatrix() {
-        var copy = mat4.create();
-        mat4.set(mvMatrix, copy);
-        mvMatrixStack.push(copy);
-    }
-
-    function mvPopMatrix() {
-        if (mvMatrixStack.length == 0) {
-            throw "Invalid popMatrix!";
-        }
-        mvMatrix = mvMatrixStack.pop();
-    }
-
-
     function setMatrixUniforms() {
         gl.uniformMatrix4fv(shaderProgram.pMatrixUniform, false, pMatrix);
         gl.uniformMatrix4fv(shaderProgram.mvMatrixUniform, false, mvMatrix);
@@ -288,74 +219,17 @@ function webGLStart() {
         return degrees * Math.PI / 180;
     }
 
-    function handleKeyDown(event) {
-        currentlyPressedKeys[event.keyCode] = true;
-    }
-
-
-    function handleKeyUp(event) {
-        currentlyPressedKeys[event.keyCode] = false;
-    }
-
-
-    function handleKeys() {
-        if (currentlyPressedKeys[33]) {
-            // Page Up
-            z -= 0.05;
-        }
-        if (currentlyPressedKeys[34]) {
-            // Page Down
-            z += 0.05;
-        }
-        if (currentlyPressedKeys[37]) {
-            // Left cursor key
-            ySpeed -= 1;
-        }
-        if (currentlyPressedKeys[39]) {
-            // Right cursor key
-            ySpeed += 1;
-        }
-        if (currentlyPressedKeys[38]) {
-            // Up cursor key
-            xSpeed -= 1;
-        }
-        if (currentlyPressedKeys[40]) {
-            // Down cursor key
-            xSpeed += 1;
-        }
-    }
-
-
-    function handleMouseDown(event) {
-        mouseDown = true;
-        lastMouseX = event.clientX;
-        lastMouseY = event.clientY;
-    }
-
-    function handleMouseUp(event) {
-        mouseDown = false;
-    }
 
     function handleMouseMove(event) {
-        if (!mouseDown) {
-            return;
-        }
         var newX = event.clientX;
         var newY = event.clientY;
 
-        var deltaX = newX - lastMouseX;
-        var deltaY = newY - lastMouseY;
+        if (event.buttons != 0 && lastMouseX != null) {
 
-        xRot += deltaY / 5;
-        yRot += deltaX / 5;
+            xRot += (newY - lastMouseY) / 5;
+            yRot += (newX - lastMouseX) / 5;
+        }
 
-        /*
-            var newRotationMatrix = mat4.create();
-            mat4.identity(newRotationMatrix);
-            mat4.rotate(newRotationMatrix, degToRad(deltaX / 10), [0, 1, 0]);
-            mat4.rotate(newRotationMatrix, degToRad(deltaY / 10), [1, 0, 0]);
-            mat4.multiply(newRotationMatrix, moonRotationMatrix, moonRotationMatrix);
-        */
         lastMouseX = newX
         lastMouseY = newY;
     }
@@ -495,7 +369,7 @@ function webGLStart() {
     }
 
     function divideTriangle(points, triangles, edges, sphere_r) {
-        var divide_cnt = 5;
+        var divide_cnt = 4;
 
         for (var divide_idx = 0; divide_idx < divide_cnt; divide_idx++) {
 
@@ -753,9 +627,6 @@ function webGLStart() {
         var timeNow = new Date().getTime();
         if (lastTime != 0) {
             var elapsed = timeNow - lastTime;
-
-            //        xRot += (xSpeed * elapsed) / 1000.0;
-            //        yRot += (ySpeed * elapsed) / 1000.0;
         }
         lastTime = timeNow;
     }
@@ -767,7 +638,6 @@ function webGLStart() {
             return;
         }
 
-        handleKeys();
         drawScene();
         animate();
     }
@@ -778,9 +648,12 @@ function webGLStart() {
     var ss = time.getSeconds();
     console.log("" + hh + "時" + mm + "分" + ss + "秒をお知らせします。")
 
-
     var canvas = document.getElementById("lesson07-canvas");
-    initGL(canvas);
+    WebGL2 = CreateWebGLLib(canvas);
+    gl = WebGL2.getGL();
+    gl.viewportWidth = canvas.width;
+    gl.viewportHeight = canvas.height;
+
     initShaders();
     initBuffers();
     initTexture();
@@ -788,11 +661,7 @@ function webGLStart() {
     gl.clearColor(0.0, 0.0, 0.0, 1.0);
     gl.enable(gl.DEPTH_TEST);
 
-    document.onkeydown = handleKeyDown;
-    document.onkeyup = handleKeyUp;
 
-    canvas.onmousedown = handleMouseDown;
-    document.onmouseup = handleMouseUp;
     document.onmousemove = handleMouseMove;
 
     if (window.WheelEvent) {
