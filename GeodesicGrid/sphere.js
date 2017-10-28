@@ -430,7 +430,7 @@ function makeEarthBuffers() {
 }
 
 
-function initBuffers(gl) {
+function initBuffers(pkg, gl) {
     var ret = makeEarthBuffers();
 
     var param = {
@@ -440,29 +440,39 @@ function initBuffers(gl) {
             "aVertexPosition": ret.vertex_array,
             "aVertexNormal": ret.normal_array,
             "aTextureCoord": ret.texture_array,
+            "uAmbientColor": 1,
+            "uLightingDirection": 1,
+            "uDirectionalColor": 1,
+            "uUseLighting": 1,
+            "vTextureCoord": 1,
+            "vLightWeighting": 1,
+            "uv0": 1,
+            "uv1": 1,
+        /*
+            uniform mat4 uMVMatrix;
+            uniform mat4 uPMatrix;
+            uniform mat3 uNMatrix;
+        */
         }
     };
 
-    var pkg = {};
-
     MyWebGL.parseShader(pkg, param);
+//    MyWebGL.makeAttrib(pkg);
 
-
+    /*
+    */
     cubeVertexPositionBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, cubeVertexPositionBuffer);
-
     gl.bufferData(gl.ARRAY_BUFFER, ret.vertex_array, gl.STATIC_DRAW);
     cubeVertexPositionBuffer.itemSize = 3;
 
     cubeVertexNormalBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, cubeVertexNormalBuffer);
-
     gl.bufferData(gl.ARRAY_BUFFER, ret.normal_array, gl.STATIC_DRAW);
     cubeVertexNormalBuffer.itemSize = 3;
 
     cubeVertexTextureCoordBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, cubeVertexTextureCoordBuffer);
-
     gl.bufferData(gl.ARRAY_BUFFER, ret.texture_array, gl.STATIC_DRAW);
     cubeVertexTextureCoordBuffer.itemSize = 2;
 

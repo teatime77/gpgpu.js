@@ -94,6 +94,10 @@ function CreateWebGLLib(canvas) {
                 if (tkn0 != "in" && tkn0 != "uniform" && tkn0 != "out") {
                     continue;
                 }
+                if (tkn1 == "mat4" || tkn1 == "mat3" || tkn1 == "bool") {
+                    console.log("未実装:" + line.trim());
+                    continue;
+                }
                 Assert(tkn1 == "int" || tkn1 == "float" || tkn1 == "vec2" || tkn1 == "vec3" || tkn1 == "vec4" || tkn1 == "sampler2D" || tkn1 == "sampler3D");
 
 
