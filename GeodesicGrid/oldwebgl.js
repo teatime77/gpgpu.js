@@ -25,6 +25,7 @@ function webGLStart() {
     var moonRotationMatrix = mat4.create();
     mat4.identity(moonRotationMatrix);
     var lastTime = 0;
+    var pkg = {};
 
     function initShaders(pkg) {
         var vertex_shader = MyWebGL.makeShader(gl.VERTEX_SHADER, vertexShaderText);
@@ -110,7 +111,7 @@ function webGLStart() {
         lastMouseY = newY;
     }
 
-    function drawScene() {
+    function drawScene(pkg) {
         gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
@@ -123,14 +124,7 @@ function webGLStart() {
         mat4.rotate(mvMatrix, degToRad(xRot), [1, 0, 0]);
         mat4.rotate(mvMatrix, degToRad(yRot), [0, 1, 0]);
 
-        gl.bindBuffer(gl.ARRAY_BUFFER, cubeVertexPositionBuffer);
-        gl.vertexAttribPointer(pkg.program.vertexPositionAttribute, cubeVertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
-
-        gl.bindBuffer(gl.ARRAY_BUFFER, cubeVertexNormalBuffer);
-        gl.vertexAttribPointer(pkg.program.vertexNormalAttribute, cubeVertexNormalBuffer.itemSize, gl.FLOAT, false, 0, 0);
-
-        gl.bindBuffer(gl.ARRAY_BUFFER, cubeVertexTextureCoordBuffer);
-        gl.vertexAttribPointer(pkg.program.textureCoordAttribute, cubeVertexTextureCoordBuffer.itemSize, gl.FLOAT, false, 0, 0);
+        MyWebGL.setAttribData(pkg);
 
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, crateTexture);
@@ -183,7 +177,7 @@ function webGLStart() {
             return;
         }
 
-        drawScene();
+        drawScene(pkg);
         animate();
     }
 
@@ -199,7 +193,6 @@ function webGLStart() {
     gl.viewportWidth = canvas.width;
     gl.viewportHeight = canvas.height;
 
-    var pkg = {};
     initShaders(pkg);
     initBuffers(pkg, gl);
     initTexture();

@@ -311,7 +311,7 @@ function CreateWebGLLib(canvas) {
                 var dim = this.vecDim(attrib.type);
 
                 gl.bindBuffer(gl.ARRAY_BUFFER, attrib.AttribBuffer); chk();
-                gl.vertexAttribPointer(i, dim, gl.FLOAT, false, 0, 0); chk();
+                gl.vertexAttribPointer(attrib.AttribLoc, dim, gl.FLOAT, false, 0, 0); chk();
                 gl.bufferData(gl.ARRAY_BUFFER, attrib.value, gl.STATIC_DRAW);
             }
         }

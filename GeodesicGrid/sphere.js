@@ -457,24 +457,7 @@ function initBuffers(pkg, gl) {
     };
 
     MyWebGL.parseShader(pkg, param);
-//    MyWebGL.makeAttrib(pkg);
-
-    /*
-    */
-    cubeVertexPositionBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, cubeVertexPositionBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, ret.vertex_array, gl.STATIC_DRAW);
-    cubeVertexPositionBuffer.itemSize = 3;
-
-    cubeVertexNormalBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, cubeVertexNormalBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, ret.normal_array, gl.STATIC_DRAW);
-    cubeVertexNormalBuffer.itemSize = 3;
-
-    cubeVertexTextureCoordBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, cubeVertexTextureCoordBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, ret.texture_array, gl.STATIC_DRAW);
-    cubeVertexTextureCoordBuffer.itemSize = 2;
+    MyWebGL.makeAttrib(pkg);
 
     cubeVertexIndexBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, cubeVertexIndexBuffer);
