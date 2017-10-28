@@ -252,7 +252,7 @@ class ConvolutionalLayer extends Layer{
                 .replace(/filterSize/g, this.filterSize.toString() + "u");
 
             console.log(shader_src);
-            param.shaderText = shader_src;
+            param.vertexShader = shader_src;
         }
         else {
 
@@ -478,7 +478,7 @@ class ConvolutionalLayer extends Layer{
                 .replace(/filterSize/g, this.filterSize.toString() + "u");
 
             console.log(shader_src);
-            param.shaderText = shader_src;
+            param.vertexShader = shader_src;
         }
         else {
 
@@ -794,7 +794,7 @@ class Network {
             "activation": activation,
         };
 
-        param.shaderText = Shaders[vs_id];
+        param.vertexShader = Shaders[vs_id];
         param.key = vs_id;
 
         WebGL2.compute(param);
@@ -1255,7 +1255,7 @@ function AttribTest(n){
         "z": z
     };
 
-    param.shaderText = Shaders[vs_id];
+    param.vertexShader = Shaders[vs_id];
     param.key = vs_id;
 
     WebGL2.compute(param);

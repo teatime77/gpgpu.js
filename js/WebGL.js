@@ -9,7 +9,7 @@ function MakeFloat32Index(n) {
     return v;
 }
 
-function CreateWebGLLib() {
+function CreateWebGLLib(canvas) {
     let gl;
 
     function chk() {
@@ -18,16 +18,19 @@ function CreateWebGLLib() {
 
     class WebGLLib {
 
-        constructor() {
+        constructor(canvas) {
             console.log("init WebGL");
 
             this.packages = {};
 
-            // -- Init Canvas
-            var canvas = document.createElement('canvas');
-            canvas.width = 32;
-            canvas.height = 32;
-            document.body.appendChild(canvas);
+            if (!canvas) {
+
+                // -- Init Canvas
+                canvas = document.createElement('canvas');
+                canvas.width = 32;
+                canvas.height = 32;
+                document.body.appendChild(canvas);
+            }
 
             // -- Init WebGL Context
             gl = canvas.getContext('webgl2', { antialias: false });
@@ -40,6 +43,10 @@ function CreateWebGLLib() {
             }
 
             this.TEXTUREs = [gl.TEXTURE0, gl.TEXTURE1, gl.TEXTURE2, gl.TEXTURE3];
+        }
+
+        getGL() {
+            return gl;
         }
 
         WebGLClear() {
@@ -70,7 +77,7 @@ function CreateWebGLLib() {
             pkg.uniforms = [];
             pkg.textures = [];
             pkg.varyings = [];
-            var lines = param.shaderText.split(/(\r\n|\r|\n)+/);
+            var lines = param.vertexShader.split(/(\r\n|\r|\n)+/);
             for(let line of lines) {
 
                 var tokens = line.split(/[\s\t]+/);
@@ -138,20 +145,19 @@ function CreateWebGLLib() {
             gl.attachShader(prg, vshaderTransform); chk();
             gl.attachShader(prg, fshaderTransform); chk();
 
-            var varying_names = varyings.map(x => x.name);
-            gl.transformFeedbackVaryings(prg, varying_names, gl.SEPARATE_ATTRIBS); chk();   // gl.INTERLEAVED_ATTRIBS 
+            if (varyings) {
+
+                var varying_names = varyings.map(x => x.name);
+                gl.transformFeedbackVaryings(prg, varying_names, gl.SEPARATE_ATTRIBS); chk();   // gl.INTERLEAVED_ATTRIBS 
+            }
+
             gl.linkProgram(prg); chk();
 
-            // check
-            var msg = gl.getProgramInfoLog(prg); chk();
-            if (msg) {
-                console.log(msg);
+
+            if (!gl.getProgramParameter(prg, gl.LINK_STATUS)) {
+                console.log("Link Error:" + gl.getProgramInfoLog(prg));
             }
 
-            msg = gl.getShaderInfoLog(vshaderTransform); chk();
-            if (msg) {
-                console.log(msg);
-            }
 
             gl.deleteShader(vshaderTransform); chk();
             gl.deleteShader(fshaderTransform); chk();
@@ -163,6 +169,11 @@ function CreateWebGLLib() {
             var shader = gl.createShader(type); chk();
             gl.shaderSource(shader, source); chk();
             gl.compileShader(shader); chk();
+
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                alert(gl.getShaderInfoLog(shader));
+                return null;
+            }
 
             return shader;
         }
@@ -223,7 +234,7 @@ function CreateWebGLLib() {
             this.parseShader(pkg, param);
 
             var fsrc = Shaders['fs-transform'];
-            var vertex_shader = this.makeShader(gl.VERTEX_SHADER, param.shaderText);
+            var vertex_shader = this.makeShader(gl.VERTEX_SHADER, param.vertexShader);
 
             var fragment_shader = this.makeShader(gl.FRAGMENT_SHADER, fsrc);
 
@@ -438,5 +449,5 @@ function CreateWebGLLib() {
         }
     }
 
-    return new WebGLLib();
+    return new WebGLLib(canvas);
 }
