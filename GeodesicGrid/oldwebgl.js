@@ -25,6 +25,7 @@ function webGLStart() {
     var moonRotationMatrix = mat4.create();
     mat4.identity(moonRotationMatrix);
     var lastTime = 0;
+    var param;
     var pkg = {};
 
     function initShaders(pkg) {
@@ -35,23 +36,7 @@ function webGLStart() {
 
         gl.useProgram(pkg.program);
 
-        pkg.program.vertexPositionAttribute = gl.getAttribLocation(pkg.program, "aVertexPosition");
-        gl.enableVertexAttribArray(pkg.program.vertexPositionAttribute);
-
-        pkg.program.vertexNormalAttribute = gl.getAttribLocation(pkg.program, "aVertexNormal");
-        gl.enableVertexAttribArray(pkg.program.vertexNormalAttribute);
-
-        pkg.program.textureCoordAttribute = gl.getAttribLocation(pkg.program, "aTextureCoord");
-        gl.enableVertexAttribArray(pkg.program.textureCoordAttribute);
-
-        pkg.program.pMatrixUniform = gl.getUniformLocation(pkg.program, "uPMatrix");
-        pkg.program.mvMatrixUniform = gl.getUniformLocation(pkg.program, "uMVMatrix");
-        pkg.program.nMatrixUniform = gl.getUniformLocation(pkg.program, "uNMatrix");
         pkg.program.samplerUniform = gl.getUniformLocation(pkg.program, "uSampler");
-        pkg.program.useLightingUniform = gl.getUniformLocation(pkg.program, "uUseLighting");
-        pkg.program.ambientColorUniform = gl.getUniformLocation(pkg.program, "uAmbientColor");
-        pkg.program.lightingDirectionUniform = gl.getUniformLocation(pkg.program, "uLightingDirection");
-        pkg.program.directionalColorUniform = gl.getUniformLocation(pkg.program, "uDirectionalColor");
     }
 
     function handleLoadedTexture(texture) {
@@ -80,17 +65,6 @@ function webGLStart() {
 
         crateTexture.image.src = "world.topo.bathy.200408.2048x2048.png";// "earth.png";// "crate.gif";
     }
-
-    function setMatrixUniforms() {
-        gl.uniformMatrix4fv(pkg.program.pMatrixUniform, false, pMatrix);
-        gl.uniformMatrix4fv(pkg.program.mvMatrixUniform, false, mvMatrix);
-
-        var normalMatrix = mat3.create();
-        mat4.toInverseMat3(mvMatrix, normalMatrix);
-        mat3.transpose(normalMatrix);
-        gl.uniformMatrix3fv(pkg.program.nMatrixUniform, false, normalMatrix);
-    }
-
 
     function degToRad(degrees) {
         return degrees * Math.PI / 180;
@@ -129,36 +103,46 @@ function webGLStart() {
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, crateTexture);
         gl.uniform1i(pkg.program.samplerUniform, 0);
+
         var lighting = document.getElementById("lighting").checked;
-        gl.uniform1i(pkg.program.useLightingUniform, lighting);
-        if (lighting) {
-            gl.uniform3f(
-                pkg.program.ambientColorUniform,
-                parseFloat(document.getElementById("ambientR").value),
-                parseFloat(document.getElementById("ambientG").value),
-                parseFloat(document.getElementById("ambientB").value)
-            );
 
-            var lightingDirection = [
-                parseFloat(document.getElementById("lightDirectionX").value),
-                parseFloat(document.getElementById("lightDirectionY").value),
-                parseFloat(document.getElementById("lightDirectionZ").value)
-            ];
-            var adjustedLD = vec3.create();
-            vec3.normalize(lightingDirection, adjustedLD);
-            vec3.scale(adjustedLD, -1);
-            gl.uniform3fv(pkg.program.lightingDirectionUniform, adjustedLD);
+        var ambient = new Float32Array([
+            parseFloat(document.getElementById("ambientR").value),
+            parseFloat(document.getElementById("ambientG").value), 
+            parseFloat(document.getElementById("ambientB").value)
+        ]);
+        var directionalColor = new Float32Array([
+            parseFloat(document.getElementById("directionalR").value),
+            parseFloat(document.getElementById("directionalG").value),
+            parseFloat(document.getElementById("directionalB").value)
+        ]);
 
-            gl.uniform3f(
-                pkg.program.directionalColorUniform,
-                parseFloat(document.getElementById("directionalR").value),
-                parseFloat(document.getElementById("directionalG").value),
-                parseFloat(document.getElementById("directionalB").value)
-            );
-        }
+        var lightingDirection = new Float32Array([
+            parseFloat(document.getElementById("lightDirectionX").value),
+            parseFloat(document.getElementById("lightDirectionY").value),
+            parseFloat(document.getElementById("lightDirectionZ").value)
+        ]);
+        var adjustedLD = vec3.create();
+        vec3.normalize(lightingDirection, adjustedLD);
+        vec3.scale(adjustedLD, -1);
+
+        var normalMatrix = mat3.create();
+        mat4.toInverseMat3(mvMatrix, normalMatrix);
+        mat3.transpose(normalMatrix);
+
+        param.args["uUseLighting"]       = lighting;
+        param.args["uAmbientColor"]      = ambient;
+        param.args["uDirectionalColor"]  = directionalColor;
+        param.args["uLightingDirection"] = adjustedLD;
+        param.args["uPMatrix"]           = pMatrix;
+        param.args["uMVMatrix"]          = mvMatrix;
+        param.args["uNMatrix"]           = normalMatrix;
+
+        MyWebGL.copyParamArgsValue(param, pkg);
+
+        MyWebGL.setUniformsData(pkg);
 
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, cubeVertexIndexBuffer);
-        setMatrixUniforms();
         gl.drawElements(gl.TRIANGLES, cubeVertexIndexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
     }
 
@@ -194,7 +178,7 @@ function webGLStart() {
     gl.viewportHeight = canvas.height;
 
     initShaders(pkg);
-    initBuffers(pkg, gl);
+    param = initBuffers(pkg, gl);
     initTexture();
 
     gl.clearColor(0.0, 0.0, 0.0, 1.0);

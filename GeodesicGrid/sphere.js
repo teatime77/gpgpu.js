@@ -440,19 +440,20 @@ function initBuffers(pkg, gl) {
             "aVertexPosition": ret.vertex_array,
             "aVertexNormal": ret.normal_array,
             "aTextureCoord": ret.texture_array,
-            "uAmbientColor": 1,
-            "uLightingDirection": 1,
-            "uDirectionalColor": 1,
+
             "uUseLighting": 1,
+            "uAmbientColor": 1,
+            "uDirectionalColor": 1,
+            "uLightingDirection": 1,
+            "uPMatrix": 1,
+            "uMVMatrix": 1,
+            "uNMatrix": 1,
+            /*
             "vTextureCoord": 1,
             "vLightWeighting": 1,
             "uv0": 1,
             "uv1": 1,
-        /*
-            uniform mat4 uMVMatrix;
-            uniform mat4 uPMatrix;
-            uniform mat3 uNMatrix;
-        */
+            */
         }
     };
 
@@ -464,4 +465,9 @@ function initBuffers(pkg, gl) {
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, ret.idx_array, gl.STATIC_DRAW);
     cubeVertexIndexBuffer.itemSize = 1;
     cubeVertexIndexBuffer.numItems = ret.idx_array.length;
+
+    // ユニフォーム変数の初期処理
+    MyWebGL.initUniform(pkg);
+
+    return param;
 }

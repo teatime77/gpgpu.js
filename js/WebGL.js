@@ -94,11 +94,9 @@ function CreateWebGLLib(canvas) {
                 if (tkn0 != "in" && tkn0 != "uniform" && tkn0 != "out") {
                     continue;
                 }
-                if (tkn1 == "mat4" || tkn1 == "mat3" || tkn1 == "bool") {
-                    console.log("未実装:" + line.trim());
-                    continue;
-                }
-                Assert(tkn1 == "int" || tkn1 == "float" || tkn1 == "vec2" || tkn1 == "vec3" || tkn1 == "vec4" || tkn1 == "sampler2D" || tkn1 == "sampler3D");
+                Assert(tkn1 == "int" || tkn1 == "float" || tkn1 == "vec2" || tkn1 == "vec3" || tkn1 == "vec4" ||
+                    tkn1 == "sampler2D" || tkn1 == "sampler3D" ||
+                    tkn1 == "mat4" || tkn1 == "mat3" || tkn1 == "bool");
 
 
                 var arg_name;
@@ -119,7 +117,11 @@ function CreateWebGLLib(canvas) {
                 }
 
                 var arg_val = param.args[arg_name];
-                Assert(arg_val != undefined);
+                if(arg_val == undefined){
+                    if(tokens[0] == "out"){
+                        continue;
+                    }
+                }
 
                 var arg_inf = { name: arg_name, value: arg_val, type: tkn1, isArray: is_array };
 
@@ -262,6 +264,10 @@ function CreateWebGLLib(canvas) {
             }
         }
 
+        initUniform(pkg) {
+            pkg.uniforms.forEach(u => u.locUniform = gl.getUniformLocation(pkg.program, u.name), chk());
+        }
+
         makePackage(param) {
             var pkg = {};
             this.packages[param.key] = pkg;
@@ -279,7 +285,7 @@ function CreateWebGLLib(canvas) {
             gl.useProgram(pkg.program); chk();
 
             // ユニフォーム変数の初期処理
-            pkg.uniforms.forEach(u => u.locUniform = gl.getUniformLocation(pkg.program, u.name), chk());
+            this.initUniform(pkg);
 
             // テクスチャの初期処理
             this.makeTexture(pkg);
@@ -323,53 +329,33 @@ function CreateWebGLLib(canvas) {
 
                     var val = u.value instanceof Mat ? u.value.dt : u.value;
 
-                    switch (this.vecDim(u.type)) {
-                        case 4:
-                            if (u.isArray) {
-
-                                gl.uniform4fv(u.locUniform, val); chk();
-                            }
-                            else {
-
-                                gl.uniform4f(u.locUniform, val[0], val[1], val[2], val[3]); chk();
-                            }
+                    switch (u.type) {
+                        case "mat4":
+                            gl.uniformMatrix4fv(u.locUniform, false, val); chk();
                             break;
-
-                        case 3:
-                            if (u.isArray) {
-
-                                gl.uniform3fv(u.locUniform, val); chk();
-                            }
-                            else {
-
-                                gl.uniform3f(u.locUniform, val[0], val[1], val[2]); chk();
-                            }
+                        case "mat3":
+                            gl.uniformMatrix3fv(u.locUniform, false, val); chk();
                             break;
-                        case 2:
-                            if (u.isArray) {
-
-                                gl.uniform2fv(u.locUniform, val); chk();
-                            }
-                            else {
-
-                                gl.uniform2f(u.locUniform, val[0], val[1]); chk();
-                            }
+                        case "vec4":
+                            gl.uniform4fv(u.locUniform, val); chk();
                             break;
-                        case 1:
-                            if (u.isArray) {
-
-                                gl.uniform1fv(u.locUniform, val); chk();
-                            }
-                            else {
-
-                                gl.uniform1f(u.locUniform, val[0]); chk();
-                            }
+                        case "vec3":
+                            gl.uniform3fv(u.locUniform, val); chk();
+                            break;
+                        case "vec2":
+                            gl.uniform2fv(u.locUniform, val); chk();
+                            break;
+                        case "float":
+                            gl.uniform1fv(u.locUniform, val); chk();
+                            break;
+                        default:
+                            Assert(false);
                             break;
                     }
                 }
                 else {
 
-                    if (u.type == "int") {
+                    if (u.type == "int" || u.type == "bool") {
 
                         gl.uniform1i(u.locUniform, u.value); chk();
                     }
@@ -377,6 +363,16 @@ function CreateWebGLLib(canvas) {
 
                         gl.uniform1f(u.locUniform, u.value); chk();
                     }
+                }
+            }
+        }
+
+        copyParamArgsValue(param, pkg){
+            for(let args of[ pkg.attributes, pkg.uniforms, pkg.textures, pkg.varyings ]) {
+                for (let arg of args) {
+                    var val = param.args[arg.name];
+                    Assert(val != undefined);
+                    arg.value = val;
                 }
             }
         }
@@ -392,13 +388,7 @@ function CreateWebGLLib(canvas) {
                 gl.useProgram(pkg.program); chk();
             }
 
-            for(let args of[ pkg.attributes, pkg.uniforms, pkg.textures, pkg.varyings ]) {
-                for (let arg of args) {
-                    var val = param.args[arg.name];
-                    Assert(val != undefined);
-                    arg.value = val;
-                }
-            }
+            this.copyParamArgsValue(param, pkg);
 
             this.setAttribData(pkg);
 
