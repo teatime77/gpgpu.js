@@ -1303,7 +1303,7 @@ function* SGD(net, training_data, epochs, mini_batch_size, eta, test_data) {
             var Y = net.Laminate(mini_batch, 1);
             net.update_mini_batch(X, Y, eta);
             show_cnt = (net.layers[1] instanceof ConvolutionalLayer ? 100 : 1000);
-            if (10000 < new Date() - show_time) {
+            if (60 * 1000 < new Date() - show_time) {
 
                 var s = "" + idx + " ";
                 for(let layer of net.layers.slice(1)) {

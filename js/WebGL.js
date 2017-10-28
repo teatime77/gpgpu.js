@@ -55,17 +55,19 @@ function CreateWebGLLib(canvas) {
 
                 gl.bindBuffer(gl.ARRAY_BUFFER, null); chk();
                 gl.deleteBuffer(pkg.idxBuffer); chk();
-                for(let buf of pkg.feedbackBuffers) {
-                    gl.deleteBuffer(buf); chk();
+
+                for (let varying of pkg.varyings) {
+                    if (varying.feedbackBuffer) {
+                        gl.deleteBuffer(varying.feedbackBuffer); chk();
+                    }
                 }
+
                 gl.deleteTransformFeedback(pkg.transformFeedback); chk();
 
                 gl.bindTexture(gl.TEXTURE_2D, null); chk();
                 gl.bindTexture(gl.TEXTURE_3D, null); chk();
-                for(let tex of pkg.Textures) {
 
-                    gl.deleteTexture(tex); chk();
-                }
+                pkg.textures.forEach(x => gl.deleteTexture(x.Texture), chk())
 
                 gl.deleteProgram(pkg.program); chk();
                 console.log("clear pkg:" + pkg.key);
@@ -178,35 +180,45 @@ function CreateWebGLLib(canvas) {
             return shader;
         }
 
-        makeTexture(tex_id, texture_inf) {
-            var dim = texture_inf.type == "sampler3D" ? gl.TEXTURE_3D : gl.TEXTURE_2D;
+        makeTexture(pkg) {
+            for (var i = 0; i < pkg.textures.length; i++) {
+                var tex_inf = pkg.textures[i];
 
-            var texture = gl.createTexture(); chk();
+                tex_inf.locTexture = gl.getUniformLocation(pkg.program, tex_inf.name); chk();
 
-            gl.activeTexture(tex_id); chk();
-            gl.bindTexture(dim, texture); chk();
+                var dim = tex_inf.type == "sampler3D" ? gl.TEXTURE_3D : gl.TEXTURE_2D;
 
-            gl.texParameteri(dim, gl.TEXTURE_MAG_FILTER, gl.NEAREST); chk();
-            gl.texParameteri(dim, gl.TEXTURE_MIN_FILTER, gl.NEAREST); chk();
-            gl.texParameteri(dim, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); chk();
-            gl.texParameteri(dim, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE); chk();
+                tex_inf.Texture = gl.createTexture(); chk();
 
-            return texture;
+                gl.activeTexture(this.TEXTUREs[i]); chk();
+                gl.bindTexture(dim, tex_inf.Texture); chk();
+
+                gl.texParameteri(dim, gl.TEXTURE_MAG_FILTER, gl.NEAREST); chk();
+                gl.texParameteri(dim, gl.TEXTURE_MIN_FILTER, gl.NEAREST); chk();
+                gl.texParameteri(dim, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); chk();
+                gl.texParameteri(dim, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE); chk();
+            }
         }
 
-        setTextureData(texture_inf, tex_id, texture) {
-            var dim = texture_inf.type == "sampler3D" ? gl.TEXTURE_3D : gl.TEXTURE_2D;
+        setTextureData(pkg) {
+            for (var i = 0; i < pkg.textures.length; i++) {
+                var tex_inf = pkg.textures[i];
 
-            gl.activeTexture(tex_id); chk();
-            gl.bindTexture(dim, texture); chk();
-            if (dim == gl.TEXTURE_2D) {
+                gl.uniform1i(tex_inf.locTexture, i); chk();
 
-                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, texture_inf.value.Cols / 4, texture_inf.value.Rows, 0, gl.RGBA, gl.FLOAT, texture_inf.value.dt); chk();
-            }
-            else {
-                Assert(dim == gl.TEXTURE_3D, "Set-Tex");
+                var dim = tex_inf.type == "sampler3D" ? gl.TEXTURE_3D : gl.TEXTURE_2D;
 
-                gl.texImage3D(gl.TEXTURE_3D, 0, gl.RGBA32F, texture_inf.value.Cols / 4, texture_inf.value.Rows, texture_inf.value.Depth, 0, gl.RGBA, gl.FLOAT, texture_inf.value.dt); chk();
+                gl.activeTexture(this.TEXTUREs[i]); chk();
+                gl.bindTexture(dim, tex_inf.Texture); chk();
+                if (dim == gl.TEXTURE_2D) {
+
+                    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, tex_inf.value.Cols / 4, tex_inf.value.Rows, 0, gl.RGBA, gl.FLOAT, tex_inf.value.dt); chk();
+                }
+                else {
+                    Assert(dim == gl.TEXTURE_3D, "Set-Tex");
+
+                    gl.texImage3D(gl.TEXTURE_3D, 0, gl.RGBA32F, tex_inf.value.Cols / 4, tex_inf.value.Rows, tex_inf.value.Depth, 0, gl.RGBA, gl.FLOAT, tex_inf.value.dt); chk();
+                }
             }
         }
 
@@ -242,28 +254,13 @@ function CreateWebGLLib(canvas) {
             gl.useProgram(pkg.program); chk();
 
             // ユニフォーム変数の初期処理
-            pkg.locUniforms = [];
-            for(let u of pkg.uniforms) {
-
-                var loc = gl.getUniformLocation(pkg.program, u.name); chk();
-                pkg.locUniforms.push(loc);
-            }
+            pkg.uniforms.forEach(u => u.locUniform = gl.getUniformLocation(pkg.program, u.name), chk());
 
             // テクスチャの初期処理
-            pkg.locTextures = [];
-            pkg.Textures = [];
-            for (var i = 0; i < pkg.textures.length; i++) {
-
-                var loc = gl.getUniformLocation(pkg.program, pkg.textures[i].name); chk();
-                pkg.locTextures.push(loc);
-
-                var tex = this.makeTexture(this.TEXTUREs[i], pkg.textures[i]);
-                pkg.Textures.push(tex);
-            }
+            this.makeTexture(pkg);
 
             pkg.attribElementCount = param.elementCount;
 
-            pkg.AttribBuffers = [];
             for (let attrib of pkg.attributes) {
                 var attrib_dim = this.vecDim(attrib.type);
                 var attrib_len = attrib.value instanceof Mat ? attrib.value.dt.length : attrib.value.length;
@@ -277,22 +274,17 @@ function CreateWebGLLib(canvas) {
                     Assert(pkg.elementCount == elemen_count);
                 }
 
-                var vbo = gl.createBuffer();
-                pkg.AttribBuffers.push(vbo);
+                attrib.AttribBuffer = gl.createBuffer();
             }
-
-            pkg.feedbackBuffers = [];
 
             for (let varying of pkg.varyings) {
                 var out_buffer_size = this.vecDim(varying.type) * pkg.attribElementCount * Float32Array.BYTES_PER_ELEMENT;
 
                 // Feedback empty buffer
-                var buf = gl.createBuffer(); chk();
-                gl.bindBuffer(gl.ARRAY_BUFFER, buf); chk();
+                varying.feedbackBuffer = gl.createBuffer(); chk();
+                gl.bindBuffer(gl.ARRAY_BUFFER, varying.feedbackBuffer); chk();
                 gl.bufferData(gl.ARRAY_BUFFER, out_buffer_size, gl.STATIC_COPY); chk();
                 gl.bindBuffer(gl.ARRAY_BUFFER, null); chk();
-
-                pkg.feedbackBuffers.push(buf);
             }
 
             // -- Init TransformFeedback 
@@ -312,42 +304,42 @@ function CreateWebGLLib(canvas) {
                         case 4:
                             if (u.isArray) {
 
-                                gl.uniform4fv(pkg.locUniforms[i], val); chk();
+                                gl.uniform4fv(u.locUniform, val); chk();
                             }
                             else {
 
-                                gl.uniform4f(pkg.locUniforms[i], val[0], val[1], val[2], val[3]); chk();
+                                gl.uniform4f(u.locUniform, val[0], val[1], val[2], val[3]); chk();
                             }
                             break;
 
                         case 3:
                             if (u.isArray) {
 
-                                gl.uniform3fv(pkg.locUniforms[i], val); chk();
+                                gl.uniform3fv(u.locUniform, val); chk();
                             }
                             else {
 
-                                gl.uniform3f(pkg.locUniforms[i], val[0], val[1], val[2]); chk();
+                                gl.uniform3f(u.locUniform, val[0], val[1], val[2]); chk();
                             }
                             break;
                         case 2:
                             if (u.isArray) {
 
-                                gl.uniform2fv(pkg.locUniforms[i], val); chk();
+                                gl.uniform2fv(u.locUniform, val); chk();
                             }
                             else {
 
-                                gl.uniform2f(pkg.locUniforms[i], val[0], val[1]); chk();
+                                gl.uniform2f(u.locUniform, val[0], val[1]); chk();
                             }
                             break;
                         case 1:
                             if (u.isArray) {
 
-                                gl.uniform1fv(pkg.locUniforms[i], val); chk();
+                                gl.uniform1fv(u.locUniform, val); chk();
                             }
                             else {
 
-                                gl.uniform1f(pkg.locUniforms[i], val[0]); chk();
+                                gl.uniform1f(u.locUniform, val[0]); chk();
                             }
                             break;
                     }
@@ -356,11 +348,11 @@ function CreateWebGLLib(canvas) {
 
                     if (u.type == "int") {
 
-                        gl.uniform1i(pkg.locUniforms[i], u.value); chk();
+                        gl.uniform1i(u.locUniform, u.value); chk();
                     }
                     else {
 
-                        gl.uniform1f(pkg.locUniforms[i], u.value); chk();
+                        gl.uniform1f(u.locUniform, u.value); chk();
                     }
                 }
             }
@@ -390,7 +382,7 @@ function CreateWebGLLib(canvas) {
                 var attrib = pkg.attributes[i];
                 var dim = this.vecDim(attrib.type);
 
-                gl.bindBuffer(gl.ARRAY_BUFFER, pkg.AttribBuffers[i]); chk();
+                gl.bindBuffer(gl.ARRAY_BUFFER, attrib.AttribBuffer); chk();
                 gl.vertexAttribPointer(i, dim, gl.FLOAT, false, 4 * dim, 0); chk();
                 gl.enableVertexAttribArray(i); chk();
                 gl.bindAttribLocation(pkg.program, i, attrib.name);
@@ -404,18 +396,14 @@ function CreateWebGLLib(canvas) {
             gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, pkg.transformFeedback); chk();
 
             // テクスチャの値のセット
-            for (var i = 0; i < pkg.textures.length; i++) {
-
-                this.setTextureData(pkg.textures[i], this.TEXTUREs[i], pkg.Textures[i]);
-                gl.uniform1i(pkg.locTextures[i], i); chk();
-            }
+            this.setTextureData(pkg);
 
             // ユニフォーム変数のセット
             this.setUniformsData(pkg);
 
             for (var i = 0; i < pkg.varyings.length; i++) {
-
-                gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, i, pkg.feedbackBuffers[i]); chk();
+                var varying = pkg.varyings[i];
+                gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, i, varying.feedbackBuffer); chk();
             }
 
             // 計算開始
@@ -426,13 +414,14 @@ function CreateWebGLLib(canvas) {
             gl.disable(gl.RASTERIZER_DISCARD); chk();
 
             for (var i = 0; i < pkg.varyings.length; i++) {
+                varying = pkg.varyings[i];
 
                 gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, i, null); chk();
 
                 // 処理結果を表示
-                gl.bindBuffer(gl.ARRAY_BUFFER, pkg.feedbackBuffers[i]); chk();
+                gl.bindBuffer(gl.ARRAY_BUFFER, varying.feedbackBuffer); chk();
 
-                var out_buf = pkg.varyings[i].value;
+                var out_buf = varying.value;
                 if (out_buf instanceof Mat) {
                     out_buf = out_buf.dt;
                 }
