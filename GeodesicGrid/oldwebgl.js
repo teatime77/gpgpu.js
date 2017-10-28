@@ -1,8 +1,13 @@
 ﻿// JavaScript source code
 
+var MyWebGL;
+
+var cubeVertexPositionBuffer;
+var cubeVertexNormalBuffer;
+var cubeVertexTextureCoordBuffer;
+var cubeVertexIndexBuffer;
 
 function webGLStart() {
-    var WebGL2;
     var gl;
     var shaderProgram;
     var crateTexture;
@@ -20,18 +25,13 @@ function webGLStart() {
 
     var moonRotationMatrix = mat4.create();
     mat4.identity(moonRotationMatrix);
-
-    var cubeVertexPositionBuffer;
-    var cubeVertexNormalBuffer;
-    var cubeVertexTextureCoordBuffer;
-    var cubeVertexIndexBuffer;
     var lastTime = 0;
 
     function initShaders() {
-        var vertex_shader = WebGL2.makeShader(gl.VERTEX_SHADER, vertexShaderText);
-        var fragmentShader = WebGL2.makeShader(gl.FRAGMENT_SHADER, fragmentShaderText);
+        var vertex_shader = MyWebGL.makeShader(gl.VERTEX_SHADER, vertexShaderText);
+        var fragmentShader = MyWebGL.makeShader(gl.FRAGMENT_SHADER, fragmentShaderText);
 
-        shaderProgram = WebGL2.makeProgram(vertex_shader, fragmentShader);
+        shaderProgram = MyWebGL.makeProgram(vertex_shader, fragmentShader);
 
         gl.useProgram(shaderProgram);
 
@@ -109,73 +109,6 @@ function webGLStart() {
 
         lastMouseX = newX
         lastMouseY = newY;
-    }
-
-
-    function initBuffers() {
-        var ret           = makeRegularIcosahedron();
-        var points        = ret.points;
-        var triangles = ret.triangles;
-        var sphere_r = ret.sphere_r;
-
-        var edges = [];
-
-        triangles = divideTriangle(points, triangles, edges, sphere_r);
-
-        // 頂点インデックス
-        var vertexIndices = [];
-
-        triangles.forEach(x =>
-            vertexIndices.push(points.indexOf(x.Vertexes[0]), points.indexOf(x.Vertexes[1]), points.indexOf(x.Vertexes[2]))
-        );
-
-        // 法線をセット
-        points.forEach(p => SetNorm(p));
-
-        // 位置の配列
-        var vertices = [];
-        points.forEach(p =>
-            vertices.push(p.x, p.y, p.z)
-        );
-
-        // 法線の配列
-        var vertexNormals = [];
-        points.forEach(p =>
-            vertexNormals.push(p.nx, p.ny, p.nz)
-        );
-
-        // テクスチャ座標
-        var textureCoords = [];
-        points.forEach(p =>
-            textureCoords.push(p.texX, p.texY)
-        );
-
-        cubeVertexPositionBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, cubeVertexPositionBuffer);
-
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
-        cubeVertexPositionBuffer.itemSize = 3;
-        cubeVertexPositionBuffer.numItems = points.length;
-
-        cubeVertexNormalBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, cubeVertexNormalBuffer);
-
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertexNormals), gl.STATIC_DRAW);
-        cubeVertexNormalBuffer.itemSize = 3;
-        cubeVertexNormalBuffer.numItems = points.length;
-
-        cubeVertexTextureCoordBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, cubeVertexTextureCoordBuffer);
-
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(textureCoords), gl.STATIC_DRAW);
-        cubeVertexTextureCoordBuffer.itemSize = 2;
-        cubeVertexTextureCoordBuffer.numItems = points.length;
-
-        cubeVertexIndexBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, cubeVertexIndexBuffer);
-        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(vertexIndices), gl.STATIC_DRAW);
-        cubeVertexIndexBuffer.itemSize = 1;
-        cubeVertexIndexBuffer.numItems = vertexIndices.length;
     }
 
     function drawScene() {
@@ -262,13 +195,13 @@ function webGLStart() {
     console.log("" + hh + "時" + mm + "分" + ss + "秒をお知らせします。")
 
     var canvas = document.getElementById("lesson07-canvas");
-    WebGL2 = CreateWebGLLib(canvas);
-    gl = WebGL2.getGL();
+    MyWebGL = CreateWebGLLib(canvas);
+    gl = MyWebGL.getGL();
     gl.viewportWidth = canvas.width;
     gl.viewportHeight = canvas.height;
 
     initShaders();
-    initBuffers();
+    initBuffers(gl);
     initTexture();
 
     gl.clearColor(0.0, 0.0, 0.0, 1.0);

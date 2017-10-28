@@ -82,7 +82,7 @@ function CreateWebGLLib(canvas) {
             var lines = param.vertexShader.split(/(\r\n|\r|\n)+/);
             for(let line of lines) {
 
-                var tokens = line.split(/[\s\t]+/);
+                var tokens = line.trim().split(/[\s\t]+/);
                 if (tokens.length < 3) {
                     continue;
                 }
@@ -180,6 +180,27 @@ function CreateWebGLLib(canvas) {
             return shader;
         }
 
+        makeAttrib(pkg) {
+            for (let attrib of pkg.attributes) {
+                var attrib_dim = this.vecDim(attrib.type);
+                var attrib_len = attrib.value instanceof Mat ? attrib.value.dt.length : attrib.value.length;
+                var elemen_count = attrib_len / attrib_dim;
+
+                if (pkg.elementCount == undefined) {
+                    pkg.attribElementCount = elemen_count;
+                }
+                else {
+
+                    Assert(pkg.elementCount == elemen_count);
+                }
+
+                attrib.AttribBuffer = gl.createBuffer();
+                attrib.AttribLoc = gl.getAttribLocation(pkg.program, attrib.name); chk();
+                gl.enableVertexAttribArray(attrib.AttribLoc); chk();
+                gl.bindAttribLocation(pkg.program, attrib.AttribLoc, attrib.name);
+            }
+        }
+
         makeTexture(pkg) {
             for (var i = 0; i < pkg.textures.length; i++) {
                 var tex_inf = pkg.textures[i];
@@ -261,21 +282,7 @@ function CreateWebGLLib(canvas) {
 
             pkg.attribElementCount = param.elementCount;
 
-            for (let attrib of pkg.attributes) {
-                var attrib_dim = this.vecDim(attrib.type);
-                var attrib_len = attrib.value instanceof Mat ? attrib.value.dt.length : attrib.value.length;
-                var elemen_count = attrib_len / attrib_dim;
-
-                if (pkg.elementCount == undefined) {
-                    pkg.attribElementCount = elemen_count;
-                }
-                else {
-
-                    Assert(pkg.elementCount == elemen_count);
-                }
-
-                attrib.AttribBuffer = gl.createBuffer();
-            }
+            this.makeAttrib(pkg);
 
             for (let varying of pkg.varyings) {
                 var out_buffer_size = this.vecDim(varying.type) * pkg.attribElementCount * Float32Array.BYTES_PER_ELEMENT;
@@ -291,6 +298,18 @@ function CreateWebGLLib(canvas) {
             pkg.transformFeedback = gl.createTransformFeedback(); chk();
 
             return pkg;
+        }
+
+        setAttribData(pkg) {
+            // -- Init Buffer
+            for (var i = 0; i < pkg.attributes.length; i++) {
+                var attrib = pkg.attributes[i];
+                var dim = this.vecDim(attrib.type);
+
+                gl.bindBuffer(gl.ARRAY_BUFFER, attrib.AttribBuffer); chk();
+                gl.vertexAttribPointer(i, dim, gl.FLOAT, false, 0, 0); chk();
+                gl.bufferData(gl.ARRAY_BUFFER, attrib.value, gl.STATIC_DRAW);
+            }
         }
 
         setUniformsData(pkg) {
@@ -377,17 +396,7 @@ function CreateWebGLLib(canvas) {
                 }
             }
 
-            // -- Init Buffer
-            for (var i = 0; i < pkg.attributes.length; i++) { 
-                var attrib = pkg.attributes[i];
-                var dim = this.vecDim(attrib.type);
-
-                gl.bindBuffer(gl.ARRAY_BUFFER, attrib.AttribBuffer); chk();
-                gl.vertexAttribPointer(i, dim, gl.FLOAT, false, 4 * dim, 0); chk();
-                gl.enableVertexAttribArray(i); chk();
-                gl.bindAttribLocation(pkg.program, i, attrib.name);
-                gl.bufferData(gl.ARRAY_BUFFER, attrib.value, gl.STATIC_DRAW);
-            }
+            this.setAttribData(pkg);
 
             gl.useProgram(pkg.program); chk();
 

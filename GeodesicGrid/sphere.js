@@ -1,4 +1,4 @@
-// JavaScript source code
+ï»¿// JavaScript source code
 
 
 class Triangle {
@@ -48,7 +48,7 @@ function sprintf() {
     }
     else {
 
-        // ˆø”‚ÌƒŠƒXƒg‚ğArray‚É•ÏŠ·‚µ‚Ü‚·B
+        // å¼•æ•°ã®ãƒªã‚¹ãƒˆã‚’Arrayã«å¤‰æ›ã—ã¾ã™ã€‚
         args = Array.prototype.slice.call(arguments);
     }
 
@@ -165,7 +165,7 @@ function SetNorm(p) {
 function makeRegularIcosahedron() {
     var G = (1 + Math.sqrt(5)) / 2;
 
-    // ’¸“_‚ÌƒŠƒXƒg
+    // é ‚ç‚¹ã®ãƒªã‚¹ãƒˆ
     var points = [
         new Vertex( 1,  G,  0), // 0
         new Vertex( 1, -G,  0), // 1
@@ -213,7 +213,7 @@ function makeRegularIcosahedron() {
     });
 
 
-    // OŠpŒ`‚ÌƒŠƒXƒg
+    // ä¸‰è§’å½¢ã®ãƒªã‚¹ãƒˆ
     var triangles = []
 
     for (var i1 = 0; i1 < points.length; i1++) {
@@ -231,7 +231,7 @@ function makeRegularIcosahedron() {
                             pnts[i].adjacentVertexes.push(pnts[(i + 1) % 3], pnts[(i + 2) % 3])
                         }
                             
-//                            println("³20–Ê‘Ì %d %d %d", points.indexOf(tri.Vertexes[0]), points.indexOf(tri.Vertexes[1]), points.indexOf(tri.Vertexes[2]))
+//                            println("æ­£20é¢ä½“ %d %d %d", points.indexOf(tri.Vertexes[0]), points.indexOf(tri.Vertexes[1]), points.indexOf(tri.Vertexes[2]))
 
                         triangles.push(tri);
                     }
@@ -242,7 +242,7 @@ function makeRegularIcosahedron() {
     console.assert(triangles.length == 20);
 
     points.forEach(function (p) {
-        // —×Ú‚·‚é’¸“_‚Ìd•¡‚ğæ‚èœ‚­B
+        // éš£æ¥ã™ã‚‹é ‚ç‚¹ã®é‡è¤‡ã‚’å–ã‚Šé™¤ãã€‚
         p.adjacentVertexes = Array.from(new Set(p.adjacentVertexes));
 
         console.assert(p.adjacentVertexes.length == 5);
@@ -256,31 +256,31 @@ function divideTriangle(points, triangles, edges, sphere_r) {
 
     for (var divide_idx = 0; divide_idx < divide_cnt; divide_idx++) {
 
-        // OŠpŒ`‚ğ•ªŠ„‚·‚éB
+        // ä¸‰è§’å½¢ã‚’åˆ†å‰²ã™ã‚‹ã€‚
         var new_triangles = [];
 
         triangles.forEach(function (x) {
-            // OŠpŒ`‚Ì’¸“_‚ÌƒŠƒXƒgB
+            // ä¸‰è§’å½¢ã®é ‚ç‚¹ã®ãƒªã‚¹ãƒˆã€‚
             var pnts = [ x.Vertexes[0], x.Vertexes[1], x.Vertexes[2] ];
 
-            // ’†“_‚ÌƒŠƒXƒg
+            // ä¸­ç‚¹ã®ãƒªã‚¹ãƒˆ
             var midpoints = [];
 
             for (var i1 = 0; i1 < 3; i1++) {
 
-                // OŠpŒ`‚Ì2“_
+                // ä¸‰è§’å½¢ã®2ç‚¹
                 var p1 = pnts[i1];
                 var p2 = pnts[(i1 + 1) % 3];
 
-                // 2“_‚ğ‚Â‚È‚®•Ó‚ğ’T‚·B
+                // 2ç‚¹ã‚’ã¤ãªãè¾ºã‚’æ¢ã™ã€‚
                 var edge = edges.find(x => x.Endpoints[0] == p1 && x.Endpoints[1] == p2 || x.Endpoints[1] == p1 && x.Endpoints[0] == p2);
                 if (edge == undefined) {
-                    // 2“_‚ğ‚Â‚È‚®•Ó‚ª‚È‚¢ê‡
+                    // 2ç‚¹ã‚’ã¤ãªãè¾ºãŒãªã„å ´åˆ
 
-                    // 2“_‚ğ‚Â‚È‚®•Ó‚ğì‚éB
+                    // 2ç‚¹ã‚’ã¤ãªãè¾ºã‚’ä½œã‚‹ã€‚
                     edge = new Edge(p1, p2);
 
-                    // •Ó‚Ì’†“_‚ğì‚éB
+                    // è¾ºã®ä¸­ç‚¹ã‚’ä½œã‚‹ã€‚
                     edge.Mid = new Vertex((p1.x + p2.x) / 2, (p1.y + p2.y) / 2, (p1.z + p2.z) / 2);
 
                     for (var i = 0; i < i; k++) {
@@ -377,7 +377,98 @@ function divideTriangle(points, triangles, edges, sphere_r) {
         p.texX = Math.min(1, Math.max(0, ph / (2 * Math.PI) + 0.5));
     }
 
-    println("”¼Œa:%.3f OŠpŒ` %d", sphere_r, triangles.length);
+    println("åŠå¾„:%.3f ä¸‰è§’å½¢ %d", sphere_r, triangles.length);
 
     return triangles;
+}
+
+function makeEarthBuffers() {
+    var ret = makeRegularIcosahedron();
+    var points = ret.points;
+    var triangles = ret.triangles;
+    var sphere_r = ret.sphere_r;
+
+    var edges = [];
+
+    triangles = divideTriangle(points, triangles, edges, sphere_r);
+
+    // é ‚ç‚¹ã‚¤ãƒ³ãƒ‡ãƒƒã‚¯ã‚¹
+    var vertexIndices = [];
+
+    triangles.forEach(x =>
+        vertexIndices.push(points.indexOf(x.Vertexes[0]), points.indexOf(x.Vertexes[1]), points.indexOf(x.Vertexes[2]))
+    );
+
+    // æ³•ç·šã‚’ã‚»ãƒƒãƒˆ
+    points.forEach(p => SetNorm(p));
+
+    // ä½ç½®ã®é…åˆ—
+    var vertices = [];
+    points.forEach(p =>
+        vertices.push(p.x, p.y, p.z)
+    );
+
+    // æ³•ç·šã®é…åˆ—
+    var vertexNormals = [];
+    points.forEach(p =>
+        vertexNormals.push(p.nx, p.ny, p.nz)
+    );
+
+    // ãƒ†ã‚¯ã‚¹ãƒãƒ£åº§æ¨™
+    var textureCoords = [];
+    points.forEach(p =>
+        textureCoords.push(p.texX, p.texY)
+    );
+
+    var ret = {};
+    ret.vertex_array = new Float32Array(vertices);
+    ret.normal_array = new Float32Array(vertexNormals);
+    ret.texture_array = new Float32Array(textureCoords);
+    ret.idx_array = new Uint16Array(vertexIndices);
+
+    return ret;
+}
+
+
+function initBuffers(gl) {
+    var ret = makeEarthBuffers();
+
+    var param = {
+        vertexShader: vertexShaderText
+        ,
+        args: {
+            "aVertexPosition": ret.vertex_array,
+            "aVertexNormal": ret.normal_array,
+            "aTextureCoord": ret.texture_array,
+        }
+    };
+
+    var pkg = {};
+
+    MyWebGL.parseShader(pkg, param);
+
+
+    cubeVertexPositionBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, cubeVertexPositionBuffer);
+
+    gl.bufferData(gl.ARRAY_BUFFER, ret.vertex_array, gl.STATIC_DRAW);
+    cubeVertexPositionBuffer.itemSize = 3;
+
+    cubeVertexNormalBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, cubeVertexNormalBuffer);
+
+    gl.bufferData(gl.ARRAY_BUFFER, ret.normal_array, gl.STATIC_DRAW);
+    cubeVertexNormalBuffer.itemSize = 3;
+
+    cubeVertexTextureCoordBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, cubeVertexTextureCoordBuffer);
+
+    gl.bufferData(gl.ARRAY_BUFFER, ret.texture_array, gl.STATIC_DRAW);
+    cubeVertexTextureCoordBuffer.itemSize = 2;
+
+    cubeVertexIndexBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, cubeVertexIndexBuffer);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, ret.idx_array, gl.STATIC_DRAW);
+    cubeVertexIndexBuffer.itemSize = 1;
+    cubeVertexIndexBuffer.numItems = ret.idx_array.length;
 }
