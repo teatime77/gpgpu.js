@@ -276,7 +276,7 @@ function CreateWebGLLib(canvas) {
 
                 if (tex_inf.value instanceof Image) {
 
-    }
+                }
                 else {
 
                     this.texImage(dim, tex_inf);
@@ -355,19 +355,21 @@ function CreateWebGLLib(canvas) {
 
             this.makeAttrib(pkg);
 
-            for (let varying of pkg.varyings) {
-                var out_buffer_size = this.vecDim(varying.type) * pkg.attribElementCount * Float32Array.BYTES_PER_ELEMENT;
+            if (pkg.varyings.length != 0) {
 
-                // Feedback empty buffer
-                varying.feedbackBuffer = gl.createBuffer(); chk();
-                gl.bindBuffer(gl.ARRAY_BUFFER, varying.feedbackBuffer); chk();
-                gl.bufferData(gl.ARRAY_BUFFER, out_buffer_size, gl.STATIC_COPY); chk();
-                gl.bindBuffer(gl.ARRAY_BUFFER, null); chk();
+                for (let varying of pkg.varyings) {
+                    var out_buffer_size = this.vecDim(varying.type) * pkg.attribElementCount * Float32Array.BYTES_PER_ELEMENT;
+
+                    // Feedback empty buffer
+                    varying.feedbackBuffer = gl.createBuffer(); chk();
+                    gl.bindBuffer(gl.ARRAY_BUFFER, varying.feedbackBuffer); chk();
+                    gl.bufferData(gl.ARRAY_BUFFER, out_buffer_size, gl.STATIC_COPY); chk();
+                    gl.bindBuffer(gl.ARRAY_BUFFER, null); chk();
+                }
+
+                // -- Init TransformFeedback 
+                pkg.transformFeedback = gl.createTransformFeedback(); chk();
             }
-
-            // -- Init TransformFeedback 
-            pkg.transformFeedback = gl.createTransformFeedback(); chk();
-
 
             if (param.VertexIndexBuffer) {
                 this.makeVertexIndexBuffer(pkg, param);
@@ -460,25 +462,26 @@ function CreateWebGLLib(canvas) {
 
             gl.useProgram(pkg.program); chk();
 
-            gl.enable(gl.RASTERIZER_DISCARD); chk();
-
-            gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, pkg.transformFeedback); chk();
-
             // テクスチャの値のセット
             this.setTextureData(pkg);
 
             // ユニフォーム変数のセット
             this.setUniformsData(pkg);
 
-            for (var i = 0; i < pkg.varyings.length; i++) {
-                var varying = pkg.varyings[i];
-                gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, i, varying.feedbackBuffer); chk();
-            }
-
             if (pkg.varyings.length == 0) {
 
+                this.draw(pkg);
             }
             else {
+
+                gl.enable(gl.RASTERIZER_DISCARD); chk();
+
+                gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, pkg.transformFeedback); chk();
+
+                for (var i = 0; i < pkg.varyings.length; i++) {
+                    var varying = pkg.varyings[i];
+                    gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, i, varying.feedbackBuffer); chk();
+                }
 
                 // 計算開始
                 gl.beginTransformFeedback(gl.POINTS); chk();    // TRIANGLES

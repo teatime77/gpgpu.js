@@ -2,16 +2,7 @@
 
 var MyWebGL;
 
-var cubeVertexPositionBuffer;
-var cubeVertexNormalBuffer;
-var cubeVertexTextureCoordBuffer;
-var cubeVertexIndexBuffer;
-var texImg;
-
 function webGLStart() {
-    var gl;
-    var imageLoaded = false;
-
     var xRot = 0;
     var yRot = 0;
     var z = -5.0;
@@ -20,23 +11,10 @@ function webGLStart() {
     var lastMouseY = null;
 
     var param;
-    var pkg = {};
-    var tex_inf = {};
-
-    function initShaders(pkg) {
-        var vertex_shader = MyWebGL.makeShader(gl.VERTEX_SHADER, vertexShaderText);
-        var fragmentShader = MyWebGL.makeShader(gl.FRAGMENT_SHADER, fragmentShaderText);
-
-        pkg.program = MyWebGL.makeProgram(vertex_shader, fragmentShader);
-
-        gl.useProgram(pkg.program);
-
-    }
 
     function degToRad(degrees) {
         return degrees * Math.PI / 180;
     }
-
 
     function handleMouseMove(event) {
         var newX = event.clientX;
@@ -52,7 +30,7 @@ function webGLStart() {
         lastMouseY = newY;
     }
 
-    function drawScene(pkg) {
+    function drawScene() {
 
         var pMatrix = mat4.create();
         mat4.perspective(45, MyWebGL.canvas.width / MyWebGL.canvas.height, 0.1, 100.0, pMatrix);
@@ -99,49 +77,26 @@ function webGLStart() {
         param.args["uMVMatrix"]          = mvMatrix;
         param.args["uNMatrix"]           = normalMatrix;
 
-        MyWebGL.setAttribData(pkg);
-
-        // テクスチャの値のセット
-        MyWebGL.setTextureData(pkg);
-
-        MyWebGL.copyParamArgsValue(param, pkg);
-
-        MyWebGL.setUniformsData(pkg);
-        MyWebGL.draw(pkg);
+        MyWebGL.compute(param);
     }
 
     function tick() {
         requestAnimFrame(tick);
-        if (!imageLoaded) {
-            return;
-        }
-
-        drawScene(pkg);
+        drawScene();
     }
-
-    var time = new Date();
-    var hh = time.getHours();
-    var mm = time.getMinutes();
-    var ss = time.getSeconds();
-    console.log("" + hh + "時" + mm + "分" + ss + "秒をお知らせします。")
 
     var canvas = document.getElementById("lesson07-canvas");
     MyWebGL = CreateWebGLLib(canvas);
-    gl = MyWebGL.getGL();
 
+    var img = new Image();
+    img.onload = function () {
 
-    texImg = new Image();
-    texImg.onload = function () {
+        param = initBuffers(img);
 
-        initShaders(pkg);
-        param = initBuffers(pkg);
-
-        // テクスチャの初期処理
-        MyWebGL.makeTexture(pkg);
-        imageLoaded = true;
+        tick();
     }
 
-    texImg.src = "world.topo.bathy.200408.2048x2048.png";// "earth.png";// "crate.gif";
+    img.src = "world.topo.bathy.200408.2048x2048.png";// "earth.png";// "crate.gif";
 
     document.onmousemove = handleMouseMove;
 
@@ -157,15 +112,14 @@ function webGLStart() {
             e.preventDefault();
         });
     }
-
-    tick();
 }
 
 
-function initBuffers(pkg) {
+function initBuffers(img) {
     var ret = makeEarthBuffers();
 
     var param = {
+        key: "Earth",
         vertexShader: vertexShaderText,
         fragmentShader: fragmentShaderText
         ,
@@ -181,24 +135,11 @@ function initBuffers(pkg) {
             "uPMatrix": 1,
             "uMVMatrix": 1,
             "uNMatrix": 1,
-            "uSampler": texImg,
-            /*
-            "vTextureCoord": 1,
-            "vLightWeighting": 1,
-            "uv0": 1,
-            "uv1": 1,
-            */
+            "uSampler": img,
         }
         ,
         VertexIndexBuffer: ret.idx_array
     };
-
-    MyWebGL.parseShader(pkg, param);
-    MyWebGL.makeAttrib(pkg);
-    MyWebGL.makeVertexIndexBuffer(pkg, param);
-
-    // ユニフォーム変数の初期処理
-    MyWebGL.initUniform(pkg);
 
     return param;
 }
