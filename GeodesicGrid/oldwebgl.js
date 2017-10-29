@@ -33,15 +33,6 @@ function webGLStart() {
 
     }
 
-    function handleLoadedTexture() {
-        tex_inf.locTexture = gl.getUniformLocation(pkg.program, "uSampler");
-        tex_inf.Texture = gl.createTexture();
-
-        gl.bindTexture(gl.TEXTURE_2D, tex_inf.Texture);
-
-        gl.bindTexture(gl.TEXTURE_2D, null);
-    }
-
     function degToRad(degrees) {
         return degrees * Math.PI / 180;
     }
@@ -108,27 +99,15 @@ function webGLStart() {
         param.args["uMVMatrix"]          = mvMatrix;
         param.args["uNMatrix"]           = normalMatrix;
 
-        gl.viewport(0, 0, MyWebGL.canvas.width, MyWebGL.canvas.height);
-        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-
         MyWebGL.setAttribData(pkg);
-
-        /*
-        gl.uniform1i(tex_inf.locTexture, 0);
-        gl.activeTexture(gl.TEXTURE0);
-        gl.bindTexture(gl.TEXTURE_2D, tex_inf.Texture);
-        */
 
         // テクスチャの値のセット
         MyWebGL.setTextureData(pkg);
 
-
         MyWebGL.copyParamArgsValue(param, pkg);
 
         MyWebGL.setUniformsData(pkg);
-
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, cubeVertexIndexBuffer);
-        gl.drawElements(gl.TRIANGLES, cubeVertexIndexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
+        MyWebGL.draw(pkg);
     }
 
     function tick() {
@@ -155,21 +134,14 @@ function webGLStart() {
     texImg.onload = function () {
 
         initShaders(pkg);
-        param = initBuffers(pkg, gl);
+        param = initBuffers(pkg);
 
         // テクスチャの初期処理
         MyWebGL.makeTexture(pkg);
-        //            handleLoadedTexture();
         imageLoaded = true;
     }
 
     texImg.src = "world.topo.bathy.200408.2048x2048.png";// "earth.png";// "crate.gif";
-
-
-
-    gl.clearColor(0.0, 0.0, 0.0, 1.0);
-    gl.enable(gl.DEPTH_TEST);
-
 
     document.onmousemove = handleMouseMove;
 
@@ -190,7 +162,7 @@ function webGLStart() {
 }
 
 
-function initBuffers(pkg, gl) {
+function initBuffers(pkg) {
     var ret = makeEarthBuffers();
 
     var param = {
@@ -218,19 +190,12 @@ function initBuffers(pkg, gl) {
             */
         }
         ,
-        fixed: [
-
-        ]
+        VertexIndexBuffer: ret.idx_array
     };
 
     MyWebGL.parseShader(pkg, param);
     MyWebGL.makeAttrib(pkg);
-
-    cubeVertexIndexBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, cubeVertexIndexBuffer);
-    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, ret.idx_array, gl.STATIC_DRAW);
-    cubeVertexIndexBuffer.itemSize = 1;
-    cubeVertexIndexBuffer.numItems = ret.idx_array.length;
+    MyWebGL.makeVertexIndexBuffer(pkg, param);
 
     // ユニフォーム変数の初期処理
     MyWebGL.initUniform(pkg);

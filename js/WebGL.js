@@ -284,6 +284,28 @@ function CreateWebGLLib(canvas) {
             }
         }
 
+        makeVertexIndexBuffer(pkg, param) {
+            gl.clearColor(0.0, 0.0, 0.0, 1.0); chk();
+            gl.enable(gl.DEPTH_TEST); chk();
+
+            var buf = gl.createBuffer(); chk();
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buf); chk();
+            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, param.VertexIndexBuffer, gl.STATIC_DRAW); chk();
+
+            pkg.VertexIndexBufferInf = {
+                value: param.VertexIndexBuffer,
+                buffer: buf
+            };
+        }
+
+        draw(pkg) {
+            gl.viewport(0, 0, MyWebGL.canvas.width, this.canvas.height); chk();
+            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT); chk();
+
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, pkg.VertexIndexBufferInf.buffer); chk();
+            gl.drawElements(gl.TRIANGLES, pkg.VertexIndexBufferInf.value.length, gl.UNSIGNED_SHORT, 0); chk();
+        }
+
         vecDim(tp) {
             if (tp == "vec4") {
                 return 4;
@@ -345,6 +367,11 @@ function CreateWebGLLib(canvas) {
 
             // -- Init TransformFeedback 
             pkg.transformFeedback = gl.createTransformFeedback(); chk();
+
+
+            if (param.VertexIndexBuffer) {
+                this.makeVertexIndexBuffer(pkg, param);
+            }
 
             return pkg;
         }
@@ -448,33 +475,40 @@ function CreateWebGLLib(canvas) {
                 gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, i, varying.feedbackBuffer); chk();
             }
 
-            // 計算開始
-            gl.beginTransformFeedback(gl.POINTS); chk();    // TRIANGLES
-            gl.drawArrays(gl.POINTS, 0, pkg.attribElementCount); chk();
-            gl.endTransformFeedback(); chk();
+            if (pkg.varyings.length == 0) {
 
-            gl.disable(gl.RASTERIZER_DISCARD); chk();
+            }
+            else {
 
-            for (var i = 0; i < pkg.varyings.length; i++) {
-                varying = pkg.varyings[i];
+                // 計算開始
+                gl.beginTransformFeedback(gl.POINTS); chk();    // TRIANGLES
+                gl.drawArrays(gl.POINTS, 0, pkg.attribElementCount); chk();
+                gl.endTransformFeedback(); chk();
 
-                gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, i, null); chk();
+                gl.disable(gl.RASTERIZER_DISCARD); chk();
 
-                // 処理結果を表示
-                gl.bindBuffer(gl.ARRAY_BUFFER, varying.feedbackBuffer); chk();
+                for (var i = 0; i < pkg.varyings.length; i++) {
+                    varying = pkg.varyings[i];
 
-                var out_buf = varying.value;
-                if (out_buf instanceof Mat) {
-                    out_buf = out_buf.dt;
+                    gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, i, null); chk();
+
+                    // 処理結果を表示
+                    gl.bindBuffer(gl.ARRAY_BUFFER, varying.feedbackBuffer); chk();
+
+                    var out_buf = varying.value;
+                    if (out_buf instanceof Mat) {
+                        out_buf = out_buf.dt;
+                    }
+
+                    gl.getBufferSubData(gl.ARRAY_BUFFER, 0, out_buf); chk();
+
+                    gl.bindBuffer(gl.ARRAY_BUFFER, null); chk();
                 }
 
-                gl.getBufferSubData(gl.ARRAY_BUFFER, 0, out_buf); chk();
-
-                gl.bindBuffer(gl.ARRAY_BUFFER, null); chk();
+                // 終了処理
+                gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null); chk();
             }
 
-            // 終了処理
-            gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null); chk();
 
             gl.useProgram(null); chk();
         }
