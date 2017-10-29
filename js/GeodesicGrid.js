@@ -345,6 +345,13 @@ function divideTriangle(points, triangles, edges, sphere_r) {
     triangles = new_triangles;
     */
 
+
+    println("半径:%.3f 三角形 %d", sphere_r, triangles.length);
+
+    return triangles;
+}
+
+function setTextureCoords(points, sphere_r) {
     for (var i = 0; i < points.length; i++) {
         var p = points[i];
         console.assert(i < 12 && p.adjacentVertexes.length == 5 || p.adjacentVertexes.length == 6);
@@ -356,8 +363,6 @@ function divideTriangle(points, triangles, edges, sphere_r) {
         var th = Math.asin(z);  // [-PI/2 , PI/2]
 
         p.texY = Math.min(1, Math.max(0, th / Math.PI + 0.5));
-//            p.texX = 0.5;
-//            continue;
 
         var r = Math.cos(th);
 
@@ -376,10 +381,6 @@ function divideTriangle(points, triangles, edges, sphere_r) {
 
         p.texX = Math.min(1, Math.max(0, ph / (2 * Math.PI) + 0.5));
     }
-
-    println("半径:%.3f 三角形 %d", sphere_r, triangles.length);
-
-    return triangles;
 }
 
 function makeEarthBuffers() {
@@ -391,6 +392,8 @@ function makeEarthBuffers() {
     var edges = [];
 
     triangles = divideTriangle(points, triangles, edges, sphere_r);
+
+    setTextureCoords(points, sphere_r);
 
     // 頂点インデックス
     var vertexIndices = [];
