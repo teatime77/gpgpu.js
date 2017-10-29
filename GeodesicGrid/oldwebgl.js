@@ -9,24 +9,18 @@ var cubeVertexIndexBuffer;
 
 function webGLStart() {
     var gl;
-    var crateTexture;
     var imageLoaded = false;
-    var mvMatrix = mat4.create();
-    var pMatrix = mat4.create();
+
     var xRot = 0;
-
     var yRot = 0;
-
     var z = -5.0;
 
     var lastMouseX = null;
     var lastMouseY = null;
 
-    var moonRotationMatrix = mat4.create();
-    mat4.identity(moonRotationMatrix);
-    var lastTime = 0;
     var param;
     var pkg = {};
+    var tex_inf = {};
 
     function initShaders(pkg) {
         var vertex_shader = MyWebGL.makeShader(gl.VERTEX_SHADER, vertexShaderText);
@@ -36,34 +30,35 @@ function webGLStart() {
 
         gl.useProgram(pkg.program);
 
-        pkg.program.samplerUniform = gl.getUniformLocation(pkg.program, "uSampler");
     }
 
-    function handleLoadedTexture(texture) {
-        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    function handleLoadedTexture() {
+        tex_inf.locTexture = gl.getUniformLocation(pkg.program, "uSampler");
+        tex_inf.Texture = gl.createTexture();
 
-        gl.bindTexture(gl.TEXTURE_2D, texture);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, texture.image);
+        gl.bindTexture(gl.TEXTURE_2D, tex_inf.Texture);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_NEAREST);
 
 //        gl.texParameteri(gl.TEXTURE_2D, gl.GL_TEXTURE_WRAP_S, gl.GL_MIRRORED_REPEAT); //GL_REPEAT
 //        gl.texParameteri(gl.TEXTURE_2D, gl.GL_TEXTURE_WRAP_T, gl.GL_MIRRORED_REPEAT); //GL_REPEAT
 
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, tex_inf.value);
         gl.generateMipmap(gl.TEXTURE_2D);
 
         gl.bindTexture(gl.TEXTURE_2D, null);
     }
 
     function initTexture() {
-        crateTexture = gl.createTexture();
-        crateTexture.image = new Image();
-        crateTexture.image.onload = function () {
-            handleLoadedTexture(crateTexture);
+        tex_inf.value = new Image();
+
+        tex_inf.value.onload = function () {
+            handleLoadedTexture();
             imageLoaded = true;
         }
 
-        crateTexture.image.src = "world.topo.bathy.200408.2048x2048.png";// "earth.png";// "crate.gif";
+        tex_inf.value.src = "world.topo.bathy.200408.2048x2048.png";// "earth.png";// "crate.gif";
     }
 
     function degToRad(degrees) {
@@ -86,23 +81,17 @@ function webGLStart() {
     }
 
     function drawScene(pkg) {
-        gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
-        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-        mat4.perspective(45, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0, pMatrix);
+        var pMatrix = mat4.create();
+        mat4.perspective(45, MyWebGL.canvas.width / MyWebGL.canvas.height, 0.1, 100.0, pMatrix);
 
+        var mvMatrix = mat4.create();
         mat4.identity(mvMatrix);
 
         mat4.translate(mvMatrix, [0.0, 0.0, z]);
 
         mat4.rotate(mvMatrix, degToRad(xRot), [1, 0, 0]);
         mat4.rotate(mvMatrix, degToRad(yRot), [0, 1, 0]);
-
-        MyWebGL.setAttribData(pkg);
-
-        gl.activeTexture(gl.TEXTURE0);
-        gl.bindTexture(gl.TEXTURE_2D, crateTexture);
-        gl.uniform1i(pkg.program.samplerUniform, 0);
 
         var lighting = document.getElementById("lighting").checked;
 
@@ -138,6 +127,16 @@ function webGLStart() {
         param.args["uMVMatrix"]          = mvMatrix;
         param.args["uNMatrix"]           = normalMatrix;
 
+        gl.viewport(0, 0, MyWebGL.canvas.width, MyWebGL.canvas.height);
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+        MyWebGL.setAttribData(pkg);
+
+        gl.uniform1i(tex_inf.locTexture, 0);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, tex_inf.Texture);
+
+
         MyWebGL.copyParamArgsValue(param, pkg);
 
         MyWebGL.setUniformsData(pkg);
@@ -146,15 +145,6 @@ function webGLStart() {
         gl.drawElements(gl.TRIANGLES, cubeVertexIndexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
     }
 
-    function animate() {
-        var timeNow = new Date().getTime();
-        if (lastTime != 0) {
-            var elapsed = timeNow - lastTime;
-        }
-        lastTime = timeNow;
-    }
-
-
     function tick() {
         requestAnimFrame(tick);
         if (!imageLoaded) {
@@ -162,7 +152,6 @@ function webGLStart() {
         }
 
         drawScene(pkg);
-        animate();
     }
 
     var time = new Date();
@@ -174,8 +163,6 @@ function webGLStart() {
     var canvas = document.getElementById("lesson07-canvas");
     MyWebGL = CreateWebGLLib(canvas);
     gl = MyWebGL.getGL();
-    gl.viewportWidth = canvas.width;
-    gl.viewportHeight = canvas.height;
 
     initShaders(pkg);
     param = initBuffers(pkg, gl);

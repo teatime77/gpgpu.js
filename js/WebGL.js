@@ -31,6 +31,7 @@ function CreateWebGLLib(canvas) {
                 canvas.height = 32;
                 document.body.appendChild(canvas);
             }
+            this.canvas = canvas;
 
             // -- Init WebGL Context
             gl = canvas.getContext('webgl2', { antialias: false });
@@ -207,6 +208,18 @@ function CreateWebGLLib(canvas) {
             }
         }
 
+        texImage(dim, tex_inf) {
+            if (dim == gl.TEXTURE_2D) {
+
+                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, tex_inf.value.Cols / 4, tex_inf.value.Rows, 0, gl.RGBA, gl.FLOAT, tex_inf.value.dt); chk();
+            }
+            else {
+                Assert(dim == gl.TEXTURE_3D, "Set-Tex");
+
+                gl.texImage3D(gl.TEXTURE_3D, 0, gl.RGBA32F, tex_inf.value.Cols / 4, tex_inf.value.Rows, tex_inf.value.Depth, 0, gl.RGBA, gl.FLOAT, tex_inf.value.dt); chk();
+            }
+        }
+
         makeTexture(pkg) {
             for (var i = 0; i < pkg.textures.length; i++) {
                 var tex_inf = pkg.textures[i];
@@ -237,15 +250,8 @@ function CreateWebGLLib(canvas) {
 
                 gl.activeTexture(this.TEXTUREs[i]); chk();
                 gl.bindTexture(dim, tex_inf.Texture); chk();
-                if (dim == gl.TEXTURE_2D) {
 
-                    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, tex_inf.value.Cols / 4, tex_inf.value.Rows, 0, gl.RGBA, gl.FLOAT, tex_inf.value.dt); chk();
-                }
-                else {
-                    Assert(dim == gl.TEXTURE_3D, "Set-Tex");
-
-                    gl.texImage3D(gl.TEXTURE_3D, 0, gl.RGBA32F, tex_inf.value.Cols / 4, tex_inf.value.Rows, tex_inf.value.Depth, 0, gl.RGBA, gl.FLOAT, tex_inf.value.dt); chk();
-                }
+                this.texImage(dim, tex_inf);
             }
         }
 

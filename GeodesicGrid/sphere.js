@@ -455,6 +455,10 @@ function initBuffers(pkg, gl) {
             "uv1": 1,
             */
         }
+        ,
+        fixed: [
+
+        ]
     };
 
     MyWebGL.parseShader(pkg, param);
