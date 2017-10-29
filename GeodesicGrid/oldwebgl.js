@@ -6,6 +6,7 @@ var cubeVertexPositionBuffer;
 var cubeVertexNormalBuffer;
 var cubeVertexTextureCoordBuffer;
 var cubeVertexIndexBuffer;
+var texImg;
 
 function webGLStart() {
     var gl;
@@ -37,28 +38,8 @@ function webGLStart() {
         tex_inf.Texture = gl.createTexture();
 
         gl.bindTexture(gl.TEXTURE_2D, tex_inf.Texture);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_NEAREST);
-
-//        gl.texParameteri(gl.TEXTURE_2D, gl.GL_TEXTURE_WRAP_S, gl.GL_MIRRORED_REPEAT); //GL_REPEAT
-//        gl.texParameteri(gl.TEXTURE_2D, gl.GL_TEXTURE_WRAP_T, gl.GL_MIRRORED_REPEAT); //GL_REPEAT
-
-        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, tex_inf.value);
-        gl.generateMipmap(gl.TEXTURE_2D);
 
         gl.bindTexture(gl.TEXTURE_2D, null);
-    }
-
-    function initTexture() {
-        tex_inf.value = new Image();
-
-        tex_inf.value.onload = function () {
-            handleLoadedTexture();
-            imageLoaded = true;
-        }
-
-        tex_inf.value.src = "world.topo.bathy.200408.2048x2048.png";// "earth.png";// "crate.gif";
     }
 
     function degToRad(degrees) {
@@ -132,9 +113,14 @@ function webGLStart() {
 
         MyWebGL.setAttribData(pkg);
 
+        /*
         gl.uniform1i(tex_inf.locTexture, 0);
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, tex_inf.Texture);
+        */
+
+        // テクスチャの値のセット
+        MyWebGL.setTextureData(pkg);
 
 
         MyWebGL.copyParamArgsValue(param, pkg);
@@ -164,9 +150,22 @@ function webGLStart() {
     MyWebGL = CreateWebGLLib(canvas);
     gl = MyWebGL.getGL();
 
-    initShaders(pkg);
-    param = initBuffers(pkg, gl);
-    initTexture();
+
+    texImg = new Image();
+    texImg.onload = function () {
+
+        initShaders(pkg);
+        param = initBuffers(pkg, gl);
+
+        // テクスチャの初期処理
+        MyWebGL.makeTexture(pkg);
+        //            handleLoadedTexture();
+        imageLoaded = true;
+    }
+
+    texImg.src = "world.topo.bathy.200408.2048x2048.png";// "earth.png";// "crate.gif";
+
+
 
     gl.clearColor(0.0, 0.0, 0.0, 1.0);
     gl.enable(gl.DEPTH_TEST);
@@ -188,4 +187,53 @@ function webGLStart() {
     }
 
     tick();
+}
+
+
+function initBuffers(pkg, gl) {
+    var ret = makeEarthBuffers();
+
+    var param = {
+        vertexShader: vertexShaderText,
+        fragmentShader: fragmentShaderText
+        ,
+        args: {
+            "aVertexPosition": ret.vertex_array,
+            "aVertexNormal": ret.normal_array,
+            "aTextureCoord": ret.texture_array,
+
+            "uUseLighting": 1,
+            "uAmbientColor": 1,
+            "uDirectionalColor": 1,
+            "uLightingDirection": 1,
+            "uPMatrix": 1,
+            "uMVMatrix": 1,
+            "uNMatrix": 1,
+            "uSampler": texImg,
+            /*
+            "vTextureCoord": 1,
+            "vLightWeighting": 1,
+            "uv0": 1,
+            "uv1": 1,
+            */
+        }
+        ,
+        fixed: [
+
+        ]
+    };
+
+    MyWebGL.parseShader(pkg, param);
+    MyWebGL.makeAttrib(pkg);
+
+    cubeVertexIndexBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, cubeVertexIndexBuffer);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, ret.idx_array, gl.STATIC_DRAW);
+    cubeVertexIndexBuffer.itemSize = 1;
+    cubeVertexIndexBuffer.numItems = ret.idx_array.length;
+
+    // ユニフォーム変数の初期処理
+    MyWebGL.initUniform(pkg);
+
+    return param;
 }

@@ -80,71 +80,78 @@ function CreateWebGLLib(canvas) {
             pkg.uniforms = [];
             pkg.textures = [];
             pkg.varyings = [];
-            var lines = param.vertexShader.split(/(\r\n|\r|\n)+/);
-            for(let line of lines) {
+            for(let shader_text of[ param.vertexShader,  param.fragmentShader ]) {
 
-                var tokens = line.trim().split(/[\s\t]+/);
-                if (tokens.length < 3) {
-                    continue;
-                }
+                var lines = shader_text.split(/(\r\n|\r|\n)+/);
+                for(let line of lines) {
 
-                var tkn0 = tokens[0];
-                var tkn1 = tokens[1];
-                var tkn2 = tokens[2];
-
-                if (tkn0 != "in" && tkn0 != "uniform" && tkn0 != "out") {
-                    continue;
-                }
-                Assert(tkn1 == "int" || tkn1 == "float" || tkn1 == "vec2" || tkn1 == "vec3" || tkn1 == "vec4" ||
-                    tkn1 == "sampler2D" || tkn1 == "sampler3D" ||
-                    tkn1 == "mat4" || tkn1 == "mat3" || tkn1 == "bool");
-
-
-                var arg_name;
-                var is_array = false;
-                var k1 = tkn2.indexOf("[");
-                if (k1 != -1) {
-                    arg_name = tkn2.substring(0, k1);
-                    is_array = true;
-                }
-                else{
-                    var k2 = tkn2.indexOf(";");
-                    if (k2 != -1) {
-                        arg_name = tkn2.substring(0, k2);
-                    }
-                    else{
-                        arg_name = tkn2;
-                    }
-                }
-
-                var arg_val = param.args[arg_name];
-                if(arg_val == undefined){
-                    if(tokens[0] == "out"){
+                    var tokens = line.trim().split(/[\s\t]+/);
+                    if (tokens.length < 3) {
                         continue;
                     }
-                }
 
-                var arg_inf = { name: arg_name, value: arg_val, type: tkn1, isArray: is_array };
+                    var tkn0 = tokens[0];
+                    var tkn1 = tokens[1];
+                    var tkn2 = tokens[2];
 
-                switch (tokens[0]) {
-                    case "in":
-                        pkg.attributes.push(arg_inf);
-                        break;
+                    if (tkn0 != "in" && tkn0 != "uniform" && tkn0 != "out") {
+                        continue;
+                    }
+                    if (tkn0 != "uniform" && shader_text == param.fragmentShader) {
 
-                    case "uniform":
-                        if (tkn1 == "sampler2D" || tkn1 == "sampler3D") {
+                        continue;
+                    }
+                    Assert(tkn1 == "int" || tkn1 == "float" || tkn1 == "vec2" || tkn1 == "vec3" || tkn1 == "vec4" ||
+                        tkn1 == "sampler2D" || tkn1 == "sampler3D" ||
+                        tkn1 == "mat4" || tkn1 == "mat3" || tkn1 == "bool");
 
-                            pkg.textures.push(arg_inf);
+
+                    var arg_name;
+                    var is_array = false;
+                    var k1 = tkn2.indexOf("[");
+                    if (k1 != -1) {
+                        arg_name = tkn2.substring(0, k1);
+                        is_array = true;
+                    }
+                    else{
+                        var k2 = tkn2.indexOf(";");
+                        if (k2 != -1) {
+                            arg_name = tkn2.substring(0, k2);
                         }
-                        else {
-                            pkg.uniforms.push(arg_inf);
-
+                        else{
+                            arg_name = tkn2;
                         }
-                        break;
+                    }
 
-                    case "out":
-                        pkg.varyings.push(arg_inf);
-                        break;
+                    var arg_val = param.args[arg_name];
+                    if(arg_val == undefined){
+                        if(tokens[0] == "out"){
+                            continue;
+                        }
+                    }
+
+                    var arg_inf = { name: arg_name, value: arg_val, type: tkn1, isArray: is_array };
+
+                    switch (tokens[0]) {
+                        case "in":
+                            pkg.attributes.push(arg_inf);
+                            break;
+
+                        case "uniform":
+                            if (tkn1 == "sampler2D" || tkn1 == "sampler3D") {
+
+                                pkg.textures.push(arg_inf);
+                            }
+                            else {
+                                pkg.uniforms.push(arg_inf);
+
+                            }
+                            break;
+
+                        case "out":
+                            pkg.varyings.push(arg_inf);
+                            break;
+                    }
                 }
             }
         }
@@ -233,10 +240,26 @@ function CreateWebGLLib(canvas) {
                 gl.activeTexture(this.TEXTUREs[i]); chk();
                 gl.bindTexture(dim, tex_inf.Texture); chk();
 
-                gl.texParameteri(dim, gl.TEXTURE_MAG_FILTER, gl.NEAREST); chk();
-                gl.texParameteri(dim, gl.TEXTURE_MIN_FILTER, gl.NEAREST); chk();
-                gl.texParameteri(dim, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); chk();
-                gl.texParameteri(dim, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE); chk();
+                if (tex_inf.value instanceof Image) {
+
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR); chk();
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_NEAREST); chk();
+
+                    //        gl.texParameteri(gl.TEXTURE_2D, gl.GL_TEXTURE_WRAP_S, gl.GL_MIRRORED_REPEAT); //GL_REPEAT
+                    //        gl.texParameteri(gl.TEXTURE_2D, gl.GL_TEXTURE_WRAP_T, gl.GL_MIRRORED_REPEAT); //GL_REPEAT
+
+                    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true); chk();
+                    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, tex_inf.value); chk();
+                    gl.generateMipmap(gl.TEXTURE_2D); chk();
+                }
+                else {
+
+                    gl.texParameteri(dim, gl.TEXTURE_MAG_FILTER, gl.NEAREST); chk();
+                    gl.texParameteri(dim, gl.TEXTURE_MIN_FILTER, gl.NEAREST); chk();
+                    gl.texParameteri(dim, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); chk();
+                    gl.texParameteri(dim, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE); chk();
+                }
+
             }
         }
 
@@ -251,7 +274,13 @@ function CreateWebGLLib(canvas) {
                 gl.activeTexture(this.TEXTUREs[i]); chk();
                 gl.bindTexture(dim, tex_inf.Texture); chk();
 
-                this.texImage(dim, tex_inf);
+                if (tex_inf.value instanceof Image) {
+
+    }
+                else {
+
+                    this.texImage(dim, tex_inf);
+                }
             }
         }
 
@@ -280,12 +309,16 @@ function CreateWebGLLib(canvas) {
 
             pkg.key = param.key;
 
+            if(! param.fragmentShader){
+
+                param.fragmentShader  = Shaders['fs-transform'];
+            }
+
             this.parseShader(pkg, param);
 
-            var fsrc = Shaders['fs-transform'];
             var vertex_shader = this.makeShader(gl.VERTEX_SHADER, param.vertexShader);
 
-            var fragment_shader = this.makeShader(gl.FRAGMENT_SHADER, fsrc);
+            var fragment_shader = this.makeShader(gl.FRAGMENT_SHADER, param.fragmentShader);
 
             pkg.program = this.makeProgram(vertex_shader, fragment_shader, pkg.varyings);
             gl.useProgram(pkg.program); chk();
