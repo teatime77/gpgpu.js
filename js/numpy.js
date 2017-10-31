@@ -14,12 +14,12 @@ class TNumpy {
     dot(A, B) {
         Assert(A instanceof Mat && B instanceof Mat && A.Cols == B.Rows && !A.columnMajor && !B.columnMajor, "d-o-t");
 
-        var key = "" + A.Rows + "," + A.Cols + "," + B.Cols;
-        if (vDot[key] == undefined) {
-            vDot[key] = 0;
+        var id = "" + A.Rows + "," + A.Cols + "," + B.Cols;
+        if (vDot[id] == undefined) {
+            vDot[id] = 0;
         }
-        if (!isFloat64 && vDot[key] < 3 && A.Cols % 4 == 0) {
-            vDot[key]++;
+        if (!isFloat64 && vDot[id] < 3 && A.Cols % 4 == 0) {
+            vDot[id]++;
 
             var use_tex = (10 * 12 * 30 < A.Rows * A.Cols * B.Cols);
             var dot_val = new Float32Array(A.Rows * B.Cols);
@@ -58,7 +58,7 @@ class TNumpy {
             //        console.log("A_len:[" + A_len + "] B_len:[" + B_len + "] repeat:[" + repeat + "]");
 
             param.vertexShader = Shaders[vs_id].replace(/_repeat_/g, repeat).replace(/_A_len_/g, A_len).replace(/_B_len_/g, B_len);
-            param.key = vs_id + ":" + A.Rows + "," + A.Cols + "," + B.Rows + "," + B.Cols;
+            param.id = vs_id + ":" + A.Rows + "," + A.Cols + "," + B.Rows + "," + B.Cols;
 
             var startTime = new Date();
             WebGL2.compute(param);
@@ -73,7 +73,7 @@ class TNumpy {
             var diff = C1.Sub(C2).Abs().Sum() / (C1.Rows * C1.Cols);
             Assert(diff < 0.001, "dot-diff");
 
-            console.log("dot:" + key + " tex:" + use_tex + " " + t1 + "ms  CPU:" + t2 + "ms 誤差 " + diff.toFixed(7));
+            console.log("dot:" + id + " tex:" + use_tex + " " + t1 + "ms  CPU:" + t2 + "ms 誤差 " + diff.toFixed(7));
             return C2;
         }
 

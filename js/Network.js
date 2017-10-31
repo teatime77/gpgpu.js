@@ -218,16 +218,16 @@ class ConvolutionalLayer extends Layer{
 
         var batch_vec4_count = sub_batch_size / 4;
         var vs_id = "ConvolutionalLayer-forward";
-        var param_key = vs_id + ":" + this.filterSize + ":" + this.featureCount + ":" + this.imgRows + ":" + this.imgCols + ":" + sub_batch_size;
+        var param_id = vs_id + ":" + this.filterSize + ":" + this.featureCount + ":" + this.imgRows + ":" + this.imgCols + ":" + sub_batch_size;
         var param;
 
-        if (this.param[param_key] == undefined) {
+        if (this.param[param_id] == undefined) {
 
             param = {};
 
-            param.key = param_key;
+            param.id = param_id;
 
-            this.param[param.key] = param;
+            this.param[param.id] = param;
 
             param.sub_prev_activation = new Mat(prev_Layer.imgRows, prev_Layer.imgCols, sub_batch_size);
             param.sub_z = new Mat(this.unitSize, sub_batch_size);
@@ -256,7 +256,7 @@ class ConvolutionalLayer extends Layer{
         }
         else {
 
-            param = this.param[param_key];
+            param = this.param[param_id];
         }
 
         if (sub_batch_size == this.batchLength) {
@@ -264,7 +264,7 @@ class ConvolutionalLayer extends Layer{
             param.sub_prev_activation.dt = prev_activation.dt;
             param.sub_z.dt = this.z.dt;
             param.sub_activation.dt = this.activation.dt;
-            WebGL2.compute(this.param[param_key]);
+            WebGL2.compute(this.param[param_id]);
         }
         else {
 
@@ -280,7 +280,7 @@ class ConvolutionalLayer extends Layer{
                     all_idx += this.batchLength;
                 }
 
-                WebGL2.compute(this.param[param_key]);
+                WebGL2.compute(this.param[param_id]);
                 
                 all_idx = sub_batch_base;
                 sub_idx = 0;
@@ -450,16 +450,16 @@ class ConvolutionalLayer extends Layer{
 
         var batch_vec4_count = this.batchLength / 4;
         var vs_id = "ConvolutionalLayer-backward";
-        var param_key = vs_id + ":" + this.featureCount + ":" + this.filterSize + ":" + this.imgRows + ":" + this.imgCols + ":" + this.batchLength;
+        var param_id = vs_id + ":" + this.featureCount + ":" + this.filterSize + ":" + this.imgRows + ":" + this.imgCols + ":" + this.batchLength;
         var param;
 
-        if (this.param[param_key] == undefined) {
+        if (this.param[param_id] == undefined) {
 
             param = {};
 
-            param.key = param_key;
+            param.id = param_id;
 
-            this.param[param.key] = param;
+            this.param[param.id] = param;
 
             param.elementCount = this.featureCount * this.filterSize * this.filterSize;
 
@@ -482,7 +482,7 @@ class ConvolutionalLayer extends Layer{
         }
         else {
 
-            param = this.param[param_key];
+            param = this.param[param_id];
         }
 
         WebGL2.compute(param);
@@ -795,7 +795,7 @@ class Network {
         };
 
         param.vertexShader = Shaders[vs_id];
-        param.key = vs_id;
+        param.id = vs_id;
 
         WebGL2.compute(param);
         for (var i = 0; i < dt.length; i++) {
@@ -1256,7 +1256,7 @@ function AttribTest(n){
     };
 
     param.vertexShader = Shaders[vs_id];
-    param.key = vs_id;
+    param.id = vs_id;
 
     WebGL2.compute(param);
 

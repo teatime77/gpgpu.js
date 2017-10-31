@@ -51,8 +51,8 @@ function CreateWebGLLib(canvas) {
         }
 
         WebGLClear() {
-            for (var key in this.packages) {
-                var pkg = this.packages[key];
+            for (var id in this.packages) {
+                var pkg = this.packages[id];
 
                 gl.bindBuffer(gl.ARRAY_BUFFER, null); chk();
                 gl.deleteBuffer(pkg.idxBuffer); chk();
@@ -71,7 +71,7 @@ function CreateWebGLLib(canvas) {
                 pkg.textures.forEach(x => gl.deleteTexture(x.Texture), chk())
 
                 gl.deleteProgram(pkg.program); chk();
-                console.log("clear pkg:" + pkg.key);
+                console.log("clear pkg:" + pkg.id);
             }
         }
 
@@ -327,9 +327,9 @@ function CreateWebGLLib(canvas) {
 
         makePackage(param) {
             var pkg = {};
-            this.packages[param.key] = pkg;
+            this.packages[param.id] = pkg;
 
-            pkg.key = param.key;
+            pkg.id = param.id;
 
             if(! param.fragmentShader){
 
@@ -446,7 +446,7 @@ function CreateWebGLLib(canvas) {
         }
 
         compute(param) {
-            var pkg = this.packages[param.key];
+            var pkg = this.packages[param.id];
             if (!pkg) {
 
                 pkg = this.makePackage(param);

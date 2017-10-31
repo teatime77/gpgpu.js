@@ -119,7 +119,7 @@ function initBuffers(img) {
     var ret = makeEarthBuffers();
 
     var param = {
-        key: "Earth",
+        id: "Earth",
         vertexShader: vertexShaderText,
         fragmentShader: fragmentShaderText
         ,
