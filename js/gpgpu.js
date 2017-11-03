@@ -241,6 +241,7 @@ function CreateWebGLLib(canvas) {
                 gl.bindTexture(dim, tex_inf.Texture); chk();
 
                 if (tex_inf.value instanceof Image) {
+                    // テクスチャが画像の場合
 
                     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR); chk();
                     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_NEAREST); chk();
@@ -253,13 +254,13 @@ function CreateWebGLLib(canvas) {
                     gl.generateMipmap(gl.TEXTURE_2D); chk();
                 }
                 else {
+                    // テクスチャが画像でない場合
 
                     gl.texParameteri(dim, gl.TEXTURE_MAG_FILTER, gl.NEAREST); chk();
                     gl.texParameteri(dim, gl.TEXTURE_MIN_FILTER, gl.NEAREST); chk();
                     gl.texParameteri(dim, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); chk();
                     gl.texParameteri(dim, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE); chk();
                 }
-
             }
         }
 
@@ -275,9 +276,11 @@ function CreateWebGLLib(canvas) {
                 gl.bindTexture(dim, tex_inf.Texture); chk();
 
                 if (tex_inf.value instanceof Image) {
+                    // テクスチャが画像の場合
 
                 }
                 else {
+                    // テクスチャが画像でない場合
 
                     this.texImage(dim, tex_inf);
                 }
@@ -299,7 +302,7 @@ function CreateWebGLLib(canvas) {
         }
 
         draw(pkg) {
-            gl.viewport(0, 0, MyWebGL.canvas.width, this.canvas.height); chk();
+            gl.viewport(0, 0, this.canvas.width, this.canvas.height); chk();
             gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT); chk();
 
             gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, pkg.VertexIndexBufferInf.buffer); chk();
@@ -325,15 +328,17 @@ function CreateWebGLLib(canvas) {
             pkg.uniforms.forEach(u => u.locUniform = gl.getUniformLocation(pkg.program, u.name), chk());
         }
 
-        makePackage(param) {
+        build(param) {
             var pkg = {};
             this.packages[param.id] = pkg;
 
             pkg.id = param.id;
 
-            if(! param.fragmentShader){
+            if (!param.fragmentShader) {
+                // フラグメントシェーダが指定されてない場合
 
-                param.fragmentShader  = Shaders['fs-transform'];
+                // デフォルトのフラグメントシェーダをセットする。
+                param.fragmentShader = Shaders['fs-transform'];
             }
 
             this.parseShader(pkg, param);
@@ -356,6 +361,7 @@ function CreateWebGLLib(canvas) {
             this.makeAttrib(pkg);
 
             if (pkg.varyings.length != 0) {
+                //  varying変数がある場合
 
                 for (let varying of pkg.varyings) {
                     var out_buffer_size = this.vecDim(varying.type) * pkg.attribElementCount * Float32Array.BYTES_PER_ELEMENT;
@@ -449,7 +455,7 @@ function CreateWebGLLib(canvas) {
             var pkg = this.packages[param.id];
             if (!pkg) {
 
-                pkg = this.makePackage(param);
+                pkg = this.build(param);
             }
             else {
 
@@ -469,10 +475,12 @@ function CreateWebGLLib(canvas) {
             this.setUniformsData(pkg);
 
             if (pkg.varyings.length == 0) {
+                //  varying変数がない場合
 
                 this.draw(pkg);
             }
             else {
+                //  varying変数がある場合
 
                 gl.enable(gl.RASTERIZER_DISCARD); chk();
 
@@ -511,7 +519,6 @@ function CreateWebGLLib(canvas) {
                 // 終了処理
                 gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null); chk();
             }
-
 
             gl.useProgram(null); chk();
         }
