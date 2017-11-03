@@ -433,3 +433,52 @@ function makeEarthBuffers() {
 }
 
 
+function makePlaneBuffers(nx, ny) {
+    // 位置の配列
+    var vertices = [];
+
+    // 法線の配列
+    var vertexNormals = [];
+
+    // テクスチャ座標
+    var textureCoords = [];
+
+    for (var i = 0; i < ny; i++) {
+        var y = i / (ny - 1);
+        for (var j = 0; j < nx; j++) {
+            var x = j / (nx - 1);
+
+            vertices.push(2 * x - 1, 2 * y - 1, 0);
+            vertexNormals.push(0, 0, 1);
+            textureCoords.push(x, y);
+        }
+    }
+
+    // 頂点インデックス
+    var vertexIndices = [];
+
+    for (var i = 0; i < ny - 1; i++) {
+        for (var j = 0; j < nx - 1; j++) {
+            var i00 =  i      * nx + j;
+            var i01 =  i      * nx + j + 1;
+            var i10 = (i + 1) * nx + j;
+            var i11 = (i + 1) * nx + j + 1;
+            var cnt = vertices.length / 3;
+            if(cnt <= i00 || cnt <= i01 || cnt <= i10 || cnt <= i11){
+                console.log("");
+            }
+
+            vertexIndices.push(i00, i10, i01);
+            vertexIndices.push(i01, i10, i11);
+        }
+    }
+
+    return {
+        vertex_array  : new Float32Array(vertices),
+        normal_array  : new Float32Array(vertexNormals),
+        texture_array : new Float32Array(textureCoords),
+        idx_array     : new Uint16Array(vertexIndices)
+    };
+}
+
+
