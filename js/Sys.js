@@ -2,7 +2,7 @@
     if (x instanceof Number) {
         return this * x;
     }
-    else if (x instanceof Mat) {
+    else if (x instanceof ArrayView) {
         return x.Mul(this);
     }
     Assert(false, "Number-Mul");

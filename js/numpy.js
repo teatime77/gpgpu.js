@@ -8,25 +8,25 @@ class TNumpy {
 
     zeros(shape) {
         Assert(shape.length == 2, "zero-s");
-        return new Mat(shape[0], shape[1]);
+        return new ArrayView(shape[0], shape[1]);
     }
 
     dot(A, B) {
-        Assert(A instanceof Mat && B instanceof Mat && A.Cols == B.Rows && !A.columnMajor && !B.columnMajor, "d-o-t");
+        Assert(A instanceof ArrayView && B instanceof ArrayView && A.ncol == B.nrow && !A.columnMajor && !B.columnMajor, "d-o-t");
 
-        var id = "" + A.Rows + "," + A.Cols + "," + B.Cols;
+        var id = "" + A.nrow + "," + A.ncol + "," + B.ncol;
         if (vDot[id] == undefined) {
             vDot[id] = 0;
         }
-        if (!isFloat64 && vDot[id] < 3 && A.Cols % 4 == 0) {
+        if (!isFloat64 && vDot[id] < 3 && A.ncol % 4 == 0) {
             vDot[id]++;
 
-            var use_tex = (10 * 12 * 30 < A.Rows * A.Cols * B.Cols);
-            var dot_val = new Float32Array(A.Rows * B.Cols);
+            var use_tex = (10 * 12 * 30 < A.nrow * A.ncol * B.ncol);
+            var dot_val = new Float32Array(A.nrow * B.ncol);
 
             var param = {};
 
-            param.elementCount = A.Rows * B.Cols;
+            param.elementCount = A.nrow * B.ncol;
 
             var vs_id;
             if (use_tex) {
@@ -36,7 +36,7 @@ class TNumpy {
                     "idx_f": MakeFloat32Index(param.elementCount),
                     "A_Tex": A,
                     "B_Tex": B.T(),
-                    "B_Cols": B.Cols,
+                    "B_Cols": B.ncol,
                     'dot_val': dot_val,
                 };
             }
@@ -45,24 +45,24 @@ class TNumpy {
 
                 param.args = {
                     "idx_f": MakeFloat32Index(param.elementCount),
-                    "B_Cols": B.Cols,
+                    "B_Cols": B.ncol,
                     "A": A,
                     "B": B.T(),
                     'dot_val': dot_val,
                 };
             }
 
-            var A_len = (A.Rows * A.Cols / 4).toString();
-            var B_len = (B.Rows * B.Cols / 4).toString();
-            var repeat = (A.Cols / 4).toString();
+            var A_len = (A.nrow * A.ncol / 4).toString();
+            var B_len = (B.nrow * B.ncol / 4).toString();
+            var repeat = (A.ncol / 4).toString();
             //        console.log("A_len:[" + A_len + "] B_len:[" + B_len + "] repeat:[" + repeat + "]");
 
             param.vertexShader = Shaders[vs_id].replace(/_repeat_/g, repeat).replace(/_A_len_/g, A_len).replace(/_B_len_/g, B_len);
-            param.id = vs_id + ":" + A.Rows + "," + A.Cols + "," + B.Rows + "," + B.Cols;
+            param.id = vs_id + ":" + A.nrow + "," + A.ncol + "," + B.nrow + "," + B.ncol;
 
             var startTime = new Date();
             WebGL2.compute(param);
-            var C1 = new Mat(A.Rows, B.Cols, dot_val);
+            var C1 = new ArrayView(A.nrow, B.ncol, dot_val);
 
             var t1 = new Date() - startTime;
 
@@ -70,7 +70,7 @@ class TNumpy {
             var C2 = A.Dot(B);
             var t2 = new Date() - startTime;
 
-            var diff = C1.Sub(C2).Abs().Sum() / (C1.Rows * C1.Cols);
+            var diff = C1.Sub(C2).Abs().Sum() / (C1.nrow * C1.ncol);
             Assert(diff < 0.001, "dot-diff");
 
             console.log("dot:" + id + " tex:" + use_tex + " " + t1 + "ms  CPU:" + t2 + "ms 誤差 " + diff.toFixed(7));
@@ -81,7 +81,7 @@ class TNumpy {
     }
 
     argmax(x) {
-        Assert(x instanceof Mat && x.Cols == 1, "argmax");
+        Assert(x instanceof ArrayView && x.ncol == 1, "argmax");
         var idx = x.dt.indexOf(Math.max.apply(null, x.dt));
         Assert(idx != -1, "argmax");
         return idx;
@@ -115,11 +115,11 @@ class TNumpyRandom {
                 return this.NextDouble();
 
             case 1:
-                m = new Mat(1, arguments[0]);
+                m = new ArrayView(1, arguments[0]);
                 break;
 
             case 2:
-                m = new Mat(arguments[0], arguments[1]);
+                m = new ArrayView(arguments[0], arguments[1]);
                 break;
 
             default:

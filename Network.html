@@ -170,10 +170,10 @@
 
                             for (var i = 0; i < TrainingImgCnt; i++) {
                                 var st = 16 + wh * i;
-                                var x = new Mat(wh, 1, new Float32Array(TrainingDataImage.slice(st, st + wh)));
+                                var x = new ArrayView(wh, 1, new Float32Array(TrainingDataImage.slice(st, st + wh)));
                                 x.dt = x.dt.map(a => a / 256.0);
                                 var n = TrainingDataLabel[8 + i];
-                                var y = new Mat(10, 1, new Float32Array(10));
+                                var y = new ArrayView(10, 1, new Float32Array(10));
                                 y.dt[n] = 1;
 
                                 TrainingData.push([x, y]);

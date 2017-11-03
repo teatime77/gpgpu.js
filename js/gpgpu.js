@@ -197,7 +197,7 @@ function CreateWebGLLib(canvas) {
         makeAttrib(pkg) {
             for (let attrib of pkg.attributes) {
                 var attrib_dim = this.vecDim(attrib.type);
-                var attrib_len = attrib.value instanceof Mat ? attrib.value.dt.length : attrib.value.length;
+                var attrib_len = attrib.value instanceof ArrayView ? attrib.value.dt.length : attrib.value.length;
                 var elemen_count = attrib_len / attrib_dim;
 
                 if (pkg.elementCount == undefined) {
@@ -218,12 +218,12 @@ function CreateWebGLLib(canvas) {
         texImage(dim, tex_inf) {
             if (dim == gl.TEXTURE_2D) {
 
-                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, tex_inf.value.Cols / 4, tex_inf.value.Rows, 0, gl.RGBA, gl.FLOAT, tex_inf.value.dt); chk();
+                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, tex_inf.value.ncol / 4, tex_inf.value.nrow, 0, gl.RGBA, gl.FLOAT, tex_inf.value.dt); chk();
             }
             else {
                 Assert(dim == gl.TEXTURE_3D, "Set-Tex");
 
-                gl.texImage3D(gl.TEXTURE_3D, 0, gl.RGBA32F, tex_inf.value.Cols / 4, tex_inf.value.Rows, tex_inf.value.Depth, 0, gl.RGBA, gl.FLOAT, tex_inf.value.dt); chk();
+                gl.texImage3D(gl.TEXTURE_3D, 0, gl.RGBA32F, tex_inf.value.ncol / 4, tex_inf.value.nrow, tex_inf.value.shape[tex_inf.value.shape.length - 3], 0, gl.RGBA, gl.FLOAT, tex_inf.value.dt); chk();
             }
         }
 
@@ -391,9 +391,9 @@ function CreateWebGLLib(canvas) {
         setUniformsData(pkg) {
             for (var i = 0; i < pkg.uniforms.length; i++) {
                 var u = pkg.uniforms[i];
-                if (u.value instanceof Mat || u.value instanceof Float32Array) {
+                if (u.value instanceof ArrayView || u.value instanceof Float32Array) {
 
-                    var val = u.value instanceof Mat ? u.value.dt : u.value;
+                    var val = u.value instanceof ArrayView ? u.value.dt : u.value;
 
                     switch (u.type) {
                         case "mat4":
@@ -503,7 +503,7 @@ function CreateWebGLLib(canvas) {
                     gl.bindBuffer(gl.ARRAY_BUFFER, varying.feedbackBuffer); chk();
 
                     var out_buf = varying.value;
-                    if (out_buf instanceof Mat) {
+                    if (out_buf instanceof ArrayView) {
                         out_buf = out_buf.dt;
                     }
 

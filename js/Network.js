@@ -19,17 +19,17 @@ class Lap {
     constructor(v){
         this.lastTime = new Date();
         this.lapIdx = 0;
-        this.Times = v;
+        this.lapTimes = v;
     }
 
     Time(){
         var prev_last_time = this.lastTime;
         this.lastTime = new Date();
 
-        if(this.Times.length <= this.lapIdx){
-            this.Times.push(0);
+        if(this.lapTimes.length <= this.lapIdx){
+            this.lapTimes.push(0);
         }
-        this.Times[this.lapIdx] += this.lastTime - prev_last_time;
+        this.lapTimes[this.lapIdx] += this.lastTime - prev_last_time;
         this.lapIdx++;
     }
 }
@@ -89,7 +89,7 @@ class FullyConnectedLayer extends Layer{
     forward() {
         var lap = new Lap(this.fwTime);
 
-        this.batchLength = this.prevLayer.activation.Cols;
+        this.batchLength = this.prevLayer.activation.ncol;
         lap.Time();
 
         this.z = np.dot(this.weight, this.prevLayer.activation).AddV(this.bias);
@@ -110,7 +110,7 @@ class FullyConnectedLayer extends Layer{
             if (isDebug) {
 
                 // cost = 1/2 * Σ xi*xi
-                this.cost = xrange(this.costDerivative.Cols).map(c => this.costDerivative.Col(c).dt.map(x => x * x).reduce((x, y) => x + y)).map(x => x / 2);
+                this.cost = xrange(this.costDerivative.ncol).map(c => this.costDerivative.Col(c).dt.map(x => x * x).reduce((x, y) => x + y)).map(x => x / 2);
             }
         }
         else {
@@ -132,10 +132,10 @@ class FullyConnectedLayer extends Layer{
 
             this.nablaBiases = this.Delta;
             // constructor(rows, cols, init, column_major, depth)
-            this.nablaWeights = new Mat(this.batchLength, this.weight.Rows, this.weight.Cols);
+            this.nablaWeights = new ArrayView(this.batchLength, this.weight.nrow, this.weight.ncol);
             for (var batch_idx = 0; batch_idx < this.batchLength; batch_idx++) {
-                for (var r = 0; r < this.weight.Rows; r++) {
-                    for (var c = 0; c < this.weight.Cols; c++) {
+                for (var r = 0; r < this.weight.nrow; r++) {
+                    for (var c = 0; c < this.weight.ncol; c++) {
                         var f = this.Delta.At(r, batch_idx) * this.prevLayer.activation.At(c, batch_idx);
                         this.nablaWeights.Set3(batch_idx, r, c, f);
                     }
@@ -186,12 +186,12 @@ class ConvolutionalLayer extends Layer{
         this.unitSize = this.imgRows * this.imgCols * this.featureCount;
 
         // xrange(this.featureCount).map(x => np.random.randn());
-        this.biases = new Mat(this.featureCount);
+        this.biases = new ArrayView(this.featureCount);
         for (var i = 0; i < this.biases.dt.length; i++) {
             this.biases.dt[i] = np.random.randn();
         }
 
-        this.weights = new Mat(this.featureCount, this.filterSize, this.filterSize);
+        this.weights = new ArrayView(this.featureCount, this.filterSize, this.filterSize);
         for (var i = 0; i < this.weights.dt.length; i++) {
             this.weights.dt[i] = np.random.randn();
         }
@@ -214,7 +214,7 @@ class ConvolutionalLayer extends Layer{
             Assert(false);
         }
 
-        var prev_activation = new Mat(prev_Layer.unitSize, this.batchLength, prev_Layer.activation.dt);
+        var prev_activation = new ArrayView(prev_Layer.unitSize, this.batchLength, prev_Layer.activation.dt);
 
         var batch_vec4_count = sub_batch_size / 4;
         var vs_id = "ConvolutionalLayer-forward";
@@ -229,9 +229,9 @@ class ConvolutionalLayer extends Layer{
 
             this.param[param.id] = param;
 
-            param.sub_prev_activation = new Mat(prev_Layer.imgRows, prev_Layer.imgCols, sub_batch_size);
-            param.sub_z = new Mat(this.unitSize, sub_batch_size);
-            param.sub_activation = new Mat(this.unitSize, sub_batch_size);
+            param.sub_prev_activation = new ArrayView(prev_Layer.imgRows, prev_Layer.imgCols, sub_batch_size);
+            param.sub_z = new ArrayView(this.unitSize, sub_batch_size);
+            param.sub_activation = new ArrayView(this.unitSize, sub_batch_size);
 
             param.elementCount = this.featureCount * this.imgRows * this.imgCols * batch_vec4_count;
 
@@ -346,19 +346,19 @@ class ConvolutionalLayer extends Layer{
     forward() {
         var lap = new Lap(this.fwTime);
 
-        if (this.forwardCnt == undefined || this.batchLength != this.prevLayer.activation.Cols) {
+        if (this.forwardCnt == undefined || this.batchLength != this.prevLayer.activation.ncol) {
 
             this.forwardCnt = 0;
             this.forwardGPU = 0;
             this.forwardCPU = 0;
         }
 
-        this.batchLength = this.prevLayer.activation.Cols;
+        this.batchLength = this.prevLayer.activation.ncol;
 
-        if (!this.z || this.z.Rows != this.unitSize || this.z.Cols != this.batchLength){
+        if (!this.z || this.z.nrow != this.unitSize || this.z.ncol != this.batchLength){
 
-            this.z = new Mat(this.unitSize, this.batchLength);
-            this.activation = new Mat(this.unitSize, this.batchLength);
+            this.z = new ArrayView(this.unitSize, this.batchLength);
+            this.activation = new ArrayView(this.unitSize, this.batchLength);
         }
 
         //!!!!!!!!!! テスト用 !!!!!!!!!!
@@ -445,8 +445,8 @@ class ConvolutionalLayer extends Layer{
     gpuNablaWeights(delta_z) {
         var prev_Layer = this.prevLayer;
 
-        var prev_activation = new Mat(prev_Layer.imgRows, prev_Layer.imgCols, this.batchLength, prev_Layer.activation.dt);
-        var delta_z_3D = new Mat(this.featureCount, this.imgRows, this.imgCols * this.batchLength, delta_z.dt);
+        var prev_activation = new ArrayView(prev_Layer.imgRows, prev_Layer.imgCols, this.batchLength, prev_Layer.activation.dt);
+        var delta_z_3D = new ArrayView(this.featureCount, this.imgRows, this.imgCols * this.batchLength, delta_z.dt);
 
         var batch_vec4_count = this.batchLength / 4;
         var vs_id = "ConvolutionalLayer-backward";
@@ -568,7 +568,7 @@ class ConvolutionalLayer extends Layer{
     backward(Y, eta2) {
         var lap = new Lap(this.bwTime);
 
-        var delta_z = new Mat(this.unitSize, this.batchLength, new Float32Array(this.nextLayer.deltaX.dt));
+        var delta_z = new ArrayView(this.unitSize, this.batchLength, new Float32Array(this.nextLayer.deltaX.dt));
         lap.Time();
 
         for (var i = 0; i < delta_z.dt.length; i++) {
@@ -576,9 +576,9 @@ class ConvolutionalLayer extends Layer{
         }
         lap.Time();
 
-        this.nablaBiases = new Mat(this.featureCount, 1);
-        this.nablaWeights = new Mat(this.featureCount, this.filterSize, this.filterSize);
-        this.costDerivative = new Mat(this.unitSize, 1);
+        this.nablaBiases = new ArrayView(this.featureCount, 1);
+        this.nablaWeights = new ArrayView(this.featureCount, this.filterSize, this.filterSize);
+        this.costDerivative = new ArrayView(this.unitSize, 1);
         lap.Time();
 
         this.cpuNablaBiases(delta_z);
@@ -648,12 +648,12 @@ class PoolingLayer extends Layer {
 
         var prev_activation_dt = prev_Layer.activation.dt;
 
-        if(this.activation == undefined || this.activation.Cols != this.batchLength ){
+        if(this.activation == undefined || this.activation.ncol != this.batchLength ){
 
-            this.activation = new Mat(this.unitSize, this.batchLength);
+            this.activation = new ArrayView(this.unitSize, this.batchLength);
             this.maxIdx     = new Int8Array(this.unitSize * this.batchLength);
 
-            this.deltaX = new Mat(prev_Layer.unitSize, this.batchLength);
+            this.deltaX = new ArrayView(prev_Layer.unitSize, this.batchLength);
         }
 
         // 出力先
@@ -772,7 +772,7 @@ class Network {
             dt[i] = Math.random();// i + 0.123;
         }
         // (rows, cols, init, column_major, depth)
-        var m = new Mat(28, 28, 12, dt);
+        var m = new ArrayView(28, 28, 12, dt);
         var z = new Float32Array(m.dt.length);
         var activation = new Float32Array(m.dt.length);
 
@@ -805,12 +805,12 @@ class Network {
     }
 
     Laminate(mini_batch, i) {
-        var x_rows = mini_batch[0][i].Rows;
-        var X = new Mat(x_rows, mini_batch.length);
+        var x_rows = mini_batch[0][i].nrow;
+        var X = new ArrayView(x_rows, mini_batch.length);
         for (var idx = 0; idx < mini_batch.length; idx++) {
             var x = mini_batch[idx][i];
             for (var r = 0; r < x_rows; r++) {
-                X.dt[r * X.Cols + idx] = x.dt[r];
+                X.dt[r * X.ncol + idx] = x.dt[r];
             }
         }
 
@@ -901,7 +901,7 @@ class Network {
 
             err3 = Math.abs((deltaC - deltaC3) / (deltaC == 0 ? 1 : deltaC));
 
-            for (var r2 = 0; r2 < layer.nablaBiases.Rows; r2++) {
+            for (var r2 = 0; r2 < layer.nablaBiases.nrow; r2++) {
                 if (r2 != r) {
                     Assert(layer.z_sv[r2] - layer.z.dt[r2] == 0 && layer.activation_sv[r2] - layer.activation.dt[r2] == 0, "z-activation-diff");
                 }
@@ -1104,7 +1104,7 @@ class Network {
         this.layers[0].activation = X;
         this.layers.forEach(x => x.forward());
 
-        var eta2 = eta / X.Cols;
+        var eta2 = eta / X.ncol;
 
         for (var i = this.layers.length - 1; 1 <= i; i--) {
             this.layers[i].backward(Y, eta2);
@@ -1144,10 +1144,10 @@ class Network {
                     for (var batch_idx = 0; batch_idx < this.miniBatchSize; batch_idx++) {
                         if (layer instanceof FullyConnectedLayer) {
 
-                            for (var r = 0; r < layer.nablaBiases.Rows; r++) {
+                            for (var r = 0; r < layer.nablaBiases.nrow; r++) {
                                 max_err = this.check(layer, last_layer, cost_sv, Y, eta2, batch_idx, -1, r, -1, max_err);
 
-                                for (var c = 0; c < layer.weight.Cols; c++) {
+                                for (var c = 0; c < layer.weight.ncol; c++) {
                                     max_err = this.check(layer, last_layer, cost_sv, Y, eta2, batch_idx, -1, r, c, max_err);
                                 }
                             }
@@ -1183,7 +1183,7 @@ class Network {
     }
 
     costAvg(cost) {
-        return xrange(cost.Cols).map(c => cost.Col(c).dt.map(x => Math.abs(x)).reduce((x, y) => x + y) / cost.Rows);
+        return xrange(cost.ncol).map(c => cost.Col(c).dt.map(x => Math.abs(x)).reduce((x, y) => x + y) / cost.nrow);
     }
 
     feedforward(a) {
@@ -1201,7 +1201,7 @@ class Network {
         var cnt = test_data["count"];
         var labels = test_data["label"];
 
-        var X = new Mat(cnt, 28 * 28, TestData["image"]).T();
+        var X = new ArrayView(cnt, 28 * 28, TestData["image"]).T();
         this.layers[0].activation = X;
         this.layers.forEach(x => x.forward());
 
@@ -1221,7 +1221,7 @@ function AttribTest(n){
     var y = new Float32Array(4 * 4);
     var z = new Float32Array(4 * 4);
     var biases = new Float32Array(4);
-    var tt = new Mat(10, 10, 12);
+    var tt = new ArrayView(10, 10, 12);
 
     var idx = 0;
     for (var j = 0; j < 4; j++) {
