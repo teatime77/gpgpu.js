@@ -17,7 +17,6 @@ function CreateWebGLLib(canvas) {
     }
 
     class WebGLLib {
-
         constructor(canvas) {
             console.log("init WebGL");
 
@@ -521,6 +520,96 @@ function CreateWebGLLib(canvas) {
             }
 
             gl.useProgram(null); chk();
+        }
+
+        drawScene() {
+            var param = this.drawObj.onDraw();
+
+            var pMatrix = mat4.create();
+            mat4.perspective(45, this.canvas.width / this.canvas.height, 0.1, 100.0, pMatrix);
+
+            var mvMatrix = mat4.create();
+            mat4.identity(mvMatrix);
+
+            mat4.translate(mvMatrix, [0.0, 0.0, this.drawParam.z]);
+
+            mat4.rotate(mvMatrix, this.drawParam.xRot, [1, 0, 0]);
+            mat4.rotate(mvMatrix, this.drawParam.yRot, [0, 1, 0]);
+
+            var pmvMatrix = mat4.create();
+            mat4.multiply(pMatrix, mvMatrix, pmvMatrix);
+
+            var normalMatrix = mat3.create();
+            mat4.toInverseMat3(mvMatrix, normalMatrix);
+            mat3.transpose(normalMatrix);
+
+            param.args["uPMVMatrix"] = pmvMatrix;
+            param.args["uNMatrix"] = normalMatrix;
+
+            this.compute(param);
+
+            window.requestAnimationFrame(this.drawScene.bind(this));
+        }
+
+        defaultFragmentShader() {
+            return `#version 300 es
+            precision highp float;
+            precision highp int;
+
+            in vec3 vLightWeighting;
+	        in vec2 uv0;
+	        in vec2 uv1;
+
+            uniform sampler2D TextureImage;
+
+            out vec4 color;
+
+            void main(void) {
+                vec2 uvT;
+
+		        uvT.x = ( fwidth( uv0.x ) < fwidth( uv1.x )-0.001 ) ? uv0.x : uv1.x ;
+		        uvT.y = ( fwidth( uv0.y ) < fwidth( uv1.y )-0.001 ) ? uv0.y : uv1.y ;
+
+                vec4 textureColor = texture(TextureImage, uvT);
+
+                color = vec4(textureColor.rgb * vLightWeighting, textureColor.a);
+            }
+        `;
+        }
+
+        Draw3D(draw_obj) {
+            this.drawObj = draw_obj;
+            this.drawParam = {
+                xRot : 0,
+                yRot : 0,
+                z    : -5.0
+            }
+
+            var lastMouseX = null;
+            var lastMouseY = null;
+
+            this.canvas.addEventListener('mousemove', function (event) {
+                var newX = event.clientX;
+                var newY = event.clientY;
+
+                if (event.buttons != 0 && lastMouseX != null) {
+
+                    this.drawParam.xRot += (newY -lastMouseY) / 300;
+                    this.drawParam.yRot += (newX - lastMouseX) / 300;
+                }
+
+                lastMouseX = newX
+                lastMouseY = newY;
+            }.bind(this));
+
+            this.canvas.addEventListener("wheel", function (e) {
+                this.drawParam.z += 0.002 * e.wheelDelta;
+
+                // ホイール操作によるスクロールを無効化する
+                e.preventDefault();
+            }.bind(this));
+
+            this.drawScene();
         }
     }
 
