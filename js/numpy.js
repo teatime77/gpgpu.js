@@ -1,14 +1,90 @@
 ﻿// JavaScript source code
+
 var vDot = {};
+
+function xrange() {
+    var start, stop, step;
+
+    switch (arguments.length) {
+        case 1:
+            start = 0;
+            stop = arguments[0];
+            step = 1;
+            break;
+
+        case 2:
+            start = arguments[0];
+            stop = arguments[1];
+            step = 1;
+            break;
+
+        case 3:
+            start = arguments[0];
+            stop = arguments[1];
+            step = arguments[2];
+            break;
+
+        default:
+            Assert(false, "x range");
+            return null;
+    }
+
+    var cnt = Math.floor((stop - start) / step);
+    Assert(cnt * step == stop - start, "x-range");
+    /*
+        var list = new Int32Array(cnt);
+        var k = 0;
+        for (i = start; i < stop; i += step) {
+            list[k] = i;
+            k++;
+        }
+    
+        var list = new Array();
+        for (i = start; i < stop; i += step) {
+            list.push(i);
+        }
+    */
+
+    var list = new Array(cnt);
+    var k = 0;
+    for (i = start; i < stop; i += step) {
+        list[k] = i;
+        k++;
+    }
+
+    return list;
+}
+
+function zip() {
+    var list = new Array();
+
+    for (var i = 0; ; i++) {
+        var tpl = new Array();
+        for (var k = 0; k < arguments.length; k++) {
+            var arg = arguments[k];
+            if (arg.length <= i) {
+                return list;
+            }
+            tpl.push(arg[i]);
+        }
+        list.push(tpl);
+    }
+}
+
+function zip2(u, v, f) {
+    Assert(u instanceof Array && v instanceof Array && u.length == v.length, "zip2");
+
+    var ret = new Array();
+    for (var i = 0; i < u.length; i++) {
+        ret.push(f(u[i], v[i]));
+    }
+
+    return ret;
+}
 
 class TNumpy {
     constructor() {
         this.random = new TNumpyRandom();
-    }
-
-    zeros(shape) {
-        Assert(shape.length == 2, "zero-s");
-        return new ArrayView(shape[0], shape[1]);
     }
 
     dot(A, B) {
@@ -70,7 +146,7 @@ class TNumpy {
             var C2 = A.Dot(B);
             var t2 = new Date() - startTime;
 
-            var diff = C1.Sub(C2).Abs().Sum() / (C1.nrow * C1.ncol);
+            var diff = C1.Sub(C2).dt.map(a => Math.abs(a)).reduce((x, y) => x + y) / (C1.nrow * C1.ncol);
             Assert(diff < 0.001, "dot-diff");
 
             console.log("dot:" + id + " tex:" + use_tex + " " + t1 + "ms  CPU:" + t2 + "ms 誤差 " + diff.toFixed(7));
@@ -81,13 +157,12 @@ class TNumpy {
     }
 
     argmax(x) {
-        Assert(x instanceof ArrayView && x.ncol == 1, "argmax");
+        Assert(x instanceof ArrayView && x.ncol == 1, "arg max");
         var idx = x.dt.indexOf(Math.max.apply(null, x.dt));
-        Assert(idx != -1, "argmax");
+        Assert(idx != -1, "arg max");
         return idx;
     }
 }
-
 
 class TNumpyRandom {
     constructor() {
@@ -169,8 +244,7 @@ class TNumpyRandom {
     }
 }
 
-var numpy = new TNumpy();
-var np = numpy;
+var np = new TNumpy();
 
 /*
 正規乱数のテスト

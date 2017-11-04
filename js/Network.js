@@ -92,7 +92,7 @@ class FullyConnectedLayer extends Layer{
         this.batchLength = this.prevLayer.activation.ncol;
         lap.Time();
 
-        this.z = np.dot(this.weight, this.prevLayer.activation).AddV(this.bias);
+        this.z = np.dot(this.weight, this.prevLayer.activation).AddVec(this.bias);
         lap.Time();
 
         this.activation = sigmoid(this.z);
@@ -122,10 +122,10 @@ class FullyConnectedLayer extends Layer{
         this.Delta = this.costDerivative.Mul(sigmoid_prime(this.z));
         lap.Time();
 
-        this.nabla_b = this.Delta.reduce((x, y) => x + y);
+        this.nabla_b = this.Delta.Reduce((x, y) => x + y);
         lap.Time();
 
-        this.nabla_w = np.dot(this.Delta, this.prevLayer.activation.transpose());
+        this.nabla_w = np.dot(this.Delta, this.prevLayer.activation.T());
         lap.Time();
 
         if (isDebug) {
@@ -144,7 +144,7 @@ class FullyConnectedLayer extends Layer{
         }
 
         //!!!!! 直前が入力層なら必要なし !!!!!
-        this.deltaX = np.dot(this.weight.transpose(), this.Delta);
+        this.deltaX = np.dot(this.weight.T(), this.Delta);
         lap.Time();
     }
 
@@ -1207,7 +1207,7 @@ class Network {
 
         var result = this.layers[this.layers.length - 1].activation;
 
-        return sum(xrange(cnt).map(c => np.argmax(result.Col(c)) == labels[c] ? 1 : 0));
+        return xrange(cnt).map(c => np.argmax(result.Col(c)) == labels[c] ? 1 : 0).reduce((x, y) => x + y);
 
 //        var test_results = test_data.map($ => { var x = $[0]; var y = $[1]; return [np.argmax(this.feedforward(x)), y]; });
 //        return sum(test_results.map($ => {var x = $[0];var y = $[1];return /*int*/(x == y ? 1 : 0);}));
@@ -1282,7 +1282,7 @@ function* SGD(net, training_data, epochs, mini_batch_size, eta, test_data) {
     if(test_data){
         n_test = test_data["count"];
     }
-    var n=len(training_data);//??
+    var n=training_data.length;//??
     for (let j of xrange(epochs)) {
 
         var start_time = new Date();
@@ -1345,12 +1345,12 @@ function cost_derivative(output_activations, y){
 
 function sigmoid(z){
 //??    return 1.0 / (1.0 + np.exp(-z));
-    return z.map(x => sigmoidF(x));
+    return z.Map(x => sigmoidF(x));
 }
 
 function sigmoid_prime(z){
 //??    return sigmoid(z) * (1 - sigmoid(z));
-    return z.map(x => sigmoid_primeF(x));
+    return z.Map(x => sigmoid_primeF(x));
 }
 
 function sigmoid_primeF(z) {
@@ -1361,6 +1361,30 @@ function sigmoid_primeF(z) {
 //??
 function sigmoidF(z){
     return 1.0 / (1.0 + Math.exp(-z));
+}
+
+function Slice(v) {
+    Assert(arguments.length == 2, "Slice");
+    var t = arguments[1];
+
+    var st, ed;
+    switch (t.length) {
+        case 1:
+            return v.slice(t[0]);
+
+        case 2:
+            st = (t[0] == null ? 0 : t[0]);
+            ed = (0 <= t[1] ? t[1] : v.length + t[1]);
+            return v.slice(st, ed);
+
+        case 3:
+            Assert(false, "Slice 未実装");
+            return null;
+
+        default:
+            Assert(false, "Slice");
+            return null;
+    }
 }
 
 //??
