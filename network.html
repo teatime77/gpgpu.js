@@ -4,10 +4,10 @@
 <head>
     <meta charset="utf-8" />
     <title></title>
-    <script type="text/javascript" src="js/Shader.js"></script>
+    <script type="text/javascript" src="js/shader.js"></script>
     <script type="text/javascript" src="js/gpgpu.js"></script>
     <script type="text/javascript" src="js/numpy.js"></script>
-    <script type="text/javascript" src="js/Network.js"></script>
+    <script type="text/javascript" src="js/network.js"></script>
 </head>
 <body>
 <div id="drop_zone" style="width:100px; height:100px; background-color:darkgray">Drop files here</div>
@@ -57,7 +57,7 @@
         function RunNetwork() {
             console.log("Training:%d Test:%d", TrainingData.length, TestData["count"]);
 
-            WebGL2 = CreateWebGLLib();
+            WebGL2 = CreateGPGPU();
 
             Net = new Network([
                 new InputLayer(28, 28),

@@ -1,6 +1,5 @@
 ﻿// JavaScript source code
 
-
 class Triangle {
     constructor(p, q, r, orderd) {
         if (orderd == true) {

@@ -205,14 +205,14 @@ class ArrayView {
     }
 }
 
-function CreateWebGLLib(canvas) {
+function CreateGPGPU(canvas) {
     let gl;
 
     function chk() {
         Assert(gl.getError() == gl.NO_ERROR);
     }
 
-    class WebGLLib {
+    class GPGPU {
         constructor(canvas) {
             console.log("init WebGL");
             this.setStandardShader();
@@ -526,7 +526,7 @@ function CreateWebGLLib(canvas) {
                 // フラグメントシェーダが指定されてない場合
 
                 // デフォルトのフラグメントシェーダをセットする。
-                param.fragmentShader = Shaders['fs-transform'];
+                param.fragmentShader = this.minFragmentShader;
             }
 
             this.parseShader(pkg, param);
@@ -782,7 +782,16 @@ function CreateWebGLLib(canvas) {
                 }
             `;
 
+            this.minFragmentShader =
+               `#version 300 es
+                precision highp float;
+                precision highp int;
 
+                out vec4 color;
+
+                void main(){
+                    color = vec4(1.0);
+                }`;
 
 
             this.defaultFragmentShader =
@@ -848,5 +857,5 @@ function CreateWebGLLib(canvas) {
         }
     }
 
-    return new WebGLLib(canvas);
+    return new GPGPU(canvas);
 }
