@@ -2,7 +2,7 @@
 
 function Assert(b, msg) {
     if (!b) {
-        console.log(msg + " " + this.LineText);
+        console.log(msg);
     }
 };
 
@@ -13,6 +13,41 @@ function MakeFloat32Index(n) {
     }
 
     return v;
+}
+
+function make2DArray(nrow, ncol, init) {
+    var v;
+    
+    if(init){
+        if (init instanceof Float32Array) {
+
+            v = init;
+        }
+        else {
+
+            v = new Float32Array(init);
+        }
+
+        Assert(v.length == nrow * ncol);
+    }
+    else{
+
+        v = new Float32Array(nrow * ncol);
+    }
+
+    v.nrow  = nrow;
+    v.ncol  = ncol;
+
+    v.shape = [nrow, ncol];
+
+    return v;
+}
+
+class TextureInfo {
+    constructor(texel_type, value) {
+        this.texelType = texel_type;
+        this.value     = value;
+    }
 }
 
 class ArrayView {
@@ -326,27 +361,33 @@ function CreateGPGPU(canvas) {
                         }
                     }
 
-                    var arg_inf = { name: arg_name, value: arg_val, type: tkn1, isArray: is_array };
+                    if (tkn1 == "sampler2D" || tkn1 == "sampler3D") {
 
-                    switch (tokens[0]) {
-                        case "in":
-                            pkg.attributes.push(arg_inf);
-                            break;
+                        Assert(tokens[0] == "uniform" && arg_val instanceof TextureInfo);
 
-                        case "uniform":
-                            if (tkn1 == "sampler2D" || tkn1 == "sampler3D") {
+                        arg_val.name = arg_name;
+                        arg_val.samplerType = tkn1;
+                        arg_val.isArray = is_array;
 
-                                pkg.textures.push(arg_inf);
-                            }
-                            else {
+                        pkg.textures.push(arg_val);
+                    }
+                    else {
+                    
+                        var arg_inf = { name: arg_name, value: arg_val, type: tkn1, isArray: is_array };
+
+                        switch (tokens[0]) {
+                            case "in":
+                                pkg.attributes.push(arg_inf);
+                                break;
+
+                            case "uniform":
                                 pkg.uniforms.push(arg_inf);
+                                break;
 
-                            }
-                            break;
-
-                        case "out":
-                            pkg.varyings.push(arg_inf);
-                            break;
+                            case "out":
+                                pkg.varyings.push(arg_inf);
+                                break;
+                        }
                     }
                 }
             }
@@ -411,25 +452,13 @@ function CreateGPGPU(canvas) {
             }
         }
 
-        texImage(dim, tex_inf) {
-            if (dim == gl.TEXTURE_2D) {
-
-                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, tex_inf.value.ncol / 4, tex_inf.value.nrow, 0, gl.RGBA, gl.FLOAT, tex_inf.value.dt); chk();
-            }
-            else {
-                Assert(dim == gl.TEXTURE_3D, "Set-Tex");
-
-                gl.texImage3D(gl.TEXTURE_3D, 0, gl.RGBA32F, tex_inf.value.ncol / 4, tex_inf.value.nrow, tex_inf.value.shape[tex_inf.value.shape.length - 3], 0, gl.RGBA, gl.FLOAT, tex_inf.value.dt); chk();
-            }
-        }
-
         makeTexture(pkg) {
             for (var i = 0; i < pkg.textures.length; i++) {
                 var tex_inf = pkg.textures[i];
 
                 tex_inf.locTexture = gl.getUniformLocation(pkg.program, tex_inf.name); chk();
 
-                var dim = tex_inf.type == "sampler3D" ? gl.TEXTURE_3D : gl.TEXTURE_2D;
+                var dim = tex_inf.samplerType == "sampler3D" ? gl.TEXTURE_3D : gl.TEXTURE_2D;
 
                 tex_inf.Texture = gl.createTexture(); chk();
 
@@ -466,7 +495,7 @@ function CreateGPGPU(canvas) {
 
                 gl.uniform1i(tex_inf.locTexture, i); chk();
 
-                var dim = tex_inf.type == "sampler3D" ? gl.TEXTURE_3D : gl.TEXTURE_2D;
+                var dim = tex_inf.samplerType == "sampler3D" ? gl.TEXTURE_3D : gl.TEXTURE_2D;
 
                 gl.activeTexture(this.TEXTUREs[i]); chk();
                 gl.bindTexture(dim, tex_inf.Texture); chk();
@@ -478,7 +507,57 @@ function CreateGPGPU(canvas) {
                 else {
                     // テクスチャが画像でない場合
 
-                    this.texImage(dim, tex_inf);
+                    var data;
+                    if (tex_inf.value instanceof ArrayView) {
+                        data = tex_inf.value.dt;
+                    }
+                    else {
+                        data = tex_inf.value;
+                    }
+
+                    var internal_format, format, col_size;
+                    switch (tex_inf.texelType) {
+                        case "float":
+                            internal_format = gl.R32F;
+                            format = gl.RED;
+                            col_size = 1;
+                            break;
+
+                        case "vec2":
+                            internal_format = gl.RG32F;
+                            format = gl.RG;
+                            col_size = 2;
+                            break;
+
+                        case "vec3":
+                            internal_format = gl.RGB32F;
+                            format = gl.RGB;
+                            col_size = 3;
+                            break;
+
+                        case "vec4":
+                            internal_format = gl.RGBA32F;
+                            format = gl.RGBA;
+                            col_size = 4;
+                            break;
+
+                        default:
+                            Assert(false);
+                            break;
+                    }
+
+                    if (dim == gl.TEXTURE_2D) {
+
+//                        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, tex_inf.value.ncol / 4, tex_inf.value.nrow, 0, gl.RGBA, gl.FLOAT, tex_inf.value.dt); chk();
+//                        gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, tex_inf.value.ncol, tex_inf.value.nrow, 0, gl.RED, gl.FLOAT, data); chk();
+                        gl.texImage2D(gl.TEXTURE_2D, 0, internal_format, tex_inf.value.ncol / col_size, tex_inf.value.nrow, 0, format, gl.FLOAT, data); chk();
+                    }
+                    else {
+                        Assert(dim == gl.TEXTURE_3D, "Set-Tex");
+
+//                        gl.texImage3D(gl.TEXTURE_3D, 0, gl.RGBA32F, tex_inf.value.ncol / 4, tex_inf.value.nrow, tex_inf.value.shape[tex_inf.value.shape.length - 3], 0, gl.RGBA, gl.FLOAT, data); chk();
+                        gl.texImage3D(gl.TEXTURE_3D, 0, internal_format, tex_inf.value.ncol / col_size, tex_inf.value.nrow, tex_inf.value.shape[tex_inf.value.shape.length - 3], 0, format, gl.FLOAT, data); chk();
+                    }
                 }
             }
         }
@@ -634,7 +713,14 @@ function CreateGPGPU(canvas) {
                 for (let arg of args) {
                     var val = param.args[arg.name];
                     Assert(val != undefined);
-                    arg.value = val;
+                    if (args == pkg.textures) {
+
+                        arg.value = val.value;
+                    }
+                    else {
+
+                        arg.value = val;
+                    }
                 }
             }
         }

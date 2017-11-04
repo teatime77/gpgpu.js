@@ -110,8 +110,8 @@ class TNumpy {
                 vs_id = "vs-Texture";
                 param.args = {
                     "idx_f": MakeFloat32Index(param.elementCount),
-                    "A_Tex": A,
-                    "B_Tex": B.T(),
+                    "A_Tex": new TextureInfo("vec4", A),
+                    "B_Tex": new TextureInfo("vec4", B.T()),
                     "B_Cols": B.ncol,
                     'dot_val': dot_val,
                 };

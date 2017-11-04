@@ -237,7 +237,7 @@ class ConvolutionalLayer extends Layer{
 
             param.args = {
                 "idx_f": MakeFloat32Index(param.elementCount),
-                "prev_activation": param.sub_prev_activation,
+                "prev_activation": new TextureInfo("vec4", param.sub_prev_activation),
                 "weights": this.weights.dt,
                 "biases": this.biases.dt,
                 "z": param.sub_z,
@@ -465,8 +465,8 @@ class ConvolutionalLayer extends Layer{
 
             param.args = {
                 "idx_f": MakeFloat32Index(param.elementCount),
-                "prev_activation": prev_activation,
-                "delta_z": delta_z_3D,
+                "prev_activation": new TextureInfo("vec4", prev_activation),
+                "delta_z": new TextureInfo("vec4", delta_z_3D),
                 "nablaWeights": this.nablaWeights,
             };
 
@@ -789,7 +789,7 @@ class Network {
         param.args = {
             "idx_f": MakeFloat32Index(m.dt.length),
             "biases": biases,
-            "prev_activation": m,
+            "prev_activation": new TextureInfo("vec4", m),
             "z": z,
             "activation": activation,
         };
@@ -1251,7 +1251,7 @@ function AttribTest(n){
         "biases": biases,
         "f": n,
         "ff": ff,
-        "tt":tt,
+        "tt": new TextureInfo("vec4", tt),
         "z": z
     };
 
