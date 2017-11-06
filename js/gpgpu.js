@@ -114,27 +114,27 @@ class ArrayView {
         return m;
     }
 
-    At(r, c) {
+    At2(r, c) {
         Assert(r < this.nrow && c < this.ncol, "ArrayView-at");
         return this.dt[r * this.ncol +c];
     }
 
-    Set(r, c, val) {
+    Set2(r, c, val) {
         Assert(r < this.nrow && c < this.ncol, "ArrayView-set");
 
         this.dt[r * this.ncol +c]= val;
-    }
-
-    Set3(d, r, c, val) {
-        Assert(d < this.shape[this.shape.length -3]&& r < this.nrow && c < this.ncol, "ArrayView-set3");
-
-        this.dt[(d * this.nrow +r) * this.ncol +c]= val;
     }
 
     At3(d, r, c) {
         Assert(d < this.shape[this.shape.length -3]&& r < this.nrow && c < this.ncol, "ArrayView-at3");
 
         return this.dt[(d * this.nrow +r) * this.ncol +c];
+    }
+
+    Set3(d, r, c, val) {
+        Assert(d < this.shape[this.shape.length -3]&& r < this.nrow && c < this.ncol, "ArrayView-set3");
+
+        this.dt[(d * this.nrow +r) * this.ncol +c]= val;
     }
 
     Col(c) {
@@ -307,28 +307,41 @@ function CreateGPGPU(canvas) {
         }
 
         parseShader(pkg, param) {
+            // attribute変数、uniform変数、テクスチャ、varying変数の配列を初期化する。
             pkg.attributes = [];
             pkg.uniforms = [];
             pkg.textures = [];
             pkg.varyings = [];
+
+            // 頂点シェーダとフラグメントシェーダのソースに対し
             for(let shader_text of[ param.vertexShader,  param.fragmentShader ]) {
 
+                // 行ごとに分割する。
                 var lines = shader_text.split(/(\r\n|\r|\n)+/);
+
+                // すべての行に対し
                 for(let line of lines) {
 
+                    // 行を空白で分割する。
                     var tokens = line.trim().split(/[\s\t]+/);
+
                     if (tokens.length < 3) {
+                        // トークンの長さが3未満の場合
                         continue;
                     }
 
+                    // 最初、2番目、3番目のトークン
                     var tkn0 = tokens[0];
                     var tkn1 = tokens[1];
                     var tkn2 = tokens[2];
 
                     if (tkn0 != "in" && tkn0 != "uniform" && tkn0 != "out") {
+                        // 最初のトークンが in, uniform, out でない場合
                         continue;
                     }
-                    if (tkn0 != "uniform" && shader_text == param.fragmentShader) {
+
+                    if (shader_text == param.fragmentShader && tkn0 != "uniform") {
+                        // フラグメントシェーダで uniform でない場合 ( フラグメントシェーダの入力(in)と出力(out)はアプリ側では使わない。 )
 
                         continue;
                     }
@@ -341,50 +354,80 @@ function CreateGPGPU(canvas) {
                     var is_array = false;
                     var k1 = tkn2.indexOf("[");
                     if (k1 != -1) {
-                        arg_name = tkn2.substring(0, k1);
+                        // 3番目のトークンが [ を含む場合
+
+                        // 配列と見なす。
                         is_array = true;
+
+                        // 変数名を得る。
+                        arg_name = tkn2.substring(0, k1);
                     }
                     else{
+                        // 3番目のトークンが [ を含まない場合
+
                         var k2 = tkn2.indexOf(";");
                         if (k2 != -1) {
+                            // 3番目のトークンが ; を含む場合
+
+                            // 変数名を得る。
                             arg_name = tkn2.substring(0, k2);
                         }
                         else{
+                            // 3番目のトークンが ; を含まない場合
+
+                            // 変数名を得る。
                             arg_name = tkn2;
                         }
                     }
 
+                    // 変数の値を得る。
                     var arg_val = param.args[arg_name];
-                    if(arg_val == undefined){
+
+                    if (arg_val == undefined) {
                         if(tokens[0] == "out"){
                             continue;
                         }
                     }
 
                     if (tkn1 == "sampler2D" || tkn1 == "sampler3D") {
+                        // テクスチャのsamplerの場合
 
                         Assert(tokens[0] == "uniform" && arg_val instanceof TextureInfo);
 
+                        // 変数名をセットする。
                         arg_val.name = arg_name;
+
+                        // samplerのタイプをセットする。
                         arg_val.samplerType = tkn1;
+
+                        // 配列かどうかをセットする。
                         arg_val.isArray = is_array;
 
+                        // テクスチャの配列に追加する。
                         pkg.textures.push(arg_val);
                     }
                     else {
-                    
+                        // テクスチャのsamplerでない場合
+
+                        // 変数の名前、値、型、配列かどうかをセットする。
                         var arg_inf = { name: arg_name, value: arg_val, type: tkn1, isArray: is_array };
 
                         switch (tokens[0]) {
                             case "in":
+                                // attribute変数の場合
+
                                 pkg.attributes.push(arg_inf);
                                 break;
 
                             case "uniform":
+                                // uniform変数の場合
+
                                 pkg.uniforms.push(arg_inf);
                                 break;
 
                             case "out":
+                                // varying変数の場合
+
                                 pkg.varyings.push(arg_inf);
                                 break;
                         }
@@ -393,37 +436,63 @@ function CreateGPGPU(canvas) {
             }
         }
 
-        makeProgram(vshaderTransform, fshaderTransform, varyings) {
+        /*
+            プログラムを作る。
+        */
+        makeProgram(vertex_shader, fragment_shader, varyings) {
+            // プログラムを作る。
             var prg = gl.createProgram(); chk();
-            gl.attachShader(prg, vshaderTransform); chk();
-            gl.attachShader(prg, fshaderTransform); chk();
+
+            // 頂点シェーダをアタッチする。
+            gl.attachShader(prg, vertex_shader); chk();
+
+            // フラグメントシェーダをアタッチする。
+            gl.attachShader(prg, fragment_shader); chk();
 
             if (varyings) {
+                // varying変数がある場合
 
+                // varying変数の名前の配列
                 var varying_names = varyings.map(x => x.name);
+
+                // Transform Feedbackで使うvarying変数を指定する。
                 gl.transformFeedbackVaryings(prg, varying_names, gl.SEPARATE_ATTRIBS); chk();   // gl.INTERLEAVED_ATTRIBS 
             }
 
+            // プログラムをリンクする。
             gl.linkProgram(prg); chk();
 
-
             if (!gl.getProgramParameter(prg, gl.LINK_STATUS)) {
+                // リンクエラーがある場合
+
                 console.log("Link Error:" + gl.getProgramInfoLog(prg));
             }
 
+            // 頂点シェーダを削除する。
+            gl.deleteShader(vertex_shader); chk();
 
-            gl.deleteShader(vshaderTransform); chk();
-            gl.deleteShader(fshaderTransform); chk();
+            // フラグメントシェーダを削除する。
+            gl.deleteShader(fragment_shader); chk();
 
             return prg;
         }
 
+        /*        
+            シェーダを作る。
+        */
         makeShader(type, source) {
+            // シェーダを作る。
             var shader = gl.createShader(type); chk();
+
+            // シェーダにソースをセットする。
             gl.shaderSource(shader, source); chk();
+
+            // シェーダをコンパイルする。
             gl.compileShader(shader); chk();
 
             if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                // コンパイル エラーの場合
+
                 alert(gl.getShaderInfoLog(shader));
                 return null;
             }
@@ -431,10 +500,19 @@ function CreateGPGPU(canvas) {
             return shader;
         }
 
+        /*
+            attribute変数を作る。
+        */
         makeAttrib(pkg) {
+            // すべてのattribute変数に対し
             for (let attrib of pkg.attributes) {
+                // attribute変数の次元
                 var attrib_dim = this.vecDim(attrib.type);
+
+                // attribute変数の配列の長さ
                 var attrib_len = attrib.value instanceof ArrayView ? attrib.value.dt.length : attrib.value.length;
+
+                // 要素の個数
                 var elemen_count = attrib_len / attrib_dim;
 
                 if (pkg.elementCount == undefined) {
@@ -445,24 +523,40 @@ function CreateGPGPU(canvas) {
                     Assert(pkg.elementCount == elemen_count);
                 }
 
+                // バッファを作る。
                 attrib.AttribBuffer = gl.createBuffer();
+
+                // attribute変数の位置
                 attrib.AttribLoc = gl.getAttribLocation(pkg.program, attrib.name); chk();
+
+                // 指定した位置のattribute配列を有効にする。
                 gl.enableVertexAttribArray(attrib.AttribLoc); chk();
+
+                // attribute変数の位置と変数名をバインドする。
                 gl.bindAttribLocation(pkg.program, attrib.AttribLoc, attrib.name);
             }
         }
 
+        /*
+            テクスチャを作る。
+        */
         makeTexture(pkg) {
+            // すべてのテクスチャに対し
             for (var i = 0; i < pkg.textures.length; i++) {
                 var tex_inf = pkg.textures[i];
 
+                // テクスチャのuniform変数の位置
                 tex_inf.locTexture = gl.getUniformLocation(pkg.program, tex_inf.name); chk();
 
                 var dim = tex_inf.samplerType == "sampler3D" ? gl.TEXTURE_3D : gl.TEXTURE_2D;
 
+                // テクスチャを作る。
                 tex_inf.Texture = gl.createTexture(); chk();
 
+                // 指定した位置のテクスチャをアクティブにする。
                 gl.activeTexture(this.TEXTUREs[i]); chk();
+
+                // 作成したテクスチャをバインドする。
                 gl.bindTexture(dim, tex_inf.Texture); chk();
 
                 if (tex_inf.value instanceof Image) {
@@ -489,15 +583,22 @@ function CreateGPGPU(canvas) {
             }
         }
 
+        /*
+            テクスチャのデータをセットする。
+        */
         setTextureData(pkg) {
             for (var i = 0; i < pkg.textures.length; i++) {
                 var tex_inf = pkg.textures[i];
 
+                // テクスチャのuniform変数にテクスチャの番号をセットする。
                 gl.uniform1i(tex_inf.locTexture, i); chk();
 
                 var dim = tex_inf.samplerType == "sampler3D" ? gl.TEXTURE_3D : gl.TEXTURE_2D;
 
+                // 指定した位置のテクスチャをアクティブにする。
                 gl.activeTexture(this.TEXTUREs[i]); chk();
+
+                // テクスチャをバインドする。
                 gl.bindTexture(dim, tex_inf.Texture); chk();
 
                 if (tex_inf.value instanceof Image) {
@@ -553,7 +654,7 @@ function CreateGPGPU(canvas) {
                         gl.texImage2D(gl.TEXTURE_2D, 0, internal_format, tex_inf.value.ncol / col_size, tex_inf.value.nrow, 0, format, gl.FLOAT, data); chk();
                     }
                     else {
-                        Assert(dim == gl.TEXTURE_3D, "Set-Tex");
+                        Assert(dim == gl.TEXTURE_3D, "set-Tex");
 
 //                        gl.texImage3D(gl.TEXTURE_3D, 0, gl.RGBA32F, tex_inf.value.ncol / 4, tex_inf.value.nrow, tex_inf.value.shape[tex_inf.value.shape.length - 3], 0, gl.RGBA, gl.FLOAT, data); chk();
                         gl.texImage3D(gl.TEXTURE_3D, 0, internal_format, tex_inf.value.ncol / col_size, tex_inf.value.nrow, tex_inf.value.shape[tex_inf.value.shape.length - 3], 0, format, gl.FLOAT, data); chk();
@@ -610,37 +711,46 @@ function CreateGPGPU(canvas) {
 
             this.parseShader(pkg, param);
 
+            // 頂点シェーダを作る。
             var vertex_shader = this.makeShader(gl.VERTEX_SHADER, param.vertexShader);
 
+            // フラグメントシェーダを作る。
             var fragment_shader = this.makeShader(gl.FRAGMENT_SHADER, param.fragmentShader);
 
+            // プログラムを作る。
             pkg.program = this.makeProgram(vertex_shader, fragment_shader, pkg.varyings);
+
+            // プログラムを使用する。
             gl.useProgram(pkg.program); chk();
 
             // ユニフォーム変数の初期処理
             this.initUniform(pkg);
 
-            // テクスチャの初期処理
+            // テクスチャを作る。
             this.makeTexture(pkg);
 
             pkg.attribElementCount = param.elementCount;
 
+            // attribute変数を作る。
             this.makeAttrib(pkg);
 
             if (pkg.varyings.length != 0) {
                 //  varying変数がある場合
 
+                // すべてのvarying変数に対し
                 for (let varying of pkg.varyings) {
                     var out_buffer_size = this.vecDim(varying.type) * pkg.attribElementCount * Float32Array.BYTES_PER_ELEMENT;
 
-                    // Feedback empty buffer
+                    // Transform Feedbackバッファを作る。
                     varying.feedbackBuffer = gl.createBuffer(); chk();
+
+                    // バッファをバインドする。
                     gl.bindBuffer(gl.ARRAY_BUFFER, varying.feedbackBuffer); chk();
                     gl.bufferData(gl.ARRAY_BUFFER, out_buffer_size, gl.STATIC_COPY); chk();
                     gl.bindBuffer(gl.ARRAY_BUFFER, null); chk();
                 }
 
-                // -- Init TransformFeedback 
+                // Transform Feedbackを作る。
                 pkg.transformFeedback = gl.createTransformFeedback(); chk();
             }
 
@@ -653,8 +763,7 @@ function CreateGPGPU(canvas) {
 
         setAttribData(pkg) {
             // -- Init Buffer
-            for (var i = 0; i < pkg.attributes.length; i++) {
-                var attrib = pkg.attributes[i];
+            for (let attrib of pkg.attributes) {
                 var dim = this.vecDim(attrib.type);
 
                 gl.bindBuffer(gl.ARRAY_BUFFER, attrib.AttribBuffer); chk();
@@ -664,8 +773,7 @@ function CreateGPGPU(canvas) {
         }
 
         setUniformsData(pkg) {
-            for (var i = 0; i < pkg.uniforms.length; i++) {
-                var u = pkg.uniforms[i];
+            for (let u of pkg.uniforms) {
                 if (u.value instanceof ArrayView || u.value instanceof Float32Array) {
 
                     var val = u.value instanceof ArrayView ? u.value.dt : u.value;
@@ -736,52 +844,71 @@ function CreateGPGPU(canvas) {
                 gl.useProgram(pkg.program); chk();
             }
 
+            // 実引数の値をコピーする。
             this.copyParamArgsValue(param, pkg);
 
+            // attribute変数の値をセットする。
             this.setAttribData(pkg);
 
             gl.useProgram(pkg.program); chk();
 
-            // テクスチャの値のセット
+            // テクスチャの値のセットする。
             this.setTextureData(pkg);
 
-            // ユニフォーム変数のセット
+            // ユニフォーム変数の値をセットする。
             this.setUniformsData(pkg);
 
             if (pkg.varyings.length == 0) {
                 //  描画する場合
 
                 gl.viewport(0, 0, this.canvas.width, this.canvas.height); chk();
+
+                // カラーバッファと深度バッファをクリアする。
                 gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT); chk();
 
+                // 頂点インデックスバッファをバインドする。
                 gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, pkg.VertexIndexBufferInf.buffer); chk();
+
+                // 三角形のリストを描画する。
                 gl.drawElements(gl.TRIANGLES, pkg.VertexIndexBufferInf.value.length, gl.UNSIGNED_SHORT, 0); chk();
             }
             else {
                 //  描画しない場合
 
+                // ラスタライザを無効にする。
                 gl.enable(gl.RASTERIZER_DISCARD); chk();
 
+                // Transform Feedbackをバインドする。
                 gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, pkg.transformFeedback); chk();
 
+                // すべてのvarying変数に対し
                 for (var i = 0; i < pkg.varyings.length; i++) {
                     var varying = pkg.varyings[i];
+
+                    // Transform Feedbackのバッファをバインドする。
                     gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, i, varying.feedbackBuffer); chk();
                 }
 
-                // 計算開始
+                // Transform Feedbackを開始する。
                 gl.beginTransformFeedback(gl.POINTS); chk();    // TRIANGLES
+
+                // 点ごとの描画をする。
                 gl.drawArrays(gl.POINTS, 0, pkg.attribElementCount); chk();
+
+                // Transform Feedbackを終了する。
                 gl.endTransformFeedback(); chk();
 
+                // ラスタライザを有効にする。
                 gl.disable(gl.RASTERIZER_DISCARD); chk();
 
+                // すべてのvarying変数に対し
                 for (var i = 0; i < pkg.varyings.length; i++) {
                     varying = pkg.varyings[i];
 
+                    // Transform Feedbackのバッファのバインドを解く。
                     gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, i, null); chk();
 
-                    // 処理結果を表示
+                    // ARRAY_BUFFERにバインドする。
                     gl.bindBuffer(gl.ARRAY_BUFFER, varying.feedbackBuffer); chk();
 
                     var out_buf = varying.value;
@@ -789,15 +916,18 @@ function CreateGPGPU(canvas) {
                         out_buf = out_buf.dt;
                     }
 
+                    // ARRAY_BUFFERのデータを取り出す。
                     gl.getBufferSubData(gl.ARRAY_BUFFER, 0, out_buf); chk();
 
+                    // ARRAY_BUFFERのバインドを解く。
                     gl.bindBuffer(gl.ARRAY_BUFFER, null); chk();
                 }
 
-                // 終了処理
+                // Transform Feedbackのバインドを解く。
                 gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null); chk();
             }
 
+            // プログラムの使用を終了する。
             gl.useProgram(null); chk();
         }
 
@@ -932,8 +1062,25 @@ function CreateGPGPU(canvas) {
                 lastMouseY = newY;
             }.bind(this));
 
+            this.canvas.addEventListener('touchmove', function (event) {
+                // タッチによる画面スクロールを止める
+                event.preventDefault(); 
+
+                var newX = event.changedTouches[0].clientX;
+                var newY = event.changedTouches[0].clientY;
+
+                if (lastMouseX != null) {
+
+                    this.drawParam.xRot += (newY - lastMouseY) / 300;
+                    this.drawParam.yRot += (newX - lastMouseX) / 300;
+                }
+
+                lastMouseX = newX
+                lastMouseY = newY;
+            }.bind(this), false);
+
             this.canvas.addEventListener("wheel", function (e) {
-                this.drawParam.z += 0.002 * e.wheelDelta;
+                this.drawParam.z += 0.02 * e.deltaY;
 
                 // ホイール操作によるスクロールを無効化する
                 e.preventDefault();

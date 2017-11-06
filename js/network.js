@@ -136,7 +136,7 @@ class FullyConnectedLayer extends Layer{
             for (var batch_idx = 0; batch_idx < this.batchLength; batch_idx++) {
                 for (var r = 0; r < this.weight.nrow; r++) {
                     for (var c = 0; c < this.weight.ncol; c++) {
-                        var f = this.Delta.At(r, batch_idx) * this.prevLayer.activation.At(c, batch_idx);
+                        var f = this.Delta.At2(r, batch_idx) * this.prevLayer.activation.At2(c, batch_idx);
                         this.nablaWeights.Set3(batch_idx, r, c, f);
                     }
                 }
@@ -602,7 +602,7 @@ class ConvolutionalLayer extends Layer{
         var weights_idx = 0;
         for (var feature_idx = 0; feature_idx < this.featureCount; feature_idx++) {
 
-            this.biases.dt[feature_idx] -= eta3 * this.nablaBiases.At(feature_idx, 0);
+            this.biases.dt[feature_idx] -= eta3 * this.nablaBiases.At2(feature_idx, 0);
 
             // フィルターの行に対し
             for (var r2 = 0; r2 < this.filterSize; r2++) {
@@ -840,8 +840,8 @@ class Network {
 
                 nabla = layer.nablaWeights.At3(batch_idx, r, c);
 
-                param_sv = layer.weight.At(r, c);
-                layer.weight.Set(r, c, param_sv - delta);
+                param_sv = layer.weight.At2(r, c);
+                layer.weight.Set2(r, c, param_sv - delta);
             }
         }
         else {
@@ -849,7 +849,7 @@ class Network {
 
             if (c == -1) {
 
-                nabla = layer.nablaBiases.At(feature_idx, 0);
+                nabla = layer.nablaBiases.At2(feature_idx, 0);
 
                 param_sv = layer.biases[feature_idx];
                 layer.biases[feature_idx] -= delta;
@@ -858,8 +858,8 @@ class Network {
 
                 nabla = layer.nablaWeights.At3(feature_idx, r, c);
 
-                param_sv = layer.weights[feature_idx].At(r, c);
-                layer.weights[feature_idx].Set(r, c, param_sv - delta);
+                param_sv = layer.weights[feature_idx].At2(r, c);
+                layer.weights[feature_idx].Set2(r, c, param_sv - delta);
             }
         }
 
@@ -927,7 +927,7 @@ class Network {
 
             console.log("C = 1/2 * Σ(ai - yi)^2 = " + cost_sv[batch_idx]);
             console.log("ΔC = " + deltaC);
-            console.log("- nabla * delta = - " + nabla + " * " + delta + " = " + deltaC1);//, layer.prevLayer.activation.At(c, 0)
+            console.log("- nabla * delta = - " + nabla + " * " + delta + " = " + deltaC1);//, layer.prevLayer.activation.At2(c, 0)
 
             if (layer instanceof FullyConnectedLayer) {
 
@@ -950,7 +950,7 @@ class Network {
             }
             else {
 
-                layer.weight.Set(r, c, param_sv);
+                layer.weight.Set2(r, c, param_sv);
             }
         }
         else {
@@ -961,7 +961,7 @@ class Network {
             }
             else {
 
-                layer.weights[feature_idx].Set(r, c, param_sv);
+                layer.weights[feature_idx].Set2(r, c, param_sv);
             }
         }
 
