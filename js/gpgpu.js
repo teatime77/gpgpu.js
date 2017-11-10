@@ -40,6 +40,21 @@ function make2DArray(nrow, ncol, init) {
 
     v.shape = [nrow, ncol];
 
+    v.T = function () {
+        var m = make2DArray(this.ncol, this.nrow);
+        var i1 = 0;
+        for(var r = 0; r < this.ncol; r++) {
+            var i2 = r;
+            for (var c = 0; c < this.nrow; c++) {
+                m[i1] = this[i2];
+                i1++;
+                i2 += this.ncol;
+            }
+        }
+
+        return m;
+    }
+
     return v;
 }
 
@@ -105,9 +120,13 @@ class ArrayView {
 
     T() {
         var m = new ArrayView(this.ncol, this.nrow);
+        var i1 = 0;
         for (var r = 0; r < this.ncol; r++) {
+            var i2 = r;
             for (var c = 0; c < this.nrow; c++) {
-                m.dt[r * this.nrow +c]= this.dt[c * this.ncol + r];
+                m.dt[i1] = this.dt[i2];
+                i1++;
+                i2 += this.ncol;
             }
         }
 
