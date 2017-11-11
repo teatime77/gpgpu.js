@@ -1,8 +1,6 @@
 ﻿var Shaders = {};
 
-Shaders["AttribTest"] = `#version 300 es
-precision highp float;
-precision highp int;
+Shaders["AttribTest"] = `
 precision highp sampler3D;
 
 in    float    w;
@@ -24,10 +22,7 @@ void main() {
 }`;
 
 
-Shaders["Test"] = `#version 300 es
-
-precision highp float;
-precision highp int;
+Shaders["Test"] = `
 precision highp sampler3D;
 
 in float idx_f;
@@ -58,10 +53,7 @@ void main() {
 }`;
 
 
-Shaders["ConvolutionalLayer-forward"] = `#version 300 es
-
-precision highp float;
-precision highp int;
+Shaders["ConvolutionalLayer-forward"] = `
 precision highp sampler3D;
 
 uniform float weights[featureCount * filterSize * filterSize];
@@ -134,10 +126,7 @@ void main() {
 }`;
 
 
-Shaders["ConvolutionalLayer-backward"] = `#version 300 es
-
-precision highp float;
-precision highp int;
+Shaders["ConvolutionalLayer-backward"] = `
 precision highp sampler3D;
 
 uniform float weights[featureCount * filterSize * filterSize];
@@ -184,11 +173,7 @@ void main() {
 }`;
 
 
-Shaders["vs-Texture"] = `#version 300 es
-
-precision highp float;
-precision highp int;
-
+Shaders["vs-Texture"] = `
 uniform int B_Cols;
 
 uniform sampler2D A_Tex;
@@ -216,11 +201,8 @@ void main() {
     dot_val = sum;
 }`;
 
-Shaders["vs-Uniform"] = `#version 300 es
-
-precision highp float;
-precision highp int;
-
+Shaders["vs-Uniform"] =
+`
 uniform int B_Cols;
 
 uniform vec4 A[_A_len_];

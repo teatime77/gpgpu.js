@@ -500,6 +500,8 @@ function CreateGPGPU(canvas) {
             シェーダを作る。
         */
         makeShader(type, source) {
+            source = "#version 300 es\nprecision highp float;\nprecision highp int;\n" + source;
+
             // シェーダを作る。
             var shader = gl.createShader(type); chk();
 
@@ -980,9 +982,7 @@ function CreateGPGPU(canvas) {
         }
 
         setStandardShader() {
-            this.textureSphereVertexShader = `#version 300 es
-                precision highp float;
-                precision highp int;
+            this.textureSphereVertexShader = `
 
                 const vec3 uAmbientColor = vec3(0.2, 0.2, 0.2);
                 const vec3 uLightingDirection =  normalize( vec3(0.25, 0.25, 1) );
@@ -1018,11 +1018,7 @@ function CreateGPGPU(canvas) {
             `;
 
             this.minFragmentShader =
-               `#version 300 es
-                precision highp float;
-                precision highp int;
-
-                out vec4 color;
+               `out vec4 color;
 
                 void main(){
                     color = vec4(1.0);
@@ -1030,11 +1026,7 @@ function CreateGPGPU(canvas) {
 
 
             this.defaultFragmentShader =
-               `#version 300 es
-                precision highp float;
-                precision highp int;
-
-                in vec3 vLightWeighting;
+               `in vec3 vLightWeighting;
 	            in vec2 uv0;
 	            in vec2 uv1;
 
