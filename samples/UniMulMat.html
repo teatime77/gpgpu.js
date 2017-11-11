@@ -1,0 +1,80 @@
+﻿<html>
+<head>
+<title>行列とベクトルの乗算</title>
+<meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Cache-Control" content="no-cache">
+
+<script type="text/javascript" src="../js/gpgpu.js"></script>
+
+<script type="text/javascript">
+    function printColumnMajor() {
+
+    }
+
+    function onBodyLoad() {
+    // 頂点シェーダのプログラムを文字列で記述します。
+    var vertex_shader =
+       `// 入力変数A
+        in  vec3 A;
+
+        // uniform変数B
+        uniform  mat3 B;
+
+        // 出力変数C
+        out vec3 C;
+
+        // 要素ごとに呼ばれる関数。
+        void main(void ) {
+            C = B * A;
+    }`;
+
+
+    // 入力変数AをFloat32Arrayの配列で作ります。
+    var A = new Float32Array([1, 2, 3, 4, 5, 6]);
+        // 1 4
+        // 2 5
+        // 3 6
+
+    // 同様に入力変数Bを作ります。
+    var B = new Float32Array([2, 1, 0, 0, 3, 0, 0, 0, 4]);
+        // 2 0 0
+        // 1 3 0
+        // 0 0 4
+
+    // 出力変数Cは配列のサイズ(6)を指定して作ります。
+    var C = new Float32Array(6);
+
+    // 計算のパラメータ
+    var param = {
+        // idはプログラム内でユニークであれば何でも構いません。
+        id: "AddVec",
+
+        // 頂点シェーダの文字列を指定します。
+        vertexShader: vertex_shader,
+
+        // 頂点シェーダ内の入力と出力の変数名に値を割り当てます。
+        args: {
+            "A": A,
+            "B": B,
+            "C": C,
+        }
+    };
+
+    // GPGPUのオブジェクトを作ります。
+    var gpgpu = CreateGPGPU();
+
+    // パラメータを使い計算します。
+    gpgpu.compute(param);
+
+    // 計算結果を表示します。
+    document.body.insertAdjacentHTML("beforeend", "<p>A = <br/>" + A.slice(0, 3).join(' ') + "<br/>" + A.slice(3, 6).join(' ') + "</p>");
+    document.body.insertAdjacentHTML("beforeend", "<p>B = <br/>" + B.slice(0, 3).join(' ') + "<br/>" + B.slice(3, 6).join(' ') + "<br/>" + B.slice(6, 9).join(' ') + "</p>");
+    document.body.insertAdjacentHTML("beforeend", "<p>C = B * A = <br/>" + C.slice(0, 3).join(' ') + "<br/>" + C.slice(3, 6).join(' ') + "</p>");
+}
+</script>
+</head>
+<body onload="onBodyLoad()">
+
+</body>
+</html>

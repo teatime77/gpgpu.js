@@ -1,0 +1,80 @@
+﻿<html>
+<head>
+<title>平面</title>
+<meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Cache-Control" content="no-cache">
+
+<script type="text/javascript" src="../js/gpgpu.js"></script>
+
+<script type="text/javascript">
+function onBodyLoad() {
+    var vertex_shader =
+       `in float zero;
+
+        uniform sampler2D A;
+        uniform sampler2D B;
+
+        out float C;
+
+        void main() {
+            ivec2 A_sz = textureSize(A, 0);
+            ivec2 B_sz = textureSize(B, 0);
+
+            int row = gl_VertexID / B_sz.x;
+            int col = gl_VertexID % B_sz.x;
+
+            float sum = 0.0f;
+            for(int i = 0; i < A_sz.x; i++){
+
+                vec4 a = texelFetch(A, ivec2(i, row), 0);
+                vec4 b = texelFetch(B, ivec2(col, i), 0);
+
+                sum += a.r * b.r;
+            }
+
+            C = sum + zero;
+        }`;
+
+    var A = make2DArray(4, 3, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+    var B = make2DArray(3, 2, [0, 1, 2, 3, 4, 5]);
+
+    var C = make2DArray(4, 2);
+
+    var param = {
+        id: "MatMul",
+        vertexShader: vertex_shader
+        ,
+        args: {
+            "zero": new Float32Array(16),
+            "A": new TextureInfo("float", A),
+            "B": new TextureInfo("float", B),
+            "C": C,
+        }
+    };
+
+    var gpgpu = CreateGPGPU();
+    gpgpu.compute(param);
+
+    document.body.insertAdjacentHTML("beforeend", "<p>C = " + C.join(' ') + "</p>");
+
+    var C2 = make2DArray(4, 2);
+    for (var r = 0; r < 4; r++) {
+        for (var c = 0; c < 2; c++) {
+            var sum = 0;
+            for (var i = 0; i < 3; i++) {
+                sum += A[r * A.ncol + i] * B[i * B.ncol + c];
+            }
+            C2[r * 2 + c] = sum;
+        }
+    }
+
+    document.body.insertAdjacentHTML("beforeend", "<p>C2 = " + C2.join(' ') + "</p>");
+    document.body.insertAdjacentHTML("beforeend", "<p>A_T = " + A.T().join(' ') + "</p>");
+}
+</script>
+</head>
+<body onload="onBodyLoad()">
+
+</body>
+</html>

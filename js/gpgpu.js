@@ -670,14 +670,11 @@ function CreateGPGPU(canvas) {
 
                     if (dim == gl.TEXTURE_2D) {
 
-//                        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, tex_inf.value.ncol / 4, tex_inf.value.nrow, 0, gl.RGBA, gl.FLOAT, tex_inf.value.dt); chk();
-//                        gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, tex_inf.value.ncol, tex_inf.value.nrow, 0, gl.RED, gl.FLOAT, data); chk();
                         gl.texImage2D(gl.TEXTURE_2D, 0, internal_format, tex_inf.value.ncol / col_size, tex_inf.value.nrow, 0, format, gl.FLOAT, data); chk();
                     }
                     else {
                         Assert(dim == gl.TEXTURE_3D, "set-Tex");
 
-//                        gl.texImage3D(gl.TEXTURE_3D, 0, gl.RGBA32F, tex_inf.value.ncol / 4, tex_inf.value.nrow, tex_inf.value.shape[tex_inf.value.shape.length - 3], 0, gl.RGBA, gl.FLOAT, data); chk();
                         gl.texImage3D(gl.TEXTURE_3D, 0, internal_format, tex_inf.value.ncol / col_size, tex_inf.value.nrow, tex_inf.value.shape[tex_inf.value.shape.length - 3], 0, format, gl.FLOAT, data); chk();
                     }
                 }

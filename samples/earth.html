@@ -1,0 +1,56 @@
+﻿<html>
+<head>
+<title>Geodesic grid
+</title>
+<meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Cache-Control" content="no-cache">
+
+<script type="text/javascript" src="../js/glMatrix-0.9.5.min.js"></script>
+<script type="text/javascript" src="../js/gpgpu.js"></script>
+<script type="text/javascript" src="../js/shape.js"></script>
+
+<script type="text/javascript">
+class MyDraw {
+    constructor() {
+        this.img = new Image();
+
+        this.img.onload = function () {
+            var canvas = document.getElementById("webgl-canvas");
+            this.MyWebGL = CreateGPGPU(canvas);
+            this.MyWebGL.Draw3D(this);
+        }.bind(this);
+
+        this.img.src = "../img/world.topo.bathy.200408.2048x2048.png";
+    }
+
+    onDraw() {
+        if (!this.param) {
+
+            var ret = makeEarthBuffers();
+
+            this.param = {
+                id: "Earth",
+                vertexShader: this.MyWebGL.textureSphereVertexShader,
+                fragmentShader: this.MyWebGL.defaultFragmentShader
+                ,
+                args: {
+                    "VertexPosition": ret.vertex_array,
+                    "VertexNormal": ret.normal_array,
+                    "TextureCoord": ret.texture_array,
+                    "TextureImage": new TextureInfo("vec4", this.img),
+                }
+                ,
+                VertexIndexBuffer: ret.idx_array
+            };
+        }
+
+        return this.param;
+    }
+}
+</script>
+</head>
+<body onload="new MyDraw()">
+    <canvas id="webgl-canvas" style="border: none;" width="500" height="500"></canvas>
+</body>
+</html>
