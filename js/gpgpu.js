@@ -1,269 +1,25 @@
 ﻿// JavaScript source code
 
-function Assert(b, msg) {
-    if (!b) {
-        console.log(msg);
-    }
-};
-
-function MakeFloat32Index(n) {
-    var v = new Float32Array(n);
-    for (var i = 0; i < n; i++) {
-        v[i] = i;
-    }
-
-    return v;
-}
-
-function make2DArray(nrow, ncol, init) {
-    var v;
-    
-    if(init){
-        if (init instanceof Float32Array) {
-
-            v = init;
-        }
-        else {
-
-            v = new Float32Array(init);
-        }
-
-        Assert(v.length == nrow * ncol);
-    }
-    else{
-
-        v = new Float32Array(nrow * ncol);
-    }
-
-    v.nrow  = nrow;
-    v.ncol  = ncol;
-
-    v.shape = [nrow, ncol];
-
-    v.T = function () {
-        var m = make2DArray(this.ncol, this.nrow);
-        var i1 = 0;
-        for(var r = 0; r < this.ncol; r++) {
-            var i2 = r;
-            for (var c = 0; c < this.nrow; c++) {
-                m[i1] = this[i2];
-                i1++;
-                i2 += this.ncol;
-            }
-        }
-
-        return m;
-    }
-
-    return v;
-}
-
-class TextureInfo {
-    constructor(texel_type, value) {
-        this.texelType = texel_type;
-        this.value     = value;
-    }
-}
-
-class ArrayView {
-    constructor() {
-        var args;
-
-        if(arguments.length == 1 && Array.isArray(arguments[0])) {
-
-            args = arguments[0];
-        }
-        else {
-
-            // 引数のリストをArrayに変換します。
-            args = Array.prototype.slice.call(arguments);
-        }
-
-        // 引数の最後
-        var last_arg = args[args.length -1];
-        if (typeof last_arg != 'number') {
-            // 引数の最後が数値でない場合
-
-            if (typeof last_arg == 'ArrayView') {
-
-                this.dt = new Float32Array(last_arg.dt);
-            }
-            else {
-
-                Assert(last_arg instanceof Float32Array, "is Float32Array");
-                this.dt = last_arg;
-            }
-
-            args.pop();
-        }
-
-        this.shape = args;
-
-        this.ncol = this.shape[this.shape.length -1];
-        if (this.shape.length == 1) {
-
-            this.nrow = 1;
-        }
-        else {
-
-            this.nrow = this.shape[this.shape.length -2];
-        }
-
-        if (!this.dt) {
-            this.dt = new Float32Array(this.shape.reduce((x, y) => x * y));
-        }
-    }
-
-    Map(f) {
-        return new ArrayView(this.nrow, this.ncol, this.dt.map(f));
-    }
-
-    T() {
-        var m = new ArrayView(this.ncol, this.nrow);
-        var i1 = 0;
-        for (var r = 0; r < this.ncol; r++) {
-            var i2 = r;
-            for (var c = 0; c < this.nrow; c++) {
-                m.dt[i1] = this.dt[i2];
-                i1++;
-                i2 += this.ncol;
-            }
-        }
-
-        return m;
-    }
-
-    At2(r, c) {
-        Assert(r < this.nrow && c < this.ncol, "ArrayView-at");
-        return this.dt[r * this.ncol +c];
-    }
-
-    Set2(r, c, val) {
-        Assert(r < this.nrow && c < this.ncol, "ArrayView-set");
-
-        this.dt[r * this.ncol +c]= val;
-    }
-
-    At3(d, r, c) {
-        Assert(d < this.shape[this.shape.length -3]&& r < this.nrow && c < this.ncol, "ArrayView-at3");
-
-        return this.dt[(d * this.nrow +r) * this.ncol +c];
-    }
-
-    Set3(d, r, c, val) {
-        Assert(d < this.shape[this.shape.length -3]&& r < this.nrow && c < this.ncol, "ArrayView-set3");
-
-        this.dt[(d * this.nrow +r) * this.ncol +c]= val;
-    }
-
-    Col(c) {
-        var v = new Float32Array(this.nrow);
-        for (var r = 0; r < this.nrow; r++) {
-            v[r]= this.dt[r * this.ncol +c];
-        }
-
-        return new ArrayView(this.nrow, 1, v);
-    }
-
-    Add(m) {
-        Assert(m instanceof ArrayView && m.nrow == this.nrow && m.ncol == this.ncol, "ArrayView-add");
-        var v = new Float32Array(this.nrow * this.ncol);
-        for (var r = 0; r < this.nrow; r++) {
-            for (var c = 0; c < this.ncol; c++) {
-                var k = r * this.ncol +c;
-                v[k] = this.dt[k]+m.dt[k];
-            }
-        }
-
-        return new ArrayView(this.nrow, this.ncol, v);
-    }
-
-    AddVec(vec) {
-        Assert(vec instanceof ArrayView && vec.nrow == this.nrow && vec.ncol == 1, "ArrayView-add-V");
-        var v = new Float32Array(this.nrow * this.ncol);
-        for (var r = 0; r < this.nrow; r++) {
-            for (var c = 0; c < this.ncol; c++) {
-                var k = r * this.ncol + c;
-                v[k] = this.dt[k] + vec.dt[r];
-            }
-        }
-
-        return new ArrayView(this.nrow, this.ncol, v);
-    }
-
-    Reduce(f) {
-        var v = new Float32Array(this.nrow);
-        for (var r = 0; r < this.nrow; r++) {
-            var x;
-            for (var c = 0; c < this.ncol; c++) {
-                var k = r * this.ncol +c;
-                if (c == 0) {
-
-                    x = this.dt[k];
-                }
-                else {
-
-                    x = f(x, this.dt[k]);
-                }
-            }
-            v[r]= x;
-        }
-
-        return new ArrayView(this.nrow, 1, v);
-    }
-
-    Sub(m) {
-        Assert(m instanceof ArrayView && m.nrow == this.nrow && m.ncol == this.ncol, "ArrayView-Sub");
-        var v = new Float32Array(this.nrow * this.ncol);
-        for (var r = 0; r < this.nrow; r++) {
-            for (var c = 0; c < this.ncol; c++) {
-                var k = r * this.ncol + c;
-                v[k]= this.dt[k]-m.dt[k];
-            }
-        }
-
-        return new ArrayView(this.nrow, this.ncol, v);
-    }
-
-    Mul(m) {
-        if (m instanceof Number) {
-
-            return new ArrayView(this.nrow, this.ncol, this.dt.map(x => x * m));
-            }
-        Assert(m instanceof ArrayView && m.nrow == this.nrow && m.ncol == this.ncol && m.columnMajor == this.columnMajor, "Array-View-mul");
-        var v = new Float32Array(this.nrow * this.ncol);
-        for (var r = 0; r < this.nrow; r++) {
-            for(var c = 0; c < this.ncol; c++) {
-                var k = r * this.ncol +c;
-                v[k]= this.dt[k]* m.dt[k];
-                }
-        }
-
-        return new ArrayView(this.nrow, this.ncol, v);
-    }
-
-    Dot(m) {
-        Assert(m instanceof ArrayView && m.nrow == this.ncol, "ArrayView-Dot");
-
-        var v = new Float32Array(this.nrow * m.ncol);
-        for (var r = 0; r < this.nrow; r++) {
-            for(var c = 0; c < m.ncol; c++) {
-                var sum = 0;
-                for (var k = 0; k < this.ncol; k++) {
-                    sum += this.dt[r * this.ncol +k]* m.dt[k * m.ncol +c];
-                }
-                v[r * m.ncol +c]= sum;
-                }
-                }
-        return new ArrayView(this.nrow, m.ncol, v);
-    }
-}
 
 function CreateGPGPU(canvas) {
     let gl;
 
+    function assert(condition, message) {
+        if (!condition) {
+            throw new Error(message || "Assertion failed");
+        }
+    }
+
     function chk() {
-        Assert(gl.getError() == gl.NO_ERROR);
+        assert(gl.getError() == gl.NO_ERROR);
+    }
+
+    class TextureInfo {
+        constructor(texel_type, shape, value) {
+            this.texelType = texel_type;
+            this.shape = shape;
+            this.value = value;
+        }
     }
 
     class GPGPU {
@@ -298,6 +54,10 @@ function CreateGPGPU(canvas) {
 
         getGL() {
             return gl;
+        }
+
+        makeTextureInfo(texel_type, shape, value) {
+            return new TextureInfo(texel_type, shape, value);
         }
 
         WebGLClear() {
@@ -364,7 +124,7 @@ function CreateGPGPU(canvas) {
 
                         continue;
                     }
-                    Assert(tkn1 == "int" || tkn1 == "float" || tkn1 == "vec2" || tkn1 == "vec3" || tkn1 == "vec4" ||
+                    assert(tkn1 == "int" || tkn1 == "float" || tkn1 == "vec2" || tkn1 == "vec3" || tkn1 == "vec4" ||
                         tkn1 == "sampler2D" || tkn1 == "sampler3D" ||
                         tkn1 == "mat4" || tkn1 == "mat3" || tkn1 == "bool");
 
@@ -411,7 +171,7 @@ function CreateGPGPU(canvas) {
                     if (tkn1 == "sampler2D" || tkn1 == "sampler3D") {
                         // テクスチャのsamplerの場合
 
-                        Assert(tokens[0] == "uniform" && arg_val instanceof TextureInfo);
+                        assert(tokens[0] == "uniform" && arg_val instanceof TextureInfo);
 
                         // 変数名をセットする。
                         arg_val.name = arg_name;
@@ -530,18 +290,15 @@ function CreateGPGPU(canvas) {
                 // attribute変数の次元
                 var attrib_dim = this.vecDim(attrib.type);
 
-                // attribute変数の配列の長さ
-                var attrib_len = attrib.value instanceof ArrayView ? attrib.value.dt.length : attrib.value.length;
-
                 // 要素の個数
-                var elemen_count = attrib_len / attrib_dim;
+                var elemen_count = attrib.value.length / attrib_dim;
 
                 if (pkg.elementCount == undefined) {
                     pkg.attribElementCount = elemen_count;
                 }
                 else {
 
-                    Assert(pkg.elementCount == elemen_count);
+                    assert(pkg.elementCount == elemen_count);
                 }
 
                 // バッファを作る。
@@ -629,14 +386,6 @@ function CreateGPGPU(canvas) {
                 else {
                     // テクスチャが画像でない場合
 
-                    var data;
-                    if (tex_inf.value instanceof ArrayView) {
-                        data = tex_inf.value.dt;
-                    }
-                    else {
-                        data = tex_inf.value;
-                    }
-
                     var internal_format, format, col_size;
                     switch (tex_inf.texelType) {
                         case "float":
@@ -664,18 +413,18 @@ function CreateGPGPU(canvas) {
                             break;
 
                         default:
-                            Assert(false);
+                            assert(false);
                             break;
                     }
 
                     if (dim == gl.TEXTURE_2D) {
 
-                        gl.texImage2D(gl.TEXTURE_2D, 0, internal_format, tex_inf.value.ncol / col_size, tex_inf.value.nrow, 0, format, gl.FLOAT, data); chk();
+                        gl.texImage2D(gl.TEXTURE_2D, 0, internal_format, tex_inf.shape[1] / col_size, tex_inf.shape[0], 0, format, gl.FLOAT, tex_inf.value); chk();
                     }
                     else {
-                        Assert(dim == gl.TEXTURE_3D, "set-Tex");
+                        assert(dim == gl.TEXTURE_3D, "set-Tex");
 
-                        gl.texImage3D(gl.TEXTURE_3D, 0, internal_format, tex_inf.value.ncol / col_size, tex_inf.value.nrow, tex_inf.value.shape[tex_inf.value.shape.length - 3], 0, format, gl.FLOAT, data); chk();
+                        gl.texImage3D(gl.TEXTURE_3D, 0, internal_format, tex_inf.shape[2] / col_size, tex_inf.shape[1], tex_inf.shape[0], 0, format, gl.FLOAT, tex_inf.value); chk();
                     }
                 }
             }
@@ -792,31 +541,29 @@ function CreateGPGPU(canvas) {
 
         setUniformsData(pkg) {
             for (let u of pkg.uniforms) {
-                if (u.value instanceof ArrayView || u.value instanceof Float32Array) {
-
-                    var val = u.value instanceof ArrayView ? u.value.dt : u.value;
+                if (u.value instanceof Float32Array) {
 
                     switch (u.type) {
                         case "mat4":
-                            gl.uniformMatrix4fv(u.locUniform, false, val); chk();
+                            gl.uniformMatrix4fv(u.locUniform, false, u.value); chk();
                             break;
                         case "mat3":
-                            gl.uniformMatrix3fv(u.locUniform, false, val); chk();
+                            gl.uniformMatrix3fv(u.locUniform, false, u.value); chk();
                             break;
                         case "vec4":
-                            gl.uniform4fv(u.locUniform, val); chk();
+                            gl.uniform4fv(u.locUniform, u.value); chk();
                             break;
                         case "vec3":
-                            gl.uniform3fv(u.locUniform, val); chk();
+                            gl.uniform3fv(u.locUniform, u.value); chk();
                             break;
                         case "vec2":
-                            gl.uniform2fv(u.locUniform, val); chk();
+                            gl.uniform2fv(u.locUniform, u.value); chk();
                             break;
                         case "float":
-                            gl.uniform1fv(u.locUniform, val); chk();
+                            gl.uniform1fv(u.locUniform, u.value); chk();
                             break;
                         default:
-                            Assert(false);
+                            assert(false);
                             break;
                     }
                 }
@@ -838,7 +585,7 @@ function CreateGPGPU(canvas) {
             for(let args of[ pkg.attributes, pkg.uniforms, pkg.textures, pkg.varyings ]) {
                 for (let arg of args) {
                     var val = param.args[arg.name];
-                    Assert(val != undefined);
+                    assert(val != undefined);
                     if (args == pkg.textures) {
 
                         arg.value = val.value;
@@ -929,13 +676,8 @@ function CreateGPGPU(canvas) {
                     // ARRAY_BUFFERにバインドする。
                     gl.bindBuffer(gl.ARRAY_BUFFER, varying.feedbackBuffer); chk();
 
-                    var out_buf = varying.value;
-                    if (out_buf instanceof ArrayView) {
-                        out_buf = out_buf.dt;
-                    }
-
                     // ARRAY_BUFFERのデータを取り出す。
-                    gl.getBufferSubData(gl.ARRAY_BUFFER, 0, out_buf); chk();
+                    gl.getBufferSubData(gl.ARRAY_BUFFER, 0, varying.value); chk();
 
                     // ARRAY_BUFFERのバインドを解く。
                     gl.bindBuffer(gl.ARRAY_BUFFER, null); chk();

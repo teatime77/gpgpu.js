@@ -2,6 +2,12 @@
 
 var vDot = {};
 
+function Assert(condition, message) {
+    if (!condition) {
+        throw new Error(message || "Assertion failed");
+    }
+}
+
 function xrange() {
     var start, stop, step;
 
@@ -82,6 +88,256 @@ function zip2(u, v, f) {
     return ret;
 }
 
+function makeTextureInfo(gpgpu, texel_type, array_view) {
+    return gpgpu.makeTextureInfo(texel_type, array_view.shape, array_view.dt);
+}
+
+function MakeFloat32Index(n) {
+    var v = new Float32Array(n);
+    for (var i = 0; i < n; i++) {
+        v[i] = i;
+    }
+
+    return v;
+}
+
+function make2DArray(nrow, ncol, init) {
+    var v;
+
+    if (init) {
+        if (init instanceof Float32Array) {
+
+            v = init;
+        }
+        else {
+
+            v = new Float32Array(init);
+        }
+
+        Assert(v.length == nrow * ncol);
+    }
+    else {
+
+        v = new Float32Array(nrow * ncol);
+    }
+
+    v.nrow = nrow;
+    v.ncol = ncol;
+
+    v.shape = [nrow, ncol];
+
+    v.T = function () {
+        var m = make2DArray(this.ncol, this.nrow);
+        var i1 = 0;
+        for (var r = 0; r < this.ncol; r++) {
+            var i2 = r;
+            for (var c = 0; c < this.nrow; c++) {
+                m[i1] = this[i2];
+                i1++;
+                i2 += this.ncol;
+            }
+        }
+
+        return m;
+    }
+
+    return v;
+}
+
+class ArrayView {
+    constructor() {
+        var args;
+
+        if (arguments.length == 1 && Array.isArray(arguments[0])) {
+
+            args = arguments[0];
+        }
+        else {
+
+            // 引数のリストをArrayに変換します。
+            args = Array.prototype.slice.call(arguments);
+        }
+
+        // 引数の最後
+        var last_arg = args[args.length - 1];
+        if (typeof last_arg != 'number') {
+            // 引数の最後が数値でない場合
+
+            if (typeof last_arg == 'ArrayView') {
+
+                this.dt = new Float32Array(last_arg.dt);
+            }
+            else {
+
+                Assert(last_arg instanceof Float32Array, "is Float32Array");
+                this.dt = last_arg;
+            }
+
+            args.pop();
+        }
+
+        this.shape = args;
+
+        this.ncol = this.shape[this.shape.length - 1];
+        if (this.shape.length == 1) {
+
+            this.nrow = 1;
+        }
+        else {
+
+            this.nrow = this.shape[this.shape.length - 2];
+        }
+
+        if (!this.dt) {
+            this.dt = new Float32Array(this.shape.reduce((x, y) => x * y));
+        }
+    }
+
+    Map(f) {
+        return new ArrayView(this.nrow, this.ncol, this.dt.map(f));
+    }
+
+    T() {
+        var m = new ArrayView(this.ncol, this.nrow);
+        var i1 = 0;
+        for (var r = 0; r < this.ncol; r++) {
+            var i2 = r;
+            for (var c = 0; c < this.nrow; c++) {
+                m.dt[i1] = this.dt[i2];
+                i1++;
+                i2 += this.ncol;
+            }
+        }
+
+        return m;
+    }
+
+    At2(r, c) {
+        Assert(r < this.nrow && c < this.ncol, "ArrayView-at");
+        return this.dt[r * this.ncol + c];
+    }
+
+    Set2(r, c, val) {
+        Assert(r < this.nrow && c < this.ncol, "ArrayView-set");
+
+        this.dt[r * this.ncol + c] = val;
+    }
+
+    At3(d, r, c) {
+        Assert(d < this.shape[this.shape.length - 3] && r < this.nrow && c < this.ncol, "ArrayView-at3");
+
+        return this.dt[(d * this.nrow + r) * this.ncol + c];
+    }
+
+    Set3(d, r, c, val) {
+        Assert(d < this.shape[this.shape.length - 3] && r < this.nrow && c < this.ncol, "ArrayView-set3");
+
+        this.dt[(d * this.nrow + r) * this.ncol + c] = val;
+    }
+
+    Col(c) {
+        var v = new Float32Array(this.nrow);
+        for (var r = 0; r < this.nrow; r++) {
+            v[r] = this.dt[r * this.ncol + c];
+        }
+
+        return new ArrayView(this.nrow, 1, v);
+    }
+
+    Add(m) {
+        Assert(m instanceof ArrayView && m.nrow == this.nrow && m.ncol == this.ncol, "ArrayView-add");
+        var v = new Float32Array(this.nrow * this.ncol);
+        for (var r = 0; r < this.nrow; r++) {
+            for (var c = 0; c < this.ncol; c++) {
+                var k = r * this.ncol + c;
+                v[k] = this.dt[k] + m.dt[k];
+            }
+        }
+
+        return new ArrayView(this.nrow, this.ncol, v);
+    }
+
+    AddVec(vec) {
+        Assert(vec instanceof ArrayView && vec.nrow == this.nrow && vec.ncol == 1, "ArrayView-add-V");
+        var v = new Float32Array(this.nrow * this.ncol);
+        for (var r = 0; r < this.nrow; r++) {
+            for (var c = 0; c < this.ncol; c++) {
+                var k = r * this.ncol + c;
+                v[k] = this.dt[k] + vec.dt[r];
+            }
+        }
+
+        return new ArrayView(this.nrow, this.ncol, v);
+    }
+
+    Reduce(f) {
+        var v = new Float32Array(this.nrow);
+        for (var r = 0; r < this.nrow; r++) {
+            var x;
+            for (var c = 0; c < this.ncol; c++) {
+                var k = r * this.ncol + c;
+                if (c == 0) {
+
+                    x = this.dt[k];
+                }
+                else {
+
+                    x = f(x, this.dt[k]);
+                }
+            }
+            v[r] = x;
+        }
+
+        return new ArrayView(this.nrow, 1, v);
+    }
+
+    Sub(m) {
+        Assert(m instanceof ArrayView && m.nrow == this.nrow && m.ncol == this.ncol, "ArrayView-Sub");
+        var v = new Float32Array(this.nrow * this.ncol);
+        for (var r = 0; r < this.nrow; r++) {
+            for (var c = 0; c < this.ncol; c++) {
+                var k = r * this.ncol + c;
+                v[k] = this.dt[k] - m.dt[k];
+            }
+        }
+
+        return new ArrayView(this.nrow, this.ncol, v);
+    }
+
+    Mul(m) {
+        if (m instanceof Number) {
+
+            return new ArrayView(this.nrow, this.ncol, this.dt.map(x => x * m));
+        }
+        Assert(m instanceof ArrayView && m.nrow == this.nrow && m.ncol == this.ncol && m.columnMajor == this.columnMajor, "Array-View-mul");
+        var v = new Float32Array(this.nrow * this.ncol);
+        for (var r = 0; r < this.nrow; r++) {
+            for (var c = 0; c < this.ncol; c++) {
+                var k = r * this.ncol + c;
+                v[k] = this.dt[k] * m.dt[k];
+            }
+        }
+
+        return new ArrayView(this.nrow, this.ncol, v);
+    }
+
+    Dot(m) {
+        Assert(m instanceof ArrayView && m.nrow == this.ncol, "ArrayView-Dot");
+
+        var v = new Float32Array(this.nrow * m.ncol);
+        for (var r = 0; r < this.nrow; r++) {
+            for (var c = 0; c < m.ncol; c++) {
+                var sum = 0;
+                for (var k = 0; k < this.ncol; k++) {
+                    sum += this.dt[r * this.ncol + k] * m.dt[k * m.ncol + c];
+                }
+                v[r * m.ncol + c] = sum;
+            }
+        }
+        return new ArrayView(this.nrow, m.ncol, v);
+    }
+}
+
 class TNumpy {
     constructor() {
         this.random = new TNumpyRandom();
@@ -110,8 +366,8 @@ class TNumpy {
                 vs_id = "vs-Texture";
                 param.args = {
                     "idx_f": MakeFloat32Index(param.elementCount),
-                    "A_Tex": new TextureInfo("vec4", A),
-                    "B_Tex": new TextureInfo("vec4", B.T()),
+                    "A_Tex": makeTextureInfo(WebGL2, "vec4", A),
+                    "B_Tex": makeTextureInfo(WebGL2, "vec4", B.T()),
                     "B_Cols": B.ncol,
                     'dot_val': dot_val,
                 };

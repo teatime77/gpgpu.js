@@ -37,7 +37,7 @@ class MyDraw {
                     "VertexPosition": ret.vertex_array,
                     "VertexNormal": ret.normal_array,
                     "TextureCoord": ret.texture_array,
-                    "TextureImage": this.img,
+                    "TextureImage": this.MyWebGL.makeTextureInfo(null, null, this.img),
                 }
                 ,
                 VertexIndexBuffer: ret.idx_array

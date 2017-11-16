@@ -237,11 +237,11 @@ class ConvolutionalLayer extends Layer{
 
             param.args = {
                 "idx_f": MakeFloat32Index(param.elementCount),
-                "prev_activation": new TextureInfo("vec4", param.sub_prev_activation),
+                "prev_activation": makeTextureInfo(WebGL2, "vec4", param.sub_prev_activation),
                 "weights": this.weights.dt,
                 "biases": this.biases.dt,
-                "z": param.sub_z,
-                "activation": param.sub_activation
+                "z": param.sub_z.dt,
+                "activation": param.sub_activation.dt
             };
 
             var shader_src = Shaders[vs_id]
@@ -264,6 +264,9 @@ class ConvolutionalLayer extends Layer{
             param.sub_prev_activation.dt = prev_activation.dt;
             param.sub_z.dt = this.z.dt;
             param.sub_activation.dt = this.activation.dt;
+            param.args["prev_activation"].value = prev_activation.dt;
+            param.args["z"] = param.sub_z.dt;
+            param.args["activation"] = param.sub_activation.dt;
             WebGL2.compute(this.param[param_id]);
         }
         else {
@@ -280,6 +283,9 @@ class ConvolutionalLayer extends Layer{
                     all_idx += this.batchLength;
                 }
 
+                param.args["prev_activation"].value = param.sub_prev_activation.dt;
+                param.args["z"] = param.sub_z.dt;
+                param.args["activation"] = param.sub_activation.dt;
                 WebGL2.compute(this.param[param_id]);
                 
                 all_idx = sub_batch_base;
@@ -465,8 +471,8 @@ class ConvolutionalLayer extends Layer{
 
             param.args = {
                 "idx_f": MakeFloat32Index(param.elementCount),
-                "prev_activation": new TextureInfo("vec4", prev_activation),
-                "delta_z": new TextureInfo("vec4", delta_z_3D),
+                "prev_activation": makeTextureInfo(WebGL2, "vec4", prev_activation),
+                "delta_z": makeTextureInfo(WebGL2, "vec4", delta_z_3D),
                 "nablaWeights": this.nablaWeights,
             };
 
@@ -789,7 +795,7 @@ class Network {
         param.args = {
             "idx_f": MakeFloat32Index(m.dt.length),
             "biases": biases,
-            "prev_activation": new TextureInfo("vec4", m),
+            "prev_activation": makeTextureInfo(WebGL2, "vec4", m),
             "z": z,
             "activation": activation,
         };
@@ -1251,7 +1257,7 @@ function AttribTest(n){
         "biases": biases,
         "f": n,
         "ff": ff,
-        "tt": new TextureInfo("vec4", tt),
+        "tt": makeTextureInfo(WebGL2, "vec4", tt),
         "z": z
     };
 
