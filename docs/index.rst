@@ -7,7 +7,7 @@ Welcome to gpgpu.js's documentation!
 ====================================
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
    :caption: Contents:
 
    getting_started
