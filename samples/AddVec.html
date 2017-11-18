@@ -35,7 +35,10 @@
     // 出力変数Cは配列のサイズ(6)を指定して作ります。
     var C = new Float32Array(6);
 
-    // 計算のパラメータ
+    // GPGPUのオブジェクトを作ります。
+    var gpgpu = CreateGPGPU();
+
+    // 計算のパラメータを作ります。
     var param = {
         // idはプログラム内でユニークであれば何でも構いません。
         id: "AddVec",
@@ -50,9 +53,6 @@
             "C": C,
         }
     };
-
-    // GPGPUのオブジェクトを作ります。
-    var gpgpu = CreateGPGPU();
 
     // パラメータを使い計算します。
     gpgpu.compute(param);

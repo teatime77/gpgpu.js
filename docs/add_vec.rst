@@ -1,36 +1,50 @@
-﻿<html>
-<head>
-<title>uniform変数</title>
-<meta http-equiv="content-type" content="text/html; charset=utf-8">
-<meta http-equiv="Pragma" content="no-cache">
-<meta http-equiv="Cache-Control" content="no-cache">
+﻿
+配列の加算
+==========
 
-<script type="text/javascript" src="../js/gpgpu.js"></script>
+最初に以下のような配列の加算をGPUでしてみます。
 
-<script type="text/javascript">
-    function onBodyLoad() {
+.. image:: _static/img/AddVec.png
+
+
+以下はプログラムの流れです。
+
+1. 頂点シェーダのプログラムを文字列で記述します。
+
+  1. 入力( **in** )と出力( **out** )の変数を宣言します。
+  2. **main** 関数で計算式を書きます。
+
+2. 入力と出力の変数の値を **Float32Array** の配列で定義します。
+3. GPGPUのオブジェクトを作ります。
+4. 計算のパラメータを作ります。
+5. パラメータを使い計算します。
+
+以下はコードです。
+
+.. code-block:: js
+
     // 頂点シェーダのプログラムを文字列で記述します。
     var vertex_shader =
        `// 入力変数A
-        in  float A;
+        in vec3 A;
 
-        // uniform変数B
-        uniform  float B;
+        // 入力変数B
+        in vec3 B;
 
         // 出力変数C
-        out float C;
+        out vec3 C;
 
         // 要素ごとに呼ばれる関数。
         void main(void ) {
-            C = B * A;
+            C = A + B;
     }`;
 
 
     // 入力変数AをFloat32Arrayの配列で作ります。
-    var A = new Float32Array([ 1, 2, 3, 4, 5, 6 ]);
+    var A = new Float32Array([  1,  2,  3,  4,  5,  6 ]);
 
     // 同様に入力変数Bを作ります。
-    var B = 3;
+    var B = new Float32Array([10, 20, 30, 40, 50, 60]);
 
     // 出力変数Cは配列のサイズ(6)を指定して作ります。
     var C = new Float32Array(6);
@@ -59,10 +73,3 @@
 
     // 計算結果を表示します。
     document.body.insertAdjacentHTML("beforeend", "<p>C = " + C.join(' ') + "</p>");
-}
-</script>
-</head>
-<body onload="onBodyLoad()">
-
-</body>
-</html>

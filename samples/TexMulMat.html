@@ -18,28 +18,40 @@ function onBodyLoad() {
         out float C;
 
         void main() {
-            ivec2 A_sz = textureSize(A, 0);
+            // テクスチャBの行数と列数を取得します。
+            // B_sz.yが行数、B_sz.xが列数です。
             ivec2 B_sz = textureSize(B, 0);
 
+            // 出力する行列Cの行(row)と列(col)を計算します。
+            // gl_VertexIDは入力変数の何番目の要素かを示すシステム変数です。
             int row = gl_VertexID / B_sz.x;
             int col = gl_VertexID % B_sz.x;
 
-            float sum = 0.0f;
-            for(int i = 0; i < A_sz.x; i++){
+            // Cのrow行col列の値は、Aのrow行のベクトルとBのcol列のベクトルの内積です。
 
+            // 以下のループでベクトルの内積を計算します。
+            float sum = 0.0f;
+            for(int i = 0; i < B_sz.y; i++) {
+
+                // Aのrow行i列の値を取得します。
                 vec4 a = texelFetch(A, ivec2(i, row), 0);
+
+                // Bのi行col列の値を取得します。
                 vec4 b = texelFetch(B, ivec2(col, i), 0);
 
+                // a.rとb.rに取得した値が入っているので、乗算してから
                 sum += a.r * b.r;
             }
 
+            // 入力変数zeroの値は必要ないですが、使用しない変数はコンパイラが除去してしまいエラーになるので形の上だけ使用します。
+            // zeroの値は0なので計算結果には影響しません。
             C = sum + zero;
         }`;
 
-    var A = new Float32Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
-    var B = new Float32Array([0, 1, 2, 3, 4, 5]);
+    var A = new Float32Array([1, 2, 3, 4, 5, 6, 7, 8, 11, 12, 13, 14, 15, 16, 17, 18]);
+    var B = new Float32Array([1, 2, 3, 4, 5, 6, 7, 8,  9, 10, 11, 12, 13, 14, 15, 16]);
 
-    var C = new Float32Array(4 * 2);
+    var C = new Float32Array(2 * 2);
 
     var gpgpu = CreateGPGPU();
 
@@ -48,9 +60,9 @@ function onBodyLoad() {
         vertexShader: vertex_shader
         ,
         args: {
-            "zero": new Float32Array(16),
-            "A": gpgpu.makeTextureInfo("float", [4, 3], A),
-            "B": gpgpu.makeTextureInfo("float", [3, 2], B),
+            "zero": new Float32Array(2 * 2),
+            "A": gpgpu.makeTextureInfo("float", [2, 8], A),
+            "B": gpgpu.makeTextureInfo("float", [8, 2], B),
             "C": C,
         }
     };
@@ -58,12 +70,12 @@ function onBodyLoad() {
 
     document.body.insertAdjacentHTML("beforeend", "<p>C = " + C.join(' ') + "</p>");
 
-    var C2 = new Float32Array(4 * 2);
-    for (var r = 0; r < 4; r++) {
+    var C2 = new Float32Array(2 * 2);
+    for (var r = 0; r < 2; r++) {
         for (var c = 0; c < 2; c++) {
             var sum = 0;
-            for (var i = 0; i < 3; i++) {
-                sum += A[r * 3 + i] * B[i * 2 + c];
+            for (var i = 0; i < 8; i++) {
+                sum += A[r * 8 + i] * B[i * 2 + c];
             }
             C2[r * 2 + c] = sum;
         }

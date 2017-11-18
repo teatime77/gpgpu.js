@@ -89,7 +89,41 @@ function zip2(u, v, f) {
 }
 
 function makeTextureInfo(gpgpu, texel_type, array_view) {
-    return gpgpu.makeTextureInfo(texel_type, array_view.shape, array_view.dt);
+    var col_size;
+
+    switch (texel_type) {
+        case "float":
+            return gpgpu.makeTextureInfo(texel_type, array_view.shape, array_view.dt);
+
+        case "vec2":
+            col_size = 2;
+            break;
+
+        case "vec3":
+            col_size = 3;
+            break;
+
+        case "vec4":
+            col_size = 4;
+            break;
+
+        default:
+            Assert(false);
+            break;
+    }
+
+    var shape;
+
+    if (array_view.shape.length == 2) {
+
+        shape = [ array_view.shape[0], array_view.shape[1] / col_size ]
+    }
+    else {
+
+        shape = [ array_view.shape[0], array_view.shape[1], array_view.shape[2] / col_size ]
+    }
+
+    return gpgpu.makeTextureInfo(texel_type, shape, array_view.dt);
 }
 
 function MakeFloat32Index(n) {

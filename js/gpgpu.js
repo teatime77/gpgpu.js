@@ -386,30 +386,26 @@ function CreateGPGPU(canvas) {
                 else {
                     // テクスチャが画像でない場合
 
-                    var internal_format, format, col_size;
+                    var internal_format, format;
                     switch (tex_inf.texelType) {
                         case "float":
                             internal_format = gl.R32F;
                             format = gl.RED;
-                            col_size = 1;
                             break;
 
                         case "vec2":
                             internal_format = gl.RG32F;
                             format = gl.RG;
-                            col_size = 2;
                             break;
 
                         case "vec3":
                             internal_format = gl.RGB32F;
                             format = gl.RGB;
-                            col_size = 3;
                             break;
 
                         case "vec4":
                             internal_format = gl.RGBA32F;
                             format = gl.RGBA;
-                            col_size = 4;
                             break;
 
                         default:
@@ -419,12 +415,12 @@ function CreateGPGPU(canvas) {
 
                     if (dim == gl.TEXTURE_2D) {
 
-                        gl.texImage2D(gl.TEXTURE_2D, 0, internal_format, tex_inf.shape[1] / col_size, tex_inf.shape[0], 0, format, gl.FLOAT, tex_inf.value); chk();
+                        gl.texImage2D(gl.TEXTURE_2D, 0, internal_format, tex_inf.shape[1], tex_inf.shape[0], 0, format, gl.FLOAT, tex_inf.value); chk();
                     }
                     else {
                         assert(dim == gl.TEXTURE_3D, "set-Tex");
 
-                        gl.texImage3D(gl.TEXTURE_3D, 0, internal_format, tex_inf.shape[2] / col_size, tex_inf.shape[1], tex_inf.shape[0], 0, format, gl.FLOAT, tex_inf.value); chk();
+                        gl.texImage3D(gl.TEXTURE_3D, 0, internal_format, tex_inf.shape[2], tex_inf.shape[1], tex_inf.shape[0], 0, format, gl.FLOAT, tex_inf.value); chk();
                     }
                 }
             }

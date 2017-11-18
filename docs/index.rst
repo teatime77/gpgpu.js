@@ -10,6 +10,17 @@ Welcome to gpgpu.js's documentation!
    :maxdepth: 2
    :caption: Contents:
 
+   getting_started
+   structure
+   add_vec
+   add_mul_vec
+   type
+   add_dot_vec
+   uni_mul
+   uni_mul_mat
+   tex_mul_mat
+   tex_mul_mat_vec4
+   help
 
 
 Indices and tables
