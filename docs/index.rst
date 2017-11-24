@@ -21,7 +21,6 @@ Welcome to gpgpu.js's documentation!
     tex_mul_mat
     tex_mul_mat_vec4
     speed_test
-    help
     call_graph
 
     api/api
