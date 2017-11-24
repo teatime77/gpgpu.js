@@ -1,90 +1,172 @@
-﻿// JavaScript source code
+﻿
 
+/*
+    GPGPUのオブジェクトを作ります。
 
+    この関数の内部に関数やクラスを入れて外部から参照されないようにします。
+*/
 function CreateGPGPU(canvas) {
     let gl;
 
+    /*
+        エラーのチェックをします。
+    */
     function assert(condition, message) {
         if (!condition) {
             throw new Error(message || "Assertion failed");
         }
     }
 
+    /*
+        WebGLのエラーのチェックをします。
+    */
     function chk() {
         assert(gl.getError() == gl.NO_ERROR);
     }
 
+    /*
+        テクスチャ情報
+
+        テクスチャのテクセルの型、サイズ、値の情報を持ちます。
+    */
     class TextureInfo {
+        /*
+            TextureInfoのコンストラクタ
+        */
         constructor(texel_type, shape, value) {
+            // テクセルの型
             this.texelType = texel_type;
+
+            // テクスチャのサイズ
             this.shape = shape;
+
+            // テクスチャの値
             this.value = value;
         }
     }
 
+    /*
+        GPGPUのメインのクラス
+    */
     class GPGPU {
+
+        /*
+            GPGPUのコンストラクタ
+        */
         constructor(canvas) {
             console.log("init WebGL");
-            this.setStandardShader();
-
-            this.packages = {};
 
             if (!canvas) {
+                // canvasが指定されていない場合
 
-                // -- Init Canvas
+                // canvasを作る。
                 canvas = document.createElement('canvas');
+                
+                // canvasをサイズをセットする。
                 canvas.width = 32;
                 canvas.height = 32;
+
+                // canvasをdocumentに追加する。
                 document.body.appendChild(canvas);
             }
+
             this.canvas = canvas;
 
-            // -- Init WebGL Context
+            // canvasからWebGL2のcontextを得る。
             gl = canvas.getContext('webgl2', { antialias: false });
             var isWebGL2 = !!gl;
             if (!isWebGL2) {
+                // WebGL2のcontextを得られない場合
+
                 console.log("WebGL 2 is not available. See How to get a WebGL 2 implementation");
                 console.log("https://www.khronos.org/webgl/wiki/Getting_a_WebGL_Implementation");
 
                 throw "WebGL 2 is not available.";
             }
 
+            // パッケージのリストを初期化する。
+            this.packages = {};
+
+            // 標準のシェーダの文字列をセットする。
+            this.setStandardShaderString();
+
             this.TEXTUREs = [gl.TEXTURE0, gl.TEXTURE1, gl.TEXTURE2, gl.TEXTURE3];
         }
 
+        /*
+            WebGLのオブジェクトを返します。
+        */
         getGL() {
             return gl;
         }
 
+        /*
+            テクスチャ情報を作ります。
+        */
         makeTextureInfo(texel_type, shape, value) {
             return new TextureInfo(texel_type, shape, value);
         }
 
-        WebGLClear() {
-            for (var id in this.packages) {
-                var pkg = this.packages[id];
+        /*
+            WebGLのオブジェクトをすべて削除します。
+        */
+        clearAll() {
+            var packages = Object.assign({}, this.packages);
+            for (var id in packages) {
+                this.clear(id);
+            }
+        }
+
+        /*
+            指定したidのWebGLのオブジェクトをすべて削除します。
+        */
+        clear(id) {
+            var pkg = this.packages[id];
+
+            if (pkg) {
+                // 指定したidのパッケージがある場合
+
+                delete this.packages[id]
 
                 gl.bindBuffer(gl.ARRAY_BUFFER, null); chk();
-                gl.deleteBuffer(pkg.idxBuffer); chk();
 
+                if (pkg.idxBuffer) {
+
+                    // バッファを削除する。
+                    gl.deleteBuffer(pkg.idxBuffer); chk();
+                }
+
+                // すべてのvarying変数に対し
                 for (let varying of pkg.varyings) {
                     if (varying.feedbackBuffer) {
+                        // Transform Feedbackバッファがある場合
+
+                        // バッファを削除する。
                         gl.deleteBuffer(varying.feedbackBuffer); chk();
                     }
                 }
 
-                gl.deleteTransformFeedback(pkg.transformFeedback); chk();
+                if (pkg.transformFeedback) {
+                    // Transform Feedbackがある場合
 
+                    gl.deleteTransformFeedback(pkg.transformFeedback); chk();
+                }
+
+                // テクスチャのバインドを解く。
                 gl.bindTexture(gl.TEXTURE_2D, null); chk();
                 gl.bindTexture(gl.TEXTURE_3D, null); chk();
 
+                // すべてのテクスチャを削除する。
                 pkg.textures.forEach(x => gl.deleteTexture(x.Texture), chk())
 
+                // プログラムを削除する。
                 gl.deleteProgram(pkg.program); chk();
-                console.log("clear pkg:" + pkg.id);
             }
         }
 
+        /*
+            シェーダのソースコードを解析します。
+        */
         parseShader(pkg, param) {
             // attribute変数、uniform変数、テクスチャ、varying変数の配列を初期化する。
             pkg.attributes = [];
@@ -216,7 +298,7 @@ function CreateGPGPU(canvas) {
         }
 
         /*
-            プログラムを作る。
+            WebGLのプログラムを作ります。
         */
         makeProgram(vertex_shader, fragment_shader, varyings) {
             // プログラムを作る。
@@ -257,7 +339,7 @@ function CreateGPGPU(canvas) {
         }
 
         /*        
-            シェーダを作る。
+            シェーダを作ります。
         */
         makeShader(type, source) {
             source = "#version 300 es\nprecision highp float;\nprecision highp int;\n" + source;
@@ -282,7 +364,7 @@ function CreateGPGPU(canvas) {
         }
 
         /*
-            attribute変数を作る。
+            attribute変数を作ります。
         */
         makeAttrib(pkg) {
             // すべてのattribute変数に対し
@@ -316,7 +398,7 @@ function CreateGPGPU(canvas) {
         }
 
         /*
-            テクスチャを作る。
+            テクスチャを作ります。
         */
         makeTexture(pkg) {
             // すべてのテクスチャに対し
@@ -362,7 +444,7 @@ function CreateGPGPU(canvas) {
         }
 
         /*
-            テクスチャのデータをセットする。
+            テクスチャのデータをセットします。
         */
         setTextureData(pkg) {
             for (var i = 0; i < pkg.textures.length; i++) {
@@ -414,12 +496,17 @@ function CreateGPGPU(canvas) {
                     }
 
                     if (dim == gl.TEXTURE_2D) {
+                        // 2Dのテクスチャの場合
 
+                        // テクスチャのデータをセットする。
                         gl.texImage2D(gl.TEXTURE_2D, 0, internal_format, tex_inf.shape[1], tex_inf.shape[0], 0, format, gl.FLOAT, tex_inf.value); chk();
                     }
                     else {
+                        // 3Dのテクスチャの場合
+
                         assert(dim == gl.TEXTURE_3D, "set-Tex");
 
+                        // テクスチャのデータをセットする。
                         gl.texImage3D(gl.TEXTURE_3D, 0, internal_format, tex_inf.shape[2], tex_inf.shape[1], tex_inf.shape[0], 0, format, gl.FLOAT, tex_inf.value); chk();
                     }
                 }
@@ -440,6 +527,9 @@ function CreateGPGPU(canvas) {
             };
         }
 
+        /*
+            ベクトルの次元を返します。
+        */
         vecDim(tp) {
             if (tp == "vec4") {
                 return 4;
@@ -455,11 +545,17 @@ function CreateGPGPU(canvas) {
             }
         }
 
-        initUniform(pkg) {
+        /*
+            ユニフォーム変数のロケーションをセットします。
+        */
+        setUniformLocation(pkg) {
             pkg.uniforms.forEach(u => u.locUniform = gl.getUniformLocation(pkg.program, u.name), chk());
         }
 
-        build(param) {
+        /*
+            パッケージを作ります。
+        */
+        makePackage(param) {
             var pkg = {};
             this.packages[param.id] = pkg;
 
@@ -472,6 +568,7 @@ function CreateGPGPU(canvas) {
                 param.fragmentShader = this.minFragmentShader;
             }
 
+            // シェーダのソースコードを解析する。
             this.parseShader(pkg, param);
 
             // 頂点シェーダを作る。
@@ -486,8 +583,8 @@ function CreateGPGPU(canvas) {
             // プログラムを使用する。
             gl.useProgram(pkg.program); chk();
 
-            // ユニフォーム変数の初期処理
-            this.initUniform(pkg);
+            // ユニフォーム変数のロケーションをセットします。
+            this.setUniformLocation(pkg);
 
             // テクスチャを作る。
             this.makeTexture(pkg);
@@ -524,20 +621,32 @@ function CreateGPGPU(canvas) {
             return pkg;
         }
 
+        /*
+            attribute変数のデータをセットします。
+        */
         setAttribData(pkg) {
-            // -- Init Buffer
+            // すべてのattribute変数に対し
             for (let attrib of pkg.attributes) {
                 var dim = this.vecDim(attrib.type);
 
                 gl.bindBuffer(gl.ARRAY_BUFFER, attrib.AttribBuffer); chk();
+
+                // 指定した位置のattribute変数の要素数(dim)と型(float)をセットする。
                 gl.vertexAttribPointer(attrib.AttribLoc, dim, gl.FLOAT, false, 0, 0); chk();
+
+                // attribute変数のデータをセットする。
                 gl.bufferData(gl.ARRAY_BUFFER, attrib.value, gl.STATIC_DRAW);
             }
         }
 
+        /*
+            uniform変数のデータをセットします。
+        */
         setUniformsData(pkg) {
+            // すべてのuniform変数に対し
             for (let u of pkg.uniforms) {
                 if (u.value instanceof Float32Array) {
+                    // 値が配列の場合
 
                     switch (u.type) {
                         case "mat4":
@@ -564,6 +673,7 @@ function CreateGPGPU(canvas) {
                     }
                 }
                 else {
+                    // 値が配列でない場合
 
                     if (u.type == "int" || u.type == "bool") {
 
@@ -577,16 +687,21 @@ function CreateGPGPU(canvas) {
             }
         }
 
+        /*
+            パラメータの引数の値をコピーします。
+        */
         copyParamArgsValue(param, pkg){
             for(let args of[ pkg.attributes, pkg.uniforms, pkg.textures, pkg.varyings ]) {
                 for (let arg of args) {
                     var val = param.args[arg.name];
                     assert(val != undefined);
                     if (args == pkg.textures) {
+                        // テクスチャ情報の場合
 
                         arg.value = val.value;
                     }
                     else {
+                        // テクスチャでない場合
 
                         arg.value = val;
                     }
@@ -594,11 +709,16 @@ function CreateGPGPU(canvas) {
             }
         }
 
+        /*
+            計算します。
+        */
         compute(param) {
             var pkg = this.packages[param.id];
             if (!pkg) {
+                // パッケージが未作成の場合
 
-                pkg = this.build(param);
+                // パッケージを作る。
+                pkg = this.makePackage(param);
             }
             else {
 
@@ -687,36 +807,10 @@ function CreateGPGPU(canvas) {
             gl.useProgram(null); chk();
         }
 
-        drawScene() {
-            var param = this.drawObj.onDraw();
-
-            var pMatrix = mat4.create();
-            mat4.perspective(45, this.canvas.width / this.canvas.height, 0.1, 100.0, pMatrix);
-
-            var mvMatrix = mat4.create();
-            mat4.identity(mvMatrix);
-
-            mat4.translate(mvMatrix, [0.0, 0.0, this.drawParam.z]);
-
-            mat4.rotate(mvMatrix, this.drawParam.xRot, [1, 0, 0]);
-            mat4.rotate(mvMatrix, this.drawParam.yRot, [0, 1, 0]);
-
-            var pmvMatrix = mat4.create();
-            mat4.multiply(pMatrix, mvMatrix, pmvMatrix);
-
-            var normalMatrix = mat3.create();
-            mat4.toInverseMat3(mvMatrix, normalMatrix);
-            mat3.transpose(normalMatrix);
-
-            param.args["uPMVMatrix"] = pmvMatrix;
-            param.args["uNMatrix"] = normalMatrix;
-
-            this.compute(param);
-
-            window.requestAnimationFrame(this.drawScene.bind(this));
-        }
-
-        setStandardShader() {
+        /*
+            標準のシェーダの文字列をセットします。
+        */
+        setStandardShaderString() {
             this.textureSphereVertexShader = `
 
                 const vec3 uAmbientColor = vec3(0.2, 0.2, 0.2);
@@ -752,6 +846,7 @@ function CreateGPGPU(canvas) {
                 }
             `;
 
+            // GPGPU用のフラグメントシェーダ。(何も処理はしない。)
             this.minFragmentShader =
                `out vec4 color;
 
@@ -759,7 +854,7 @@ function CreateGPGPU(canvas) {
                     color = vec4(1.0);
                 }`;
 
-
+            // デフォルトの動作のフラグメントシェーダ
             this.defaultFragmentShader =
                `in vec3 vLightWeighting;
 	            in vec2 uv0;
@@ -782,8 +877,43 @@ function CreateGPGPU(canvas) {
                 `;
         }
 
+        /*
+            3D表示をします。
+        */
+        drawScene() {
+            var param = this.drawObj.onDraw();
 
-        Draw3D(draw_obj) {
+            var pMatrix = mat4.create();
+            mat4.perspective(45, this.canvas.width / this.canvas.height, 0.1, 100.0, pMatrix);
+
+            var mvMatrix = mat4.create();
+            mat4.identity(mvMatrix);
+
+            mat4.translate(mvMatrix, [0.0, 0.0, this.drawParam.z]);
+
+            mat4.rotate(mvMatrix, this.drawParam.xRot, [1, 0, 0]);
+            mat4.rotate(mvMatrix, this.drawParam.yRot, [0, 1, 0]);
+
+            var pmvMatrix = mat4.create();
+            mat4.multiply(pMatrix, mvMatrix, pmvMatrix);
+
+            var normalMatrix = mat3.create();
+            mat4.toInverseMat3(mvMatrix, normalMatrix);
+            mat3.transpose(normalMatrix);
+
+            param.args["uPMVMatrix"] = pmvMatrix;
+            param.args["uNMatrix"] = normalMatrix;
+
+            this.compute(param);
+
+            // 次の再描画でdrawSceneが呼ばれるようにする。
+            window.requestAnimationFrame(this.drawScene.bind(this));
+        }
+
+        /*
+            3D表示を開始します。
+        */
+        startDraw3D(draw_obj) {
             this.drawObj = draw_obj;
             this.drawParam = {
                 xRot : 0,
@@ -794,6 +924,7 @@ function CreateGPGPU(canvas) {
             var lastMouseX = null;
             var lastMouseY = null;
 
+            // mousemoveのイベント リスナーを登録する。
             this.canvas.addEventListener('mousemove', function (event) {
                 var newX = event.clientX;
                 var newY = event.clientY;
@@ -808,6 +939,7 @@ function CreateGPGPU(canvas) {
                 lastMouseY = newY;
             }.bind(this));
 
+            // touchmoveのイベント リスナーを登録する。
             this.canvas.addEventListener('touchmove', function (event) {
                 // タッチによる画面スクロールを止める
                 event.preventDefault(); 
@@ -825,6 +957,7 @@ function CreateGPGPU(canvas) {
                 lastMouseY = newY;
             }.bind(this), false);
 
+            // wheelのイベント リスナーを登録する。
             this.canvas.addEventListener("wheel", function (e) {
                 this.drawParam.z += 0.02 * e.deltaY;
 
@@ -832,6 +965,7 @@ function CreateGPGPU(canvas) {
                 e.preventDefault();
             }.bind(this));
 
+            // 3D表示をする。
             this.drawScene();
         }
     }

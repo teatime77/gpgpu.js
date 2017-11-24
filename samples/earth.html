@@ -18,7 +18,7 @@ class MyDraw {
         this.img.onload = function () {
             var canvas = document.getElementById("webgl-canvas");
             this.MyWebGL = CreateGPGPU(canvas);
-            this.MyWebGL.Draw3D(this);
+            this.MyWebGL.startDraw3D(this);
         }.bind(this);
 
         this.img.src = "../img/world.topo.bathy.200408.2048x2048.png";
