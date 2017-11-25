@@ -73,3 +73,7 @@
 
     // 計算結果を表示します。
     document.body.insertAdjacentHTML("beforeend", "<p>C = " + C.join(' ') + "</p>");
+
+
+サンプルのURL
+    http://lkzf.info/gpgpu.js/samples/AddVec.html

@@ -4,7 +4,7 @@
 
 uniform変数で使える配列のサイズは数KB～数10KBですので大きなデータを扱いたい場合はテクスチャを使います。
 
-例として以下の行列の積をテクスチャでしてみます。
+例として以下の行列の積をテクスチャを使ってしてみます。
 
 .. math::
 
@@ -14,11 +14,9 @@ uniform変数で使える配列のサイズは数KB～数10KBですので大き�
     \begin{pmatrix} 372 & 408 \\ 1012 & 1128 \end{pmatrix} 
 
 
-プログラムの構成は以下のようになります。
+以下はプログラムの構成です。
 
 .. image:: _static/img/TexMulMat.png
-
-
 
 今回は入力変数の値は使わないのですが、 **入力変数と出力変数の要素の数は同じ** という原則があるので出力変数Cの要素数4と同じサイズの配列で中身の値は0の入力変数zeroを使っています。
 
@@ -26,19 +24,21 @@ uniform変数で使える配列のサイズは数KB～数10KBですので大き�
 
 今回のテクスチャは2次元配列なので使うのはsampler2Dです。
 
-.. code-block:: glsl
-
-    uniform sampler2D A;
-    uniform sampler2D B;
-    out float C;
-
-
 頂点シェーダのプログラムはこれまでと比べてかなり長いですが以下の処理をしています。
 
 1. 出力する行列Cの行(row)と列(col)を計算します。
 2. Aのrow行のベクトルとBのcol列のベクトルの内積を計算して出力します。
 
 .. code-block:: glsl
+
+    in float zero;
+
+    // 2次元配列のテクスチャ
+    uniform sampler2D A;
+    uniform sampler2D B;
+
+    // 出力変数C
+    out float C;
 
     void main() {
         // テクスチャBの行数と列数を取得します。
@@ -49,7 +49,6 @@ uniform変数で使える配列のサイズは数KB～数10KBですので大き�
         // gl_VertexIDは入力変数の何番目の要素かを示すシステム変数です。
         int row = gl_VertexID / B_sz.x;
         int col = gl_VertexID % B_sz.x;
-
 
         // Cのrow行col列の値は、Aのrow行のベクトルとBのcol列のベクトルの内積です。
 
@@ -73,13 +72,15 @@ uniform変数で使える配列のサイズは数KB～数10KBですので大き�
     }
 
 
-テクスチャの処理にはテクスチャの要素の型と行数と列数がなので、 **makeTextureInfo** というメソッドを使ってこれらを指定します。
-以下の例ではAはfloatの2行8列のテクスチャ、Bはfloatの8行2列のテクスチャを指定します。
+JavaScript側では **makeTextureInfo** というメソッドを使って、テクスチャの要素の型と行数と列数を指定します。
+以下の例ではAはfloatの2行8列のテクスチャ、Bはfloatの8行2列のテクスチャを指定しています。
 
 .. code-block:: js
 
     args: {
-        "zero": new Float32Array(4),
+        // 出力変数Cと同じサイズで中身の値は0の配列
+        "zero": new Float32Array(2 * 2),
+
         "A": gpgpu.makeTextureInfo("float", [2, 8], A),
         "B": gpgpu.makeTextureInfo("float", [8, 2], B),
         "C": C,
@@ -91,3 +92,7 @@ uniform変数で使える配列のサイズは数KB～数10KBですので大き�
 なお、テクスチャは2次元と3次元だけで1次元のテクスチャはありません。
 
 1次元のテクスチャを使いたい場合は、1行n列のように2次元のテクスチャで代用します。
+
+
+サンプルのURL
+    http://lkzf.info/gpgpu.js/samples/TexMulMat.html

@@ -10,6 +10,22 @@
     <script type="text/javascript" src="js/network.js"></script>
 </head>
 <body>
+
+    <h1>MNISTのディープラーニング</h1>
+
+
+以下のサイトから4つのファイルをダウンロードして<b>Drop files here</b>と書かれているところにドロップしてください。<br />
+<br />
+    <a href="http://yann.lecun.com/exdb/mnist/">http://yann.lecun.com/exdb/mnist/</a>
+<ul>
+    <li>t10k-images.idx3-ubyte</li>
+    <li>t10k-labels.idx1-ubyte</li>
+    <li>train-images.idx3-ubyte</li>
+    <li>train-labels.idx1-ubyte</li>
+</ul>
+
+Chromeの場合Ctrl+Shift+Iでデベロッパーツールのコンソールを表示すると学習の進行状況が見れます。<br />
+<br />
 <div id="drop_zone" style="width:100px; height:100px; background-color:darkgray">Drop files here</div>
 <canvas id="digit-canvas" width="28" height="28" style="width:28px; height:28px; background-color:aqua"/>
 <output id="list"></output>

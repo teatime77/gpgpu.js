@@ -1,6 +1,6 @@
 ﻿<html>
 <head>
-<title>テクスチャ 乗算</title>
+<title>テクスチャを使った行列の積</title>
 <meta http-equiv="content-type" content="text/html; charset=utf-8">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Cache-Control" content="no-cache">
@@ -8,13 +8,34 @@
 <script type="text/javascript" src="../js/gpgpu.js"></script>
 
 <script type="text/javascript">
+function MatStr(m, nrow, ncol, row_major_order) {
+    var s = "";
+
+    for (var row = 0; row < nrow; row++) {
+        for (var col = 0; col < ncol; col++) {
+
+            if (row_major_order) {
+                s += " " + m[row * ncol + col];
+            }
+            else {
+                s += " " + m[col * nrow + row];
+            }
+        }
+        s += "<br/>";
+    }
+
+    return s;
+}
+
 function onBodyLoad() {
     var vertex_shader =
        `in float zero;
 
+       // 2次元配列のテクスチャ
         uniform sampler2D A;
         uniform sampler2D B;
 
+        // 出力変数C
         out float C;
 
         void main() {
@@ -39,7 +60,7 @@ function onBodyLoad() {
                 // Bのi行col列の値を取得します。
                 vec4 b = texelFetch(B, ivec2(col, i), 0);
 
-                // a.rとb.rに取得した値が入っているので、乗算してから
+                // a.rとb.rに取得した値が入っています。
                 sum += a.r * b.r;
             }
 
@@ -48,44 +69,52 @@ function onBodyLoad() {
             C = sum + zero;
         }`;
 
+    // 入力変数AをFloat32Arrayの配列で作ります。
     var A = new Float32Array([1, 2, 3, 4, 5, 6, 7, 8, 11, 12, 13, 14, 15, 16, 17, 18]);
-    var B = new Float32Array([1, 2, 3, 4, 5, 6, 7, 8,  9, 10, 11, 12, 13, 14, 15, 16]);
 
+    // 入力変数BをFloat32Arrayの配列で作ります。
+    var B = new Float32Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]);
+
+    // 出力変数Cは配列のサイズ(2 * 2)を指定して作ります。
     var C = new Float32Array(2 * 2);
 
+    // GPGPUのオブジェクトを作ります。
     var gpgpu = CreateGPGPU();
 
+    // 計算のパラメータ
     var param = {
-        id: "MatMul",
+        // idはプログラム内でユニークであれば何でも構いません。
+        id: "TexMulMat",
+
+        // 頂点シェーダの文字列を指定します。
         vertexShader: vertex_shader
         ,
+
+        // 頂点シェーダ内の入力と出力の変数名に値を割り当てます。
         args: {
+            // 出力変数Cと同じサイズで中身の値は0の配列
             "zero": new Float32Array(2 * 2),
+
             "A": gpgpu.makeTextureInfo("float", [2, 8], A),
             "B": gpgpu.makeTextureInfo("float", [8, 2], B),
             "C": C,
         }
     };
+
+    // パラメータを使い計算します。
     gpgpu.compute(param);
 
-    document.body.insertAdjacentHTML("beforeend", "<p>C = " + C.join(' ') + "</p>");
+    // WebGLのオブジェクトをクリアします。
+    gpgpu.clear(param.id);
 
-    var C2 = new Float32Array(2 * 2);
-    for (var r = 0; r < 2; r++) {
-        for (var c = 0; c < 2; c++) {
-            var sum = 0;
-            for (var i = 0; i < 8; i++) {
-                sum += A[r * 8 + i] * B[i * 2 + c];
-            }
-            C2[r * 2 + c] = sum;
-        }
-    }
-
-    document.body.insertAdjacentHTML("beforeend", "<p>C2 = " + C2.join(' ') + "</p>");
+    // 計算結果を表示します。
+    document.body.insertAdjacentHTML("beforeend", "<p>A = <br/>" + MatStr(A, 2, 8, true) + "</p>");
+    document.body.insertAdjacentHTML("beforeend", "<p>B = <br/>" + MatStr(B, 8, 2, true) + "</p>");
+    document.body.insertAdjacentHTML("beforeend", "<p>C = A * B = <br/>" + MatStr(C, 2, 2, true) + "</p>");
 }
 </script>
 </head>
 <body onload="onBodyLoad()">
-
+<h1>テクスチャを使った行列の積</h1>
 </body>
 </html>

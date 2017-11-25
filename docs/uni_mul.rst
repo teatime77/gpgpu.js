@@ -9,12 +9,26 @@ uniform変数
 
 uniform変数は以下のように **uniform** を付けて宣言します。
 
+頂点シェーダのコード
+^^^^^^^^^^^^^^^^^^^^
+
 .. code-block:: glsl
 
-    uniform float B;
+    // 入力変数A
+    in  float A;
 
-JavaScript側からは以下のように数値を渡します。
+    // uniform変数B
+    uniform  float B;
 
-.. code-block:: js
+    // 出力変数C
+    out float C;
 
-    var B = 3;
+    // 要素ごとに呼ばれる関数。
+    void main(void ) {
+        C = B * A;
+    }
+
+
+
+サンプルのURL
+    http://lkzf.info/gpgpu.js/samples/UniMul.html

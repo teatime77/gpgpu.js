@@ -1,7 +1,7 @@
 ﻿<html>
 <head>
-<title>ベクトルの加算と減算</title>
-<meta http-equiv="content-type" content="text/html; charset=utf-8">
+<title>配列の加算と乗算</title>
+<meta charset="UTF-8">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Cache-Control" content="no-cache">
 
@@ -26,7 +26,7 @@ var vertex_shader =
     // 要素ごとに呼ばれる関数。
     void main(void ) {
         C = A + B;
-        D = A - B;
+        D = A * B;
 }`;
 
 
@@ -43,7 +43,7 @@ var D = new Float32Array(6);
 // 計算のパラメータ
 var param = {
     // idはプログラム内でユニークであれば何でも構いません。
-    id: "AddVec",
+    id: "AddMulVec",
 
     // 頂点シェーダの文字列を指定します。
     vertexShader: vertex_shader,
@@ -63,13 +63,18 @@ var gpgpu = CreateGPGPU();
 // パラメータを使い計算します。
 gpgpu.compute(param);
 
+// WebGLのオブジェクトをクリアします。
+gpgpu.clear(param.id);
+
 // 計算結果を表示します。
-document.body.insertAdjacentHTML("beforeend", "<p>C = " + C.join(' ') + "</p>");
-document.body.insertAdjacentHTML("beforeend", "<p>D = " + D.join(' ') + "</p>");
+document.body.insertAdjacentHTML("beforeend", "<p>A = " + A.join(' ') + "</p>");
+document.body.insertAdjacentHTML("beforeend", "<p>B = " + B.join(' ') + "</p>");
+document.body.insertAdjacentHTML("beforeend", "<p>C = A + B = " + C.join(' ') + "</p>");
+document.body.insertAdjacentHTML("beforeend", "<p>D = A * B = " + D.join(' ') + "</p>");
 }
 </script>
 </head>
 <body onload="onBodyLoad()">
-
+    <h1>配列の加算と乗算</h1>
 </body>
 </html>

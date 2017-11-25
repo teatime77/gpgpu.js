@@ -1,6 +1,6 @@
 ﻿<html>
 <head>
-<title>テクスチャ 乗算 vec4</title>
+<title>行列の積の高速化</title>
 <meta http-equiv="content-type" content="text/html; charset=utf-8">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Cache-Control" content="no-cache">
@@ -8,83 +8,116 @@
 <script type="text/javascript" src="../js/gpgpu.js"></script>
 
 <script type="text/javascript">
-function onBodyLoad() {
-    var vertex_shader =
-       `in float zero;
+    function MatStr(m, nrow, ncol, row_major_order) {
+        var s = "";
 
-        uniform sampler2D A;
-        uniform sampler2D B;
+        for (var row = 0; row < nrow; row++) {
+            for (var col = 0; col < ncol; col++) {
 
-        out float C;
-
-        void main() {
-            // テクスチャBの行数と列数を取得します。
-            // B_sz.yが行数、B_sz.xが列数です。
-            ivec2 B_sz = textureSize(B, 0);
-
-            // 出力する行列Cの行(row)と列(col)を計算します。
-            // gl_VertexIDは入力変数の何番目の要素かを示すシステム変数です。
-            int row = gl_VertexID / B_sz.y;
-            int col = gl_VertexID % B_sz.y;
-
-            // Cのrow行col列の値は、Aのrow行のベクトルとBのcol列のベクトルの内積です。
-
-            // 以下のループでベクトルの内積を計算します。
-            float sum = 0.0f;
-            for(int i = 0; i < B_sz.x; i++){
-
-                // Aのrow行i列の値を取得します。
-                vec4 a = texelFetch(A, ivec2(i, row), 0);
-
-                // Bのcol行i列の値を取得します。
-                vec4 b = texelFetch(B, ivec2(i, col), 0);
-
-                sum += dot(a, b);
+                if (row_major_order) {
+                    s += " " + m[row * ncol + col];
+                }
+                else {
+                    s += " " + m[col * nrow + row];
+                }
             }
-
-            // 入力変数zeroの値は必要ないですが、使用しない変数はコンパイラが除去してしまいエラーになるので形の上だけ使用します。
-            // zeroの値は0なので計算結果には影響しません。
-            C = sum +zero;
-        }`;
-
-    var A = new Float32Array([1, 2, 3, 4, 5, 6, 7, 8, 11, 12, 13, 14, 15, 16, 17, 18]);
-    var B = new Float32Array([1, 3, 5, 7, 9, 11, 13, 15, 2, 4, 6, 8, 10, 12, 14, 16]);
-
-    var C = new Float32Array(2 * 2);
-
-    var gpgpu = CreateGPGPU();
-
-    var param = {
-        id: "MatMul",
-        vertexShader: vertex_shader
-        ,
-        args: {
-            "zero": new Float32Array(2 * 2),
-            "A": gpgpu.makeTextureInfo("vec4", [2, 2], A),
-            "B": gpgpu.makeTextureInfo("vec4", [2, 2], B),
-            "C": C,
+            s += "<br/>";
         }
-    };
-    gpgpu.compute(param);
 
-    document.body.insertAdjacentHTML("beforeend", "<p>C = " + C.join(' ') + "</p>");
-
-    var C2 = new Float32Array(2 * 2);
-    for (var r = 0; r < 2; r++) {
-        for (var c = 0; c < 2; c++) {
-            var sum = 0;
-            for (var i = 0; i < 8; i++) {
-                sum += A[r * 8 + i] * B[c * 8 + i];
-            }
-            C2[r * 2 + c] = sum;
-        }
+        return s;
     }
 
-    document.body.insertAdjacentHTML("beforeend", "<p>C2 = " + C2.join(' ') + "</p>");
-}
+    function onBodyLoad() {
+        var vertex_shader =
+           `in float zero;
+
+           // 2次元配列のテクスチャ
+            uniform sampler2D A;
+            uniform sampler2D B;
+
+            // 出力変数C
+            out float C;
+
+            void main() {
+                // テクスチャBの行数と列数を取得します。
+                // B_sz.yが行数、B_sz.xが列数です。
+                ivec2 B_sz = textureSize(B, 0);
+
+                // 出力する行列Cの行(row)と列(col)を計算します。
+                // gl_VertexIDは入力変数の何番目の要素かを示すシステム変数です。
+                int row = gl_VertexID / B_sz.y;
+                int col = gl_VertexID % B_sz.y;
+
+                // Cのrow行col列の値は、Aのrow行のベクトルとBのcol行のベクトルの内積です。
+
+                // 以下のループでベクトルの内積を計算します。
+                float sum = 0.0f;
+                for(int i = 0; i < B_sz.x; i++){
+
+                    // Aのrow行i列の値を取得します。
+                    vec4 a = texelFetch(A, ivec2(i, row), 0);
+
+                    // Bのcol行i列の値を取得します。
+                    // !!!!! 前回はi行col列なので ivec2(col, i) でした。   !!!!!
+                    // !!!!! 今回は転置したので行と列が入れ替わっています。!!!!!
+                    vec4 b = texelFetch(B, ivec2(i, col), 0);
+
+                    sum += dot(a, b);
+                }
+
+                // 入力変数zeroの値は必要ないですが、使用しない変数はコンパイラが除去してしまいエラーになるので形の上だけ使用します。
+                // zeroの値は0なので計算結果には影響しません。
+                C = sum +zero;
+            }`;
+
+        // 入力変数AをFloat32Arrayの配列で作ります。
+        var A = new Float32Array([1, 2, 3, 4, 5, 6, 7, 8, 11, 12, 13, 14, 15, 16, 17, 18]);
+
+        // 入力変数BをFloat32Arrayの配列で作ります。
+        // !!!!! 前回のサンプルでは 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 を入れていました。 !!!!!
+        // !!!!! 今回は値を転置して入れています。!!!!!
+        var B = new Float32Array([1, 3, 5, 7, 9, 11, 13, 15, 2, 4, 6, 8, 10, 12, 14, 16]);
+
+        // 出力変数Cは配列のサイズ(2 * 2)を指定して作ります。
+        var C = new Float32Array(2 * 2);
+
+        // GPGPUのオブジェクトを作ります。
+        var gpgpu = CreateGPGPU();
+
+        // 計算のパラメータ
+        var param = {
+            // idはプログラム内でユニークであれば何でも構いません。
+            id: "TexMulMatVec4",
+
+            // 頂点シェーダの文字列を指定します。
+            vertexShader: vertex_shader
+            ,
+
+            // 頂点シェーダ内の入力と出力の変数名に値を割り当てます。
+            args: {
+                // 出力変数Cと同じサイズで中身の値は0の配列
+                "zero": new Float32Array(2 * 2),
+
+                "A": gpgpu.makeTextureInfo("vec4", [2, 2], A),
+                "B": gpgpu.makeTextureInfo("vec4", [2, 2], B),
+                "C": C,
+            }
+        };
+
+        // パラメータを使い計算します。
+        gpgpu.compute(param);
+
+        // WebGLのオブジェクトをクリアします。
+        gpgpu.clear(param.id);
+
+        // 計算結果を表示します。
+        document.body.insertAdjacentHTML("beforeend", "<p>A = <br/>" + MatStr(A, 2, 8, true) + "</p>");
+        document.body.insertAdjacentHTML("beforeend", "<p>B = <br/>" + MatStr(B, 2, 8, true) + "</p>");
+        document.body.insertAdjacentHTML("beforeend", "<p>C = A * B = <br/>" + MatStr(C, 2, 2, true) + "</p>");
+    }
 </script>
 </head>
 <body onload="onBodyLoad()">
-
+    <h1>行列の積の高速化</h1>
 </body>
 </html>

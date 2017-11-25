@@ -1,5 +1,5 @@
 ﻿
-行列とベクトルのかけ算
+行列とベクトルの乗算
 ========================
 
 今度はuniform変数に行列を入れ、入力変数のベクトルとかけ算をしてみます。
@@ -49,28 +49,30 @@ uniform変数Bの行列を入力変数Aの最初のベクトル **(1,2,3)** を�
     \begin{pmatrix} 66 \\ 81 \\ 96 \end{pmatrix}
 
 
-以下は前回のコードからの変更部分です。
--------------------------------------------
-
-入力変数A,Bはvec3, uniform変数Bはmat3です。
+頂点シェーダのコード
+^^^^^^^^^^^^^^^^^^^^
 
 .. code-block:: glsl
 
+    // 入力変数A
     in  vec3 A;
-    out vec3 C;
+
+    // uniform変数B
     uniform  mat3 B;
 
+    // 出力変数C
+    out vec3 C;
 
+    // 要素ごとに呼ばれる関数。
+    void main(void ) {
+        C = B * A;
+    }
+
+
+入力変数Aと出力変数Cはvec3, uniform変数Bはmat3です。
 Cの計算式は同じですが、今回は行列とベクトルのかけ算になります。
 
-.. code-block:: glsl
-
-    C = B * A;
 
 
-uniform変数Bの3x3の行列に値をセットします。
-
-.. code-block:: js
-
-    var B = new Float32Array([1, 2, 3, 4, 5, 6, 7, 8, 9]);
-
+サンプルのURL
+    http://lkzf.info/gpgpu.js/samples/UniMulMat.html

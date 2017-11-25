@@ -1,15 +1,30 @@
 ﻿<html>
 <head>
 <title>行列とベクトルの乗算</title>
-<meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta charset="UTF-8">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Cache-Control" content="no-cache">
 
 <script type="text/javascript" src="../js/gpgpu.js"></script>
 
 <script type="text/javascript">
-    function printColumnMajor() {
+    function MatStr(m, nrow, ncol, row_major_order) {
+        var s = "";
 
+        for (var row = 0; row < nrow; row++) {
+            for (var col = 0; col < ncol; col++) {
+
+                if (row_major_order) {
+                    s += " " + m[row * ncol + col];
+                }
+                else {
+                    s += " " + m[col * nrow + row];
+                }
+            }
+            s += "<br/>";
+        }
+
+        return s;
     }
 
     function onBodyLoad() {
@@ -32,15 +47,9 @@
 
     // 入力変数AをFloat32Arrayの配列で作ります。
     var A = new Float32Array([1, 2, 3, 4, 5, 6]);
-        // 1 4
-        // 2 5
-        // 3 6
 
     // 同様に入力変数Bを作ります。
     var B = new Float32Array([1, 2, 3, 4, 5, 6, 7, 8, 9]);
-        // 2 0 0
-        // 1 3 0
-        // 0 0 4
 
     // 出力変数Cは配列のサイズ(6)を指定して作ります。
     var C = new Float32Array(6);
@@ -48,7 +57,7 @@
     // 計算のパラメータ
     var param = {
         // idはプログラム内でユニークであれば何でも構いません。
-        id: "AddVec",
+        id: "UniMulMat",
 
         // 頂点シェーダの文字列を指定します。
         vertexShader: vertex_shader,
@@ -67,14 +76,17 @@
     // パラメータを使い計算します。
     gpgpu.compute(param);
 
+    // WebGLのオブジェクトをクリアします。
+    gpgpu.clear(param.id);
+
     // 計算結果を表示します。
-    document.body.insertAdjacentHTML("beforeend", "<p>A = <br/>" + A.slice(0, 3).join(' ') + "<br/>" + A.slice(3, 6).join(' ') + "</p>");
-    document.body.insertAdjacentHTML("beforeend", "<p>B = <br/>" + B.slice(0, 3).join(' ') + "<br/>" + B.slice(3, 6).join(' ') + "<br/>" + B.slice(6, 9).join(' ') + "</p>");
-    document.body.insertAdjacentHTML("beforeend", "<p>C = B * A = <br/>" + C.slice(0, 3).join(' ') + "<br/>" + C.slice(3, 6).join(' ') + "</p>");
+    document.body.insertAdjacentHTML("beforeend", "<p>A = <br/>[" + A.slice(0, 3).join(' ') + "]<br/>[" + A.slice(3, 6).join(' ') + "]</p>");
+    document.body.insertAdjacentHTML("beforeend", "<p>B = <br/>" + MatStr(B, 3, 3, false) + "</p>");
+    document.body.insertAdjacentHTML("beforeend", "<p>C = B * A = <br/>[" + C.slice(0, 3).join(' ') + "]<br/>[" + C.slice(3, 6).join(' ') + "]</p>");
 }
 </script>
 </head>
 <body onload="onBodyLoad()">
-
+    <h1>行列とベクトルの乗算</h1>
 </body>
 </html>

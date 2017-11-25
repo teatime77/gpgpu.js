@@ -1,7 +1,7 @@
 ﻿<html>
 <head>
-<title>ベクトルの加算</title>
-<meta http-equiv="content-type" content="text/html; charset=utf-8">
+<title>配列の加算</title>
+<meta charset="UTF-8">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Cache-Control" content="no-cache">
 
@@ -57,12 +57,17 @@
     // パラメータを使い計算します。
     gpgpu.compute(param);
 
+    // WebGLのオブジェクトをクリアします。
+    gpgpu.clear(param.id);
+
     // 計算結果を表示します。
-    document.body.insertAdjacentHTML("beforeend", "<p>C = " + C.join(' ') + "</p>");
+    document.body.insertAdjacentHTML("beforeend", "<p>A = " + A.join(' ') + "</p>");
+    document.body.insertAdjacentHTML("beforeend", "<p>B = " + B.join(' ') + "</p>");
+    document.body.insertAdjacentHTML("beforeend", "<p>C = A + B = " + C.join(' ') + "</p>");
 }
 </script>
 </head>
 <body onload="onBodyLoad()">
-
+    <h1>配列の加算</h1>
 </body>
 </html>

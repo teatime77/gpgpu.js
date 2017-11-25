@@ -38,7 +38,7 @@
     // 計算のパラメータ
     var param = {
         // idはプログラム内でユニークであれば何でも構いません。
-        id: "AddVec",
+        id: "UniMul",
 
         // 頂点シェーダの文字列を指定します。
         vertexShader: vertex_shader,
@@ -57,12 +57,17 @@
     // パラメータを使い計算します。
     gpgpu.compute(param);
 
+    // WebGLのオブジェクトをクリアします。
+    gpgpu.clear(param.id);
+
     // 計算結果を表示します。
-    document.body.insertAdjacentHTML("beforeend", "<p>C = " + C.join(' ') + "</p>");
+    document.body.insertAdjacentHTML("beforeend", "<p>A = " + A.join(' ') + "</p>");
+    document.body.insertAdjacentHTML("beforeend", "<p>B = " + B + "</p>");
+    document.body.insertAdjacentHTML("beforeend", "<p>C = B * A = " + C.join(' ') + "</p>");
 }
 </script>
 </head>
 <body onload="onBodyLoad()">
-
+    <h1>uniform変数</h1>
 </body>
 </html>
