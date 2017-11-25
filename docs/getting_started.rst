@@ -10,7 +10,7 @@ WebGLは複雑な手順に従ってAPIを呼ぶ必要があり使いづらいの
 
 ソースはGitHubに上げています。
 
-https://github.com/teatime77/gpgpu.js/
+https://github.com/teatime77/gpgpu.js/blob/master/js/gpgpu.js
 
 以下ではこのライブラリの使い方を説明します。
 

@@ -1,0 +1,82 @@
+﻿<html>
+<head>
+<title>ベクトルの加算と内積</title>
+<meta charset="UTF-8">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Cache-Control" content="no-cache">
+
+<script type="text/javascript" src="../js/gpgpu.js"></script>
+
+<script type="text/javascript">
+    function onBodyLoad() {
+// 頂点シェーダのプログラムは文字列で記述します。
+var vertex_shader =
+    `// 入力変数A
+    in  vec3 A;
+
+    // 入力変数B
+    in  vec3 B;
+
+    // 出力変数C
+    out vec3 C;
+
+    // 出力変数D
+    out float D;
+
+    // 要素ごとに呼ばれる関数。
+    void main(void ) {
+        C = A + B;
+        D = dot(A, B);
+}`;
+
+
+// 入力変数AをFloat32Arrayの配列で作ります。
+var A = new Float32Array([1, 2, 3, 4, 5, 6]);
+
+// 同様に入力変数Bを作ります。
+var B = new Float32Array([ 10, 20, 30, 40, 50, 60 ]);
+
+// 出力変数Cは配列のサイズ(6)を指定して作ります。
+var C = new Float32Array(6);
+
+// 出力変数Dは配列のサイズ(2)を指定して作ります。
+var D = new Float32Array(2);
+
+// 計算のパラメータ
+var param = {
+    // idはプログラム内でユニークであれば何でも構いません。
+    id: "AddDotVec",
+
+    // 頂点シェーダの文字列を指定します。
+    vertexShader: vertex_shader,
+
+    // 頂点シェーダ内の入力と出力の変数名に値を割り当てます。
+    args: {
+        "A": A,
+        "B": B,
+        "C": C,
+        "D": D,
+    }
+};
+
+// GPGPUのオブジェクトを作ります。
+var gpgpu = CreateGPGPU();
+
+// パラメータを使い計算します。
+gpgpu.compute(param);
+
+// WebGLのオブジェクトをクリアします。
+gpgpu.clear(param.id);
+
+// 計算結果を表示します。
+document.body.insertAdjacentHTML("beforeend", "<p>A = " + A.join(' ') + "</p>");
+document.body.insertAdjacentHTML("beforeend", "<p>B = " + B.join(' ') + "</p>");
+document.body.insertAdjacentHTML("beforeend", "<p>C = A + B = " + C.join(' ') + "</p>");
+document.body.insertAdjacentHTML("beforeend", "<p>D = dot(A, B) = " + D.join(' ') + "</p>");
+}
+</script>
+</head>
+<body onload="onBodyLoad()">
+    <h1>ベクトルの加算と内積</h1>
+</body>
+</html>

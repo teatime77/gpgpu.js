@@ -1,0 +1,241 @@
+﻿<html>
+<head>
+<title>速度計測</title>
+<meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Cache-Control" content="no-cache">
+
+<script type="text/javascript" src="../js/gpgpu.js"></script>
+
+<script type="text/javascript">
+function putLog(msg) {
+    document.body.insertAdjacentHTML("beforeend", "" + msg + "</br>");
+}
+
+function Calc(gpgpu, size) {
+    var vertex_shader1 =
+       `in float zero;
+
+        uniform sampler2D A;
+        uniform sampler2D B;
+
+        out float C;
+
+        void main() {
+            // テクスチャBの行数と列数を取得します。
+            // B_sz.yが行数、B_sz.xが列数です。
+            ivec2 B_sz = textureSize(B, 0);
+
+            // 出力する行列Cの行(row)と列(col)を計算します。
+            // gl_VertexIDは入力変数の何番目の要素かを示すシステム変数です。
+            int row = gl_VertexID / B_sz.y;
+            int col = gl_VertexID % B_sz.y;
+
+            // Cのrow行col列の値は、Aのrow行のベクトルとBのcol列のベクトルの内積です。
+
+            // 以下のループでベクトルの内積を計算します。
+            float sum = 0.0f;
+            for(int i = 0; i < B_sz.x; i++){
+
+                // Aのrow行i列の値を取得します。
+                vec4 a = texelFetch(A, ivec2(i, row), 0);
+
+                // Bのcol行i列の値を取得します。
+                vec4 b = texelFetch(B, ivec2(i, col), 0);
+
+                sum += dot(a, b);
+            }
+
+            // 入力変数zeroの値は必要ないですが、使用しない変数はコンパイラが除去してしまいエラーになるので形の上だけ使用します。
+            // zeroの値は0なので計算結果には影響しません。
+            C = sum +zero;
+        }`;
+
+    var vertex_shader2 =
+       `in float zero;
+
+        uniform sampler2D A;
+        uniform sampler2D B;
+
+        out float C;
+
+        void main() {
+            // テクスチャBの行数と列数を取得します。
+            // B_sz.yが行数、B_sz.xが列数です。
+            ivec2 B_sz = textureSize(B, 0);
+
+            // 出力する行列Cの行(row)と列(col)を計算します。
+            // gl_VertexIDは入力変数の何番目の要素かを示すシステム変数です。
+            int row = gl_VertexID / B_sz.x;
+            int col = gl_VertexID % B_sz.x;
+
+            // Cのrow行col列の値は、Aのrow行のベクトルとBのcol列のベクトルの内積です。
+
+            // 以下のループでベクトルの内積を計算します。
+            float sum = 0.0f;
+            for(int i = 0; i < B_sz.y; i++) {
+
+                // Aのrow行i列の値を取得します。
+                vec4 a = texelFetch(A, ivec2(i, row), 0);
+
+                // Bのi行col列の値を取得します。
+                vec4 b = texelFetch(B, ivec2(col, i), 0);
+
+                // a.rとb.rに取得した値が入っているので、乗算してから
+                sum += a.r * b.r;
+            }
+
+            // 入力変数zeroの値は必要ないですが、使用しない変数はコンパイラが除去してしまいエラーになるので形の上だけ使用します。
+            // zeroの値は0なので計算結果には影響しません。
+            C = sum + zero;
+        }`;
+
+    var size2 = size * size;
+    var A = new Float32Array(size2);
+    var B = new Float32Array(size2);
+    var BT = new Float32Array(size2);
+    var C1 = new Float32Array(size2);
+    var C2 = new Float32Array(size2);
+    var C3 = new Float32Array(size2);
+    var cnt1, cnt2, cnt3;
+    var ms1, ms2, ms3;
+
+    for (var i = 0; i < A.length; i++) {
+        A[i] = Math.sin(i * Math.PI / size2);
+        B[i] = Math.cos(i * Math.PI / size2);
+    }
+
+    for (var r = 0; r < size; r++) {
+        for (var c = 0; c < size; c++) {
+            BT[r * size + c] = B[c * size + r];
+        }
+    }
+
+    //------------------------------------------------------------ 
+    var param = {
+        id: "MatMul",
+        vertexShader: vertex_shader1
+        ,
+        args: {
+            "zero": new Float32Array(size2),
+            "A": gpgpu.makeTextureInfo("vec4", [size, size / 4], A),
+            "B": gpgpu.makeTextureInfo("vec4", [size, size / 4], BT),
+            "C": C1,
+        }
+    };
+
+    cnt1 = 0;
+    var start_ms = new Date().getTime();
+    while (true) {
+        ms1 = new Date().getTime() - start_ms;
+        if (1000 <= ms1) {
+            break;
+        }
+
+        gpgpu.compute(param);
+        cnt1++;
+    }
+    gpgpu.clear(param.id);
+
+
+    //------------------------------------------------------------ 
+    param = {
+        id: "MatMul",
+        vertexShader: vertex_shader2
+        ,
+        args: {
+            "zero": new Float32Array(size2),
+            "A": gpgpu.makeTextureInfo("float", [size, size], A),
+            "B": gpgpu.makeTextureInfo("float", [size, size], B),
+            "C": C2,
+        }
+    };
+
+    cnt2 = 0;
+    start_ms = new Date().getTime();
+    while (true) {
+        ms2 = new Date().getTime() - start_ms;
+        if (1000 <= ms2) {
+            break;
+        }
+        gpgpu.compute(param);
+        cnt2++;
+    }
+    gpgpu.clear(param.id);
+
+    //------------------------------------------------------------ 
+
+    var gfl1 = cnt1 * size * size * size / (1000 * 1000 * ms1);
+    var gfl2 = cnt2 * size * size * size / (1000 * 1000 * ms2);
+
+    if (size <= 2000) {
+
+        cnt3 = 0;
+        start_ms = new Date().getTime();
+        while (true) {
+            ms3 = new Date().getTime() - start_ms;
+            if (1000 <= ms3) {
+                break;
+            }
+
+            for (var r = 0; r < size; r++) {
+                for (var c = 0; c < size; c++) {
+                    var sum = 0;
+                    for (var i = 0; i < size; i++) {
+                        sum += A[r * size + i] * B[i * size + c];
+                    }
+                    C3[r * size + c] = sum;
+                }
+            }
+
+            cnt3++;
+        }
+
+        var gfl3 = cnt3 * size * size * size / (1000 * 1000 * ms3);
+
+        var max_diff = 0;
+        for (var i = 0; i < C1.length; i++) {
+            max_diff = Math.max(max_diff, Math.abs(C1[i] - C2[i]) + Math.abs(C1[i] - C3[i]));
+        }
+        console.log("diff:" + max_diff);
+
+        var s = "" + size + "," + gfl3.toFixed(3) + "," + gfl1.toFixed(3) + "," + gfl2.toFixed(3) +
+            "," + C3.reduce((x, y) => x + y).toFixed(1) + "," + C1.reduce((x, y) => x + y).toFixed(1) + "," + C2.reduce((x, y) => x + y).toFixed(1);
+    }
+    else {
+
+        var s = "" + size + ",0," + gfl1.toFixed(3) + "," + gfl2.toFixed(3) + ",0," + C1.reduce((x, y) => x + y).toFixed(1) + "," + C2.reduce((x, y) => x + y).toFixed(1);
+    }
+
+
+    putLog(s);
+
+    return true;
+}
+
+var gpgpu;
+
+function onBodyLoad() {
+    var gpgpu = CreateGPGPU();
+    var size = 8;
+
+    putLog("");
+    putLog("サイズ,vec4,float");
+    var timer_id = setInterval(function () {
+        Calc(gpgpu, size);
+        size += (size < 200 ? 8 : 40);
+        if (2000 < size) {
+
+            putLog("");
+            putLog("計測終了");
+            clearInterval(timer_id);
+        }
+    }, 1)
+}
+
+</script>
+</head>
+<body onload="onBodyLoad()">
+
+</body>
+</html>
