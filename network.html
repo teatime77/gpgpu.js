@@ -57,7 +57,7 @@ Chromeの場合Ctrl+Shift+Iでデベロッパーツールのコンソールを�
         var imageData;
 
         function StartSGD(net, training_data, epochs, mini_batch_size, eta, test_data) {
-            GenSGD = SGD(net, training_data, epochs, mini_batch_size, eta, test_data);
+            GenSGD = net.SGD(training_data, epochs, mini_batch_size, eta, test_data);
 
             TimerSGD = setInterval(function () {
                 var ret = GenSGD.next().value;

@@ -343,7 +343,7 @@ class ArrayView {
 
             return new ArrayView(this.nrow, this.ncol, this.dt.map(x => x * m));
         }
-        Assert(m instanceof ArrayView && m.nrow == this.nrow && m.ncol == this.ncol && m.columnMajor == this.columnMajor, "Array-View-mul");
+        Assert(m instanceof ArrayView && m.nrow == this.nrow && m.ncol == this.ncol, "Array-View-mul");
         var v = new Float32Array(this.nrow * this.ncol);
         for (var r = 0; r < this.nrow; r++) {
             for (var c = 0; c < this.ncol; c++) {
@@ -378,7 +378,7 @@ class TNumpy {
     }
 
     dot(A, B) {
-        Assert(A instanceof ArrayView && B instanceof ArrayView && A.ncol == B.nrow && !A.columnMajor && !B.columnMajor, "d-o-t");
+        Assert(A instanceof ArrayView && B instanceof ArrayView && A.ncol == B.nrow, "d-o-t");
 
         var id = "" + A.nrow + "," + A.ncol + "," + B.ncol;
         if (vDot[id] == undefined) {

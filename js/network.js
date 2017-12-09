@@ -225,7 +225,6 @@ class ConvolutionalLayer extends Layer{
                 .replace(/batchVec4Count/g, batch_vec4_count.toString() + "u")
                 .replace(/filterSize/g, this.filterSize.toString() + "u");
 
-            console.log(shader_src);
             param.vertexShader = shader_src;
         }
         else {
@@ -770,71 +769,70 @@ class Network {
 //        var test_results = test_data.map($ => { var x = $[0]; var y = $[1]; return [np.argmax(this.feedforward(x)), y]; });
 //        return sum(test_results.map($ => {var x = $[0];var y = $[1];return /*int*/(x == y ? 1 : 0);}));
     }
-}
 
-function* SGD(net, training_data, epochs, mini_batch_size, eta, test_data) {
-    console.log("Attrib Test OK");
+    * SGD(training_data, epochs, mini_batch_size, eta, test_data) {
+        console.log("Attrib Test OK");
 
-    net.miniBatchSize = mini_batch_size;
-    var n_test;//??
-    if(test_data == undefined){ test_data = None;}
-    if(test_data){
-        n_test = test_data["count"];
-    }
-    var n=training_data.length;//??
-    for (let j of xrange(epochs)) {
-
-        var start_time = new Date();
-        np.random.shuffle(training_data);//??
-        console.log("shuffle:" + (new Date() - start_time) + "ms");
-
-        start_time = new Date();
-        var mini_batches = xrange(0, n, mini_batch_size).map(k => Slice(training_data, [k, k + mini_batch_size]));//??
-        console.log("mini_batches:" + (new Date() - start_time) + "ms");
-
-        start_time = new Date();
-        show_time = new Date();
-        net.layers.forEach(x => x.clearStats());
-
-        for (var idx = 0; idx < mini_batches.length; idx++) {
-            mini_batch = mini_batches[idx];
-            var X = net.Laminate(mini_batch, 0);
-            var Y = net.Laminate(mini_batch, 1);
-            net.update_mini_batch(X, Y, eta);
-            show_cnt = (net.layers[1] instanceof ConvolutionalLayer ? 100 : 1000);
-            if (60 * 1000 < new Date() - show_time) {
-
-                var s = "" + idx + " ";
-                for(let layer of net.layers.slice(1)) {
-                    s += " (" + Stats(layer.fwTime, idx) + " " + Stats(layer.bwTime, idx) + " " + Stats(layer.udTime, idx) + ")";
-                }
-                console.log("update mini batch:" + s);
-                yield 1;
-
-                show_time = new Date();
-            }
-        }
-        yield 2;
-
-        console.log("update_mini_batch:" + (new Date() - start_time) + "ms");
-
+        this.miniBatchSize = mini_batch_size;
+        var n_test;//??
+        if(test_data == undefined){ test_data = None;}
         if(test_data){
-            //??                console.log("Epoch {0}: {1} / {2}".format(j, net.evaluate(test_data), n_test));
+            n_test = test_data["count"];
+        }
+        var n=training_data.length;//??
+        for (let j of xrange(epochs)) {
+
+            var start_time = new Date();
+            np.random.shuffle(training_data);//??
+            console.log("shuffle:" + (new Date() - start_time) + "ms");
+
             start_time = new Date();
-            var e = net.evaluate(test_data);
-            console.log("evaluate:" + (new Date() - start_time) + "ms");
+            var mini_batches = xrange(0, n, mini_batch_size).map(k => Slice(training_data, [k, k + mini_batch_size]));//??
+            console.log("mini_batches:" + (new Date() - start_time) + "ms");
 
-            console.log("Epoch %d: %d / %d", j, e, n_test);
-        }
-        else{
-            //??                console.log("Epoch {0} complete".format(j));
-            console.log("Epoch %d complete", j);
+            start_time = new Date();
+            var show_time = new Date();
+            this.layers.forEach(x => x.clearStats());
+
+            for (var idx = 0; idx < mini_batches.length; idx++) {
+                var mini_batch = mini_batches[idx];
+                var X = this.Laminate(mini_batch, 0);
+                var Y = this.Laminate(mini_batch, 1);
+                this.update_mini_batch(X, Y, eta);
+                if (60 * 1000 < new Date() - show_time) {
+
+                    var s = "" + idx + " ";
+                    for(let layer of this.layers.slice(1)) {
+                        s += " (" + Stats(layer.fwTime, idx) + " " + Stats(layer.bwTime, idx) + " " + Stats(layer.udTime, idx) + ")";
+                    }
+                    console.log("update mini batch:" + s);
+                    yield 1;
+
+                    show_time = new Date();
+                }
+            }
+            yield 2;
+
+            console.log("update_mini_batch:" + (new Date() - start_time) + "ms");
+
+            if(test_data){
+                //??                console.log("Epoch {0}: {1} / {2}".format(j, this.evaluate(test_data), n_test));
+                start_time = new Date();
+                var e = this.evaluate(test_data);
+                console.log("evaluate:" + (new Date() - start_time) + "ms");
+
+                console.log("Epoch %d: %d / %d", j, e, n_test);
+            }
+            else{
+                //??                console.log("Epoch {0} complete".format(j));
+                console.log("Epoch %d complete", j);
+            }
+
+            yield 3;
         }
 
-        yield 3;
+        yield 0;
     }
-
-    yield 0;
 }
 
 
@@ -883,15 +881,5 @@ function Slice(v) {
         default:
             Assert(false, "Slice");
             return null;
-    }
-}
-
-//??
-Array.prototype.GetAt = function (i) {
-    if (0 <= i) {
-        return this[i];
-    }
-    else {
-        return this[this.length + i];
     }
 }
