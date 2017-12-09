@@ -86,27 +86,11 @@ Chromeの場合Ctrl+Shift+Iでデベロッパーツールのコンソールを�
             var epochs = 10000;
             if(Net.layers.length == 3){
 
-//???            StartSGD(Net, TrainingData, epochs, 10, 3.0, TestData)
-                if (!isDebug) {
-
-                    StartSGD(Net, TrainingData, epochs, 12, 10.0, TestData)
-                }
-                else {
-
-                    StartSGD(Net, TrainingData, epochs, 1, 10.0, TestData)
-                }
+                StartSGD(Net, TrainingData, epochs, 12, 10.0, TestData)
             }
             else{
 
-                if (!isDebug) {
-
-    //                StartSGD(Net, TrainingData, epochs, 12, 0.1, TestData)
-                    StartSGD(Net, TrainingData, epochs, 12, 1.0, TestData)
-                }
-                else {
-
-                    StartSGD(Net, TrainingData, epochs, 1, 1.0, TestData)
-                }
+                StartSGD(Net, TrainingData, epochs, 12, 1.0, TestData)
             }
         }
 

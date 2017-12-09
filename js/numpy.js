@@ -384,7 +384,7 @@ class TNumpy {
         if (vDot[id] == undefined) {
             vDot[id] = 0;
         }
-        if (!isFloat64 && vDot[id] < 3 && A.ncol % 4 == 0) {
+        if (vDot[id] < 3 && A.ncol % 4 == 0) {
             vDot[id]++;
 
             var use_tex = (10 * 12 * 30 < A.nrow * A.ncol * B.ncol);
