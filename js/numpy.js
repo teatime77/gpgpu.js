@@ -370,6 +370,75 @@ class ArrayView {
         }
         return new ArrayView(this.nrow, m.ncol, v);
     }
+
+    Dot2(m) {
+        var vertex_shader =
+           `in float zero;
+
+       // 2次元配列のテクスチャ
+        uniform sampler2D A;
+        uniform sampler2D B;
+
+        // 出力変数C
+        out float C;
+
+        void main() {
+            // テクスチャBの行数と列数を取得します。
+            // B_sz.yが行数、B_sz.xが列数です。
+            ivec2 B_sz = textureSize(B, 0);
+
+            // 出力する行列Cの行(row)と列(col)を計算します。
+            // gl_VertexIDは入力変数の何番目の要素かを示すシステム変数です。
+            int row = gl_VertexID / B_sz.x;
+            int col = gl_VertexID % B_sz.x;
+
+            // Cのrow行col列の値は、Aのrow行のベクトルとBのcol列のベクトルの内積です。
+
+            // 以下のループでベクトルの内積を計算します。
+            float sum = 0.0f;
+            for(int i = 0; i < B_sz.y; i++) {
+
+                // Aのrow行i列の値を取得します。
+                vec4 a = texelFetch(A, ivec2(i, row), 0);
+
+                // Bのi行col列の値を取得します。
+                vec4 b = texelFetch(B, ivec2(col, i), 0);
+
+                // a.rとb.rに取得した値が入っています。
+                sum += a.r * b.r;
+            }
+
+            // 入力変数zeroの値は必要ないですが、使用しない変数はコンパイラが除去してしまいエラーになるので形の上だけ使用します。
+            // zeroの値は0なので計算結果には影響しません。
+            C = sum + zero;
+        }`;
+
+        var C = new ArrayView(this.nrow, m.ncol);
+        var param = {
+            id: "dot," + this.nrow + "," + this.ncol + "," + m.ncol,
+            vertexShader: vertex_shader,
+            args: {
+                "zero": new Float32Array(this.nrow * m.ncol),
+                "A": WebGL2.makeTextureInfo("float", [this.nrow, this.ncol], this.dt),
+                "B": WebGL2.makeTextureInfo("float", [   m.nrow,    m.ncol], m.dt),
+                "C": C.dt,
+            }
+        };
+
+        WebGL2.compute(param);
+
+        return C;
+    }
+
+    diff(m) {
+        Assert(m.dt.length == this.dt.length);
+        var x = 0;
+        for (var i = 0; i < this.dt.length; i++) {
+            x = Math.max(x, Math.abs(m.dt[i] - this.dt[i]));
+        }
+
+        return x;
+    }
 }
 
 class TNumpy {

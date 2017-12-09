@@ -81,16 +81,95 @@ class FullyConnectedLayer extends Layer{
         this.weight = np.random.randn(this.unitSize, this.prevLayer.unitSize);
     }
 
+    gpuForward(){
+
+        if(!this.outZero || this.outZero.length != this.batchLength * this.unitSize){
+
+            this.outZero = new Float32Array(this.batchLength * this.unitSize);
+            this.z2 = new Float32Array(this.batchLength * this.unitSize);
+            this.activation2 = new Float32Array(this.batchLength * this.unitSize);
+        }
+
+        var vertex_shader =
+           `in float zero;
+
+       // 2次元配列のテクスチャ
+        uniform sampler2D W;
+        uniform sampler2D X;
+        uniform sampler2D Bias;
+
+        out float z;
+        out float activation;
+
+        float sigmoid(float x){
+            return 1.0 / (1.0 + exp(-x));
+        }
+
+        void main() {
+            ivec2 X_sz = textureSize(X, 0);
+            ivec2 Bias_sz = textureSize(Bias, 0);
+
+            int batch_idx = gl_VertexID / Bias_sz.x;
+            int out_idx   = gl_VertexID % Bias_sz.x;
+
+            float sum = 0.0f;
+            for(int i = 0; i < X_sz.x; i++) {
+
+                vec4 w = texelFetch(W, ivec2(i, out_idx), 0);
+
+                vec4 x = texelFetch(X, ivec2(i, batch_idx), 0);
+
+                sum += w.r * x.r;
+            }
+
+            vec4 bias = texelFetch(Bias, ivec2(out_idx, 0), 0);
+            sum += bias.r;
+
+            // 入力変数zeroの値は必要ないですが、使用しない変数はコンパイラが除去してしまいエラーになるので形の上だけ使用します。
+            // zeroの値は0なので計算結果には影響しません。
+            z = sum + zero;
+
+            activation = sigmoid(z);
+        }`;
+
+        var param = {
+            id : "Fully-Connected-Layer-forward," + this.batchLength + "," + this.prevLayer.unitSize + "," + this.unitSize,
+            vertexShader: vertex_shader,
+            args : {
+                "zero": this.outZero,
+                "X": WebGL2.makeTextureInfo("float", [ this.batchLength, this.prevLayer.unitSize], this.prevLayer.activation.T().dt),
+                "W": WebGL2.makeTextureInfo("float", this.weight.shape, this.weight.dt),
+                "Bias": WebGL2.makeTextureInfo("float", [ 1, this.bias.dt.length ], this.bias.dt),
+                "z": this.z2,
+                "activation" : this.activation2
+            }
+        };
+
+        WebGL2.compute(param);
+
+        this.z = (new ArrayView(this.batchLength,  this.unitSize, this.z2)).T();
+        this.activation = (new ArrayView(this.batchLength,  this.unitSize, this.activation2)).T();
+
+//        var z_diff = this.z.diff(this.z3);
+//        var a_diff = this.activation.diff(this.activation3);
+    }
+
     forward() {
         var lap = new Lap(this.fwTime);
 
         this.batchLength = this.prevLayer.activation.ncol;
-        lap.Time();
 
-        this.z = np.dot(this.weight, this.prevLayer.activation).AddVec(this.bias);
-        lap.Time();
+        if(false){
 
-        this.activation = sigmoid(this.z);
+            this.z = np.dot(this.weight, this.prevLayer.activation).AddVec(this.bias);
+            lap.Time();
+
+            this.activation = sigmoid(this.z);
+        }
+        else{
+
+            this.gpuForward();
+        }
         lap.Time();
     }
 
@@ -114,11 +193,24 @@ class FullyConnectedLayer extends Layer{
         this.nabla_b = this.Delta.Reduce((x, y) => x + y);
         lap.Time();
 
-        this.nabla_w = np.dot(this.Delta, this.prevLayer.activation.T());
-        lap.Time();
+        if(false){
 
-        //!!!!! 直前が入力層なら必要なし !!!!!
-        this.deltaX = np.dot(this.weight.T(), this.Delta);
+            this.nabla_w = np.dot(this.Delta, this.prevLayer.activation.T());
+            lap.Time();
+
+            //!!!!! 直前が入力層なら必要なし !!!!!
+            this.deltaX = np.dot(this.weight.T(), this.Delta);
+        }
+        else{
+
+            this.nabla_w = this.Delta.Dot2(this.prevLayer.activation.T());
+//            var diff1 = this.nabla_w2.diff(this.nabla_w);
+            lap.Time();
+
+            //!!!!! 直前が入力層なら必要なし !!!!!
+            this.deltaX = this.weight.T().Dot2(this.Delta);
+//            var diff2 = this.deltaX2.diff(this.deltaX);
+        }
         lap.Time();
     }
 
