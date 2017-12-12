@@ -63,24 +63,25 @@ uniform sampler3D prev_activation;
 
 in float idx_f;
 
-out vec4 z;
-out vec4 activation;
+out float z;
+out float activation;
 
 void main() {
     uint idx = uint(idx_f);
 
-    uint feature_idx  = idx / (batchVec4Count * colCount * rowCount);
-    idx -= feature_idx * (batchVec4Count * colCount * rowCount);
+    uint batch_idx = idx / (featureCount * rowCount * colCount);
+    idx     -= batch_idx * (featureCount * rowCount * colCount);
 
-    uint r1 = idx / (batchVec4Count * colCount);
-    idx -= r1 * (batchVec4Count * colCount);
+    uint feature_idx  = idx / (rowCount * colCount);
+    idx      -= feature_idx * (rowCount * colCount);
 
-    uint c1 = idx / batchVec4Count;
-    uint batch_vec4_idx = idx - c1 * batchVec4Count;
+    uint r1 = idx / colCount;
+    uint c1 = idx - r1 * colCount;
 
     uint r2, c2;
-    vec4 sum = vec4(0.0);
+    float sum = 0.0f;
     int err_flg = 0;
+    uint weight_idx = feature_idx * filterSize * filterSize;
     for (r2 = 0u; r2 < filterSize; r2++) {
 
         for (c2 = 0u; c2 < filterSize; c2++) {
@@ -88,39 +89,30 @@ void main() {
             uint c3 = c1 + c2;
             uint r3 = r1 + r2;
 
-/*
-            uint ii = uint(idx_f);
-            uint r3 = ii / uint(3 * 28);
-            ii %= uint(3 * 28);
+            if(c3 < colCount + filterSize - 1u  && r3 < rowCount + filterSize - 1u) {
 
-            uint c3 = ii / uint(3);
-            batch_vec4_idx = ii % uint(3);
-*/
+                vec4  txl = texelFetch(prev_activation, ivec3(c3, r3, batch_idx), 0);
 
-            if(batch_vec4_idx < batchVec4Count && c3 < colCount + filterSize - 1u  && r3 < rowCount + filterSize - 1u) {
-
-                vec4  txl = texelFetch(prev_activation, ivec3(batch_vec4_idx, c3, r3), 0);
-
-                uint weight_idx = (feature_idx * filterSize + r2) * filterSize + c2;
-                sum += txl * weights[weight_idx];
+                sum += txl.r * weights[weight_idx];
             }
             else {
 
                 err_flg = 1;
                 break;
             }
+            weight_idx++;
         }
     }
 
     if(err_flg == 0) {
 
-        z = sum +biases[feature_idx];
+        z = sum + biases[feature_idx];
         activation = 1.0 / (1.0 +exp(-z));
     }
     else {
 
-        z          = vec4(12345.0);
-        activation = vec4(12345.0);
+        z          = 12345.0f;
+        activation = 12345.0f;
     }
 
 }`;

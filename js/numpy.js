@@ -232,6 +232,7 @@ class ArrayView {
     }
 
     T() {
+        Assert(this.shape.length == 2, "array-view-t")
         var m = new ArrayView(this.ncol, this.nrow);
         var i1 = 0;
         for (var r = 0; r < this.ncol; r++) {

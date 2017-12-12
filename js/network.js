@@ -280,9 +280,12 @@ class ConvolutionalLayer extends Layer{
             Assert(false);
         }
 
+        for(var i = 0; i < prev_Layer.activation.dt.length; i++){
+            prev_Layer.activation.dt[i] = 0.01 * (i % 100);
+        }
+
         var prev_activation = new ArrayView(prev_Layer.unitSize, this.batchLength, prev_Layer.activation.dt);
 
-        var batch_vec4_count = sub_batch_size / 4;
         var vs_id = "ConvolutionalLayer-forward";
         var param_id = vs_id + ":" + this.filterSize + ":" + this.featureCount + ":" + this.imgRows + ":" + this.imgCols + ":" + sub_batch_size;
         var param;
@@ -295,15 +298,15 @@ class ConvolutionalLayer extends Layer{
 
             this.param[param.id] = param;
 
-            param.sub_prev_activation = new ArrayView(prev_Layer.imgRows, prev_Layer.imgCols, sub_batch_size);
-            param.sub_z = new ArrayView(this.unitSize, sub_batch_size);
-            param.sub_activation = new ArrayView(this.unitSize, sub_batch_size);
+            param.sub_prev_activation = new ArrayView(sub_batch_size, prev_Layer.imgRows, prev_Layer.imgCols);
+            param.sub_z = new ArrayView(sub_batch_size, this.unitSize);
+            param.sub_activation = new ArrayView(sub_batch_size, this.unitSize);
 
-            param.elementCount = this.featureCount * this.imgRows * this.imgCols * batch_vec4_count;
+            param.elementCount = sub_batch_size * this.featureCount * this.imgRows * this.imgCols;
 
             param.args = {
                 "idx_f": MakeFloat32Index(param.elementCount),
-                "prev_activation": makeTextureInfo(WebGL2, "vec4", param.sub_prev_activation),
+                "prev_activation": makeTextureInfo(WebGL2, "float", param.sub_prev_activation),
                 "weights": this.weights.dt,
                 "biases": this.biases.dt,
                 "z": param.sub_z.dt,
@@ -314,7 +317,6 @@ class ConvolutionalLayer extends Layer{
                 .replace(/featureCount/g, this.featureCount.toString() + "u")
                 .replace(/rowCount/g, this.imgRows.toString() + "u")
                 .replace(/colCount/g, this.imgCols.toString() + "u")
-                .replace(/batchVec4Count/g, batch_vec4_count.toString() + "u")
                 .replace(/filterSize/g, this.filterSize.toString() + "u");
 
             param.vertexShader = shader_src;
@@ -326,13 +328,12 @@ class ConvolutionalLayer extends Layer{
 
         if (sub_batch_size == this.batchLength) {
 
-            param.sub_prev_activation.dt = prev_activation.dt;
-            param.sub_z.dt = this.z.dt;
-            param.sub_activation.dt = this.activation.dt;
-            param.args["prev_activation"].value = prev_activation.dt;
-            param.args["z"] = param.sub_z.dt;
-            param.args["activation"] = param.sub_activation.dt;
+            param.sub_prev_activation.dt = prev_activation.T().dt;
+            param.args["prev_activation"].value = prev_activation.T().dt;
             WebGL2.compute(this.param[param_id]);
+
+            this.z.dt = param.sub_z.T().dt;
+            this.activation.dt = param.sub_activation.T().dt;
         }
         else {
 
@@ -439,7 +440,7 @@ class ConvolutionalLayer extends Layer{
 
         lap.Time();
 
-        if(0.1 < Math.random()){
+        if(this.forwardCnt != 0 && 0.1 < Math.random()){
 
             return;
         }
