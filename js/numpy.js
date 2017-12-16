@@ -575,6 +575,12 @@ class TNumpyRandom {
     }
 
     RandomSampling(all_count, sample_count) {
+        if (!sample_count) {
+            // サンプリングする数が指定されてない場合
+
+            // すべてサンプリングする。
+            sample_count = all_count;
+        }
         var ret = new Array(sample_count);
 
         var numbers = xrange(all_count);

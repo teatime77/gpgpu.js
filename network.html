@@ -71,14 +71,12 @@ Chromeの場合Ctrl+Shift+Iでデベロッパーツールのコンソールを�
         }
 
         function RunNetwork() {
-            console.log("Training:%d Test:%d", TrainingData.length, TestData["count"]);
-
             WebGL2 = CreateGPGPU();
 
             Net = new Network([
                 new InputLayer(28, 28),
-                new ConvolutionalLayer(5, 20),
-                new PoolingLayer(2),
+//                new ConvolutionalLayer(5, 20),
+//                new PoolingLayer(2),
                 new FullyConnectedLayer(100),
                 new FullyConnectedLayer(10)
             ]);
@@ -86,7 +84,7 @@ Chromeの場合Ctrl+Shift+Iでデベロッパーツールのコンソールを�
             var epochs = 10000;
             if(Net.layers.length == 3){
 
-                StartSGD(Net, TrainingData, epochs, 12, 10.0, TestData)
+                StartSGD(Net, TrainingData, epochs, 12, 3.0, TestData)
             }
             else{
 
@@ -130,7 +128,7 @@ Chromeの場合Ctrl+Shift+Iでデベロッパーツールのコンソールを�
                             w = BytesToInt(v, 12);
 
                             if (fname == "train-images.idx3-ubyte") {
-                                TrainingDataImage = v;
+                                TrainingDataImage = v.slice(16);
 
                                 TrainingImgCnt = cnt;
                                 ImgH = h;
@@ -153,7 +151,7 @@ Chromeの場合Ctrl+Shift+Iでデベロッパーツールのコンソールを�
                             console.log("ラベル name:%s len:%d type:%d cnt:%d", fname, v.length, type, cnt);
 
                             if (fname == "train-labels.idx1-ubyte") {
-                                TrainingDataLabel = v;
+                                TrainingDataLabel = v.slice(8);
                             }
                             else {
                                 TestData["label"] = v.slice(8);
@@ -161,21 +159,21 @@ Chromeの場合Ctrl+Shift+Iでデベロッパーツールのコンソールを�
                         }
 
                         if (TrainingDataImage && TrainingDataLabel && TestData["image"] && TestData["label"]) {
+                            // [0,255] -> [0,1) に変換
+                            var X = new ArrayView(TrainingImgCnt, ImgH, ImgW, new Float32Array(TrainingDataImage).map(a => a / 256.0));
 
-                            TrainingData = new Array();
+                            var Y = new ArrayView(TrainingImgCnt, 10);
 
-                            var wh = ImgW * ImgH;
+                            // すべてのトレーニングデータに対し
+                            for(var i = 0; i < TrainingImgCnt; i++){
+                                // 正解のラベル
+                                var n = TrainingDataLabel[i];
 
-                            for (var i = 0; i < TrainingImgCnt; i++) {
-                                var st = 16 + wh * i;
-                                var x = new ArrayView(wh, 1, new Float32Array(TrainingDataImage.slice(st, st + wh)));
-                                x.dt = x.dt.map(a => a / 256.0);
-                                var n = TrainingDataLabel[8 + i];
-                                var y = new ArrayView(10, 1, new Float32Array(10));
-                                y.dt[n] = 1;
-
-                                TrainingData.push([x, y]);
+                                // one-hotベクトルの値をセットする。
+                                Y.dt[i * 10 + n] = 1;
                             }
+
+                            TrainingData = { "X":X , "Y":Y };
 
                             RunNetwork();
                         }
@@ -226,7 +224,7 @@ Chromeの場合Ctrl+Shift+Iでデベロッパーツールのコンソールを�
 
             for (var i = 0; i < wh; i++) {
                 var k = 4 * i;
-                var c = 255 - TrainingDataImage[16 + wh * ImgIdx + i];
+                var c = 255 - TrainingDataImage[wh * ImgIdx + i];
 
                 data[k] = c;
                 data[k + 1] = c;

@@ -4,8 +4,8 @@ class FullyConnectedLayerTest extends FullyConnectedLayer {
     backward(Y, eta2) {
         this.nablaBiases = this.Delta;
         // constructor(rows, cols, init, column_major, depth)
-        this.nablaWeights = new ArrayView(this.batchLength, this.weight.nrow, this.weight.ncol);
-        for (var batch_idx = 0; batch_idx < this.batchLength; batch_idx++) {
+        this.nablaWeights = new ArrayView(miniBatchSize, this.weight.nrow, this.weight.ncol);
+        for (var batch_idx = 0; batch_idx < miniBatchSize; batch_idx++) {
             for (var r = 0; r < this.weight.nrow; r++) {
                 for (var c = 0; c < this.weight.ncol; c++) {
                     var f = this.Delta.At2(r, batch_idx) * this.prevLayer.activation.At2(c, batch_idx);
@@ -29,7 +29,7 @@ class ConvolutionalLayerTest extends ConvolutionalLayer {
         var prev_idx = 0;
         for (var r = 0; r < this.prevLayer.imgRows; r++) {
             for (var c = 0; c < this.prevLayer.imgCols; c++) {
-                for (var b = 0; b < this.batchLength; b++) {
+                for (var b = 0; b < miniBatchSize; b++) {
                     this.prevLayer.activation.dt[prev_idx] = r * 0.1 + (c + b) * 0.001;
                     prev_idx++;
                 }
