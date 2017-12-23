@@ -270,6 +270,21 @@ class ArrayView {
         this.dt[(d * this.nrow + r) * this.ncol + c] = val;
     }
 
+    /*
+        指定した行を返す。
+    */
+    Row(r) {
+        var v = new ArrayView(this.ncol);
+        for (var c = 0; c < this.ncol; c++) {
+            v.dt[c] = this.dt[r * this.ncol + c];
+        }
+
+        return v;
+    }
+
+    /*
+        指定した列を返す。
+    */
     Col(c) {
         var v = new Float32Array(this.nrow);
         for (var r = 0; r < this.nrow; r++) {
@@ -306,12 +321,13 @@ class ArrayView {
     }
 
     Reduce(f) {
-        var v = new Float32Array(this.nrow);
-        for (var r = 0; r < this.nrow; r++) {
+        var v = new ArrayView(this.ncol);
+
+        for (var c = 0; c < this.ncol; c++)  {
             var x;
-            for (var c = 0; c < this.ncol; c++) {
+            for (var r = 0; r < this.nrow; r++) {
                 var k = r * this.ncol + c;
-                if (c == 0) {
+                if (r == 0) {
 
                     x = this.dt[k];
                 }
@@ -320,10 +336,10 @@ class ArrayView {
                     x = f(x, this.dt[k]);
                 }
             }
-            v[r] = x;
+            v.dt[c] = x;
         }
 
-        return new ArrayView(this.nrow, 1, v);
+        return v;
     }
 
     Sub(m) {
@@ -414,6 +430,7 @@ class ArrayView {
             C = sum + zero;
         }`;
 
+        Assert(this.ncol == m.nrow, "dot2");
         var C = new ArrayView(this.nrow, m.ncol);
         var param = {
             id: "dot," + this.nrow + "," + this.ncol + "," + m.ncol,
@@ -517,7 +534,7 @@ class TNumpy {
     }
 
     argmax(x) {
-        Assert(x instanceof ArrayView && x.ncol == 1, "arg max");
+        Assert(x instanceof ArrayView, "arg max");
         var idx = x.dt.indexOf(Math.max.apply(null, x.dt));
         Assert(idx != -1, "arg max");
         return idx;

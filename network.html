@@ -32,8 +32,8 @@ Chromeの場合Ctrl+Shift+Iでデベロッパーツールのコンソールを�
 
     <script type="text/javascript">
         var WebGL2;
-        var TrainingData, TestData = {};
-        var TrainingDataImage, TrainingDataLabel;
+        var TrainingImgCnt, TrainingDataImage, TrainingDataLabel, TrainingData;
+        var TestImgCnt, TestDataImage, TestDataLabel, TestData;
         var Net;
         var GenSGD;
         var TimerSGD;
@@ -48,7 +48,6 @@ Chromeの場合Ctrl+Shift+Iでデベロッパーツールのコンソールを�
 
 
         //----------------------------------------------------------------------
-        var TrainingImgCnt;
         var ImgH;
         var ImgW;
         var ImgIdx = 0;
@@ -75,8 +74,8 @@ Chromeの場合Ctrl+Shift+Iでデベロッパーツールのコンソールを�
 
             Net = new Network([
                 new InputLayer(28, 28),
-//                new ConvolutionalLayer(5, 20),
-//                new PoolingLayer(2),
+                new ConvolutionalLayer(5, 20),
+                new PoolingLayer(2),
                 new FullyConnectedLayer(100),
                 new FullyConnectedLayer(10)
             ]);
@@ -129,17 +128,16 @@ Chromeの場合Ctrl+Shift+Iでデベロッパーツールのコンソールを�
 
                             if (fname == "train-images.idx3-ubyte") {
                                 TrainingDataImage = v.slice(16);
+                                TrainingImgCnt    = cnt;
 
-                                TrainingImgCnt = cnt;
                                 ImgH = h;
                                 ImgW = w;
 
                                 setTimeout(DrawImage, 100);
                             }
                             else {
-
-                                TestData["image"] = (new Float32Array(v.slice(16))).map(a => a / 256.0);
-                                TestData["count"] = cnt;
+                                TestDataImage = v.slice(16);
+                                TestImgCnt    = cnt;
                             }
 
                             console.log("画像 name:%s len:%d type:%d cnt:%d H:%d W:%d", fname, v.length, type, cnt, h, w);
@@ -154,26 +152,33 @@ Chromeの場合Ctrl+Shift+Iでデベロッパーツールのコンソールを�
                                 TrainingDataLabel = v.slice(8);
                             }
                             else {
-                                TestData["label"] = v.slice(8);
+                                TestDataLabel = v.slice(8);
                             }
                         }
 
-                        if (TrainingDataImage && TrainingDataLabel && TestData["image"] && TestData["label"]) {
-                            // [0,255] -> [0,1) に変換
-                            var X = new ArrayView(TrainingImgCnt, ImgH, ImgW, new Float32Array(TrainingDataImage).map(a => a / 256.0));
+                        if (TrainingDataImage && TrainingDataLabel && TestDataImage && TestDataLabel) {
 
-                            var Y = new ArrayView(TrainingImgCnt, 10);
+                            function make_data(data_cnt, data_image, data_label) {
+                                // [0,255] -> [0,1) に変換
+                                var X = new ArrayView(data_cnt, ImgH, ImgW, new Float32Array(data_image).map(a => a / 256.0));
 
-                            // すべてのトレーニングデータに対し
-                            for(var i = 0; i < TrainingImgCnt; i++){
-                                // 正解のラベル
-                                var n = TrainingDataLabel[i];
+                                var Y = new ArrayView(data_cnt, 10);
 
-                                // one-hotベクトルの値をセットする。
-                                Y.dt[i * 10 + n] = 1;
+                                // すべてのトレーニングデータに対し
+                                for (var i = 0; i < data_cnt; i++) {
+                                    // 正解のラベル
+                                    var n = data_label[i];
+
+                                    // one-hotベクトルの値をセットする。
+                                    Y.dt[i * 10 + n] = 1;
+                                }
+
+                                return { "X": X, "Y": Y };
+
                             }
 
-                            TrainingData = { "X":X , "Y":Y };
+                            TrainingData = make_data(TrainingImgCnt, TrainingDataImage, TrainingDataLabel);
+                            TestData     = make_data(TestImgCnt    , TestDataImage    , TestDataLabel);
 
                             RunNetwork();
                         }

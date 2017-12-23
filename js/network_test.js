@@ -377,7 +377,7 @@ class NetworkTest extends Network {
         return max_err;
     }
 
-    update_mini_batch(X, Y, eta) {
+    update_mini_batch(X, Y) {
         var last_layer = this.layers[this.layers.length - 1];
         var cost_sv = new Float32Array(last_layer.cost);
         var max_err = 0;

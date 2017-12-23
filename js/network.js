@@ -1,4 +1,5 @@
 ﻿var miniBatchSize;
+var learningRate;
 
 function Stats(tm, idx){
     switch(tm.length){
@@ -50,10 +51,13 @@ class Layer {
     forward() {
     }
 
-    backward(Y, eta2) {
+    backward(Y) {
     }
 
-    updateParameter(eta2) {
+    updateParameter() {
+    }
+
+    clear(){
     }
 }
 
@@ -82,9 +86,13 @@ class FullyConnectedLayer extends Layer{
     }
 
     miniBatchSizeChanged(){
-        this.outZero = new Float32Array(miniBatchSize * this.unitSize);
-        this.z2 = new Float32Array(miniBatchSize * this.unitSize);
-        this.activation2 = new Float32Array(miniBatchSize * this.unitSize);
+        super.miniBatchSizeChanged();
+
+        this.outZero    = new Float32Array(miniBatchSize * this.unitSize);
+        this.z          = new ArrayView(miniBatchSize,  this.unitSize);
+        this.activation = new ArrayView(miniBatchSize,  this.unitSize);
+        this.deltaX     = new ArrayView(miniBatchSize,  this.prevLayer.unitSize);
+        this.prevLayerActivation = new ArrayView(miniBatchSize,  this.prevLayer.unitSize);
     }
 
     gpuForward(){
@@ -130,26 +138,20 @@ class FullyConnectedLayer extends Layer{
             activation = sigmoid(z);
         }`;
 
-        var param = {
+        this.param = {
             id : "Fully-Connected-Layer-forward," + miniBatchSize + "," + this.prevLayer.unitSize + "," + this.unitSize,
             vertexShader: vertex_shader,
             args : {
                 "zero": this.outZero,
-                "X": WebGL2.makeTextureInfo("float", [ miniBatchSize, this.prevLayer.unitSize], this.prevLayer.activation.T().dt),
+                "X": WebGL2.makeTextureInfo("float", [ miniBatchSize, this.prevLayer.unitSize], this.prevLayer.activation.dt),
                 "W": WebGL2.makeTextureInfo("float", this.weight.shape, this.weight.dt),
                 "Bias": WebGL2.makeTextureInfo("float", [ 1, this.bias.dt.length ], this.bias.dt),
-                "z": this.z2,
-                "activation" : this.activation2
+                "z": this.z.dt,
+                "activation" : this.activation.dt
             }
         };
 
-        WebGL2.compute(param);
-
-        this.z = (new ArrayView(miniBatchSize,  this.unitSize, this.z2)).T();
-        this.activation = (new ArrayView(miniBatchSize,  this.unitSize, this.activation2)).T();
-
-//        var z_diff = this.z.diff(this.z3);
-//        var a_diff = this.activation.diff(this.activation3);
+        WebGL2.compute(this.param);
     }
 
     forward() {
@@ -169,7 +171,33 @@ class FullyConnectedLayer extends Layer{
         lap.Time();
     }
 
-    backward(Y, eta2) {
+    cpuDeltaX(){
+
+        // 出力先
+        var output_idx = 0;
+
+        // バッチ内のデータに対し
+        for (var batch_idx = 0; batch_idx < miniBatchSize; batch_idx++) {
+
+            // 入力に対し
+            for (var x_idx = 0; x_idx < this.prevLayer.unitSize; x_idx++) {
+
+                var sum = 0.0;
+
+                // 重みの行とδyの内積
+                for (var k = 0; k < this.weight.nrow; k++) {
+                    var weight_idx = k * this.weight.ncol + x_idx;
+                    var delta_idx = batch_idx * this.unitSize + k;
+                    sum += this.Delta.dt[delta_idx] * this.weight.dt[weight_idx];
+                }
+
+                this.deltaX.dt[output_idx] = sum;
+                output_idx++;
+            }
+        }
+    }
+
+    backward(Y) {
         var lap = new Lap(this.bwTime);
 
         if (!this.nextLayer) {
@@ -191,41 +219,42 @@ class FullyConnectedLayer extends Layer{
 
         if(false){
 
-            this.nabla_w = np.dot(this.Delta, this.prevLayer.activation.T());
+            this.nabla_w = np.dot(this.Delta, this.prevLayer.activation);
             lap.Time();
 
             //!!!!! 直前が入力層なら必要なし !!!!!
             this.deltaX = np.dot(this.weight.T(), this.Delta);
         }
         else{
-
-            this.nabla_w = this.Delta.Dot2(this.prevLayer.activation.T());
-//            var diff1 = this.nabla_w2.diff(this.nabla_w);
+            this.prevLayerActivation.dt = this.prevLayer.activation.dt;
+            this.nabla_w = this.Delta.T().Dot2(this.prevLayerActivation);
             lap.Time();
 
             //!!!!! 直前が入力層なら必要なし !!!!!
-            this.deltaX = this.weight.T().Dot2(this.Delta);
-//            var diff2 = this.deltaX2.diff(this.deltaX);
+//            this.deltaX = this.weight.T().Dot2(this.Delta);
+            this.cpuDeltaX();
         }
         lap.Time();
     }
 
-    updateParameter(eta2) {
-
-//        this.weight = this.weight.Sub(eta2.Mul(this.nabla_w));
-//        this.bias = this.bias.Sub(eta2.Mul(this.nabla_b));
+    updateParameter() {
+        var eta = learningRate / miniBatchSize;
 
         var lap = new Lap(this.udTime);
 
         for(var i = 0; i < this.weight.dt.length; i++){
-            this.weight.dt[i] -= eta2 * this.nabla_w.dt[i];
+            this.weight.dt[i] -= eta * this.nabla_w.dt[i];
         }
         lap.Time();
 
         for(var i = 0; i < this.bias.dt.length; i++){
-            this.bias.dt[i] -= eta2 * this.nabla_b.dt[i];
+            this.bias.dt[i] -= eta * this.nabla_b.dt[i];
         }
         lap.Time();
+    }
+
+    clear(){
+        WebGL2.clear(this.param.id);
     }
 }
 
@@ -235,7 +264,7 @@ class ConvolutionalLayer extends Layer{
 
         this.filterSize = filter_size;
         this.featureCount = feature_count;
-        this.param = {};
+        this.params = {};
     }
 
     init(prev_layer) {
@@ -260,63 +289,25 @@ class ConvolutionalLayer extends Layer{
     }
 
     miniBatchSizeChanged(){
+        super.miniBatchSizeChanged();
+
         this.forwardCnt = 0;
         this.forwardGPU = 0;
         this.forwardCPU = 0;
 
-        this.z = new ArrayView(this.unitSize, miniBatchSize);
-        this.activation = new ArrayView(this.unitSize, miniBatchSize);
+        this.z = new ArrayView(miniBatchSize, this.unitSize);
+        this.activation = new ArrayView(miniBatchSize, this.unitSize);
     }
 
     gpuForward() {
         var prev_Layer = this.prevLayer;
 
-        var sub_batch_size;
-
-        if (miniBatchSize == 12) {
-
-            sub_batch_size = miniBatchSize;
-        }
-        else if (miniBatchSize == 10000) {
-            sub_batch_size = 200;// 16;
-        }
-        else {
-
-            Assert(false);
-        }
-
-        for(var i = 0; i < prev_Layer.activation.dt.length; i++){
-            prev_Layer.activation.dt[i] = 0.01 * (i % 100);
-        }
-
-        var prev_activation = new ArrayView(prev_Layer.unitSize, miniBatchSize, prev_Layer.activation.dt);
+        var prev_activation = new ArrayView(miniBatchSize, prev_Layer.unitSize, prev_Layer.activation.dt);
 
         var vs_id = "ConvolutionalLayer-forward";
-        var param_id = vs_id + ":" + this.filterSize + ":" + this.featureCount + ":" + this.imgRows + ":" + this.imgCols + ":" + sub_batch_size;
-        var param;
+        var param_id = vs_id + ":" + this.filterSize + ":" + this.featureCount + ":" + this.imgRows + ":" + this.imgCols + ":" + miniBatchSize;
 
-        if (this.param[param_id] == undefined) {
-
-            param = {};
-
-            param.id = param_id;
-
-            this.param[param.id] = param;
-
-            param.sub_prev_activation = new ArrayView(sub_batch_size, prev_Layer.imgRows, prev_Layer.imgCols);
-            param.sub_z = new ArrayView(sub_batch_size, this.unitSize);
-            param.sub_activation = new ArrayView(sub_batch_size, this.unitSize);
-
-            param.elementCount = sub_batch_size * this.featureCount * this.imgRows * this.imgCols;
-
-            param.args = {
-                "idx_f": MakeFloat32Index(param.elementCount),
-                "prev_activation": makeTextureInfo(WebGL2, "float", param.sub_prev_activation),
-                "weights": this.weights.dt,
-                "biases": this.biases.dt,
-                "z": param.sub_z.dt,
-                "activation": param.sub_activation.dt
-            };
+        if (this.params[param_id] == undefined) {
 
             var shader_src = Shaders[vs_id]
                 .replace(/featureCount/g, this.featureCount.toString() + "u")
@@ -324,53 +315,24 @@ class ConvolutionalLayer extends Layer{
                 .replace(/colCount/g, this.imgCols.toString() + "u")
                 .replace(/filterSize/g, this.filterSize.toString() + "u");
 
-            param.vertexShader = shader_src;
-        }
-        else {
-
-            param = this.param[param_id];
-        }
-
-        if (sub_batch_size == miniBatchSize) {
-
-            param.sub_prev_activation.dt = prev_activation.T().dt;
-            param.args["prev_activation"].value = prev_activation.T().dt;
-            WebGL2.compute(this.param[param_id]);
-
-            this.z.dt = param.sub_z.T().dt;
-            this.activation.dt = param.sub_activation.T().dt;
-        }
-        else {
-
-            for (var sub_batch_base = 0; sub_batch_base < miniBatchSize; sub_batch_base += sub_batch_size) {
-
-                var all_idx = sub_batch_base;
-                var sub_idx = 0;
-                for (var i = 0; i < prev_Layer.unitSize; i++) {
-                    for (var j = 0; j < sub_batch_size; j++) {
-                        param.sub_prev_activation.dt[sub_idx] = prev_activation.dt[all_idx + j];
-                        sub_idx++;
-                    }
-                    all_idx += miniBatchSize;
+           this.params[param_id]  = {
+                id : param_id,
+                vertexShader: shader_src,
+                args : {
+                    "idx_f": MakeFloat32Index(miniBatchSize * this.featureCount * this.imgRows * this.imgCols),
+                    "prev_activation": makeTextureInfo(WebGL2, "float", new ArrayView(miniBatchSize, prev_Layer.imgRows, prev_Layer.imgCols)),
+                    "weights": this.weights.dt,
+                    "biases": this.biases.dt,
+                    "z": this.z.dt,
+                    "activation": this.activation.dt
                 }
-
-                param.args["prev_activation"].value = param.sub_prev_activation.dt;
-                param.args["z"] = param.sub_z.dt;
-                param.args["activation"] = param.sub_activation.dt;
-                WebGL2.compute(this.param[param_id]);
-                
-                all_idx = sub_batch_base;
-                sub_idx = 0;
-                for (var i = 0; i < this.unitSize; i++) {
-                    for (var j = 0; j < sub_batch_size; j++) {
-                        this.z.dt[all_idx + j]          = param.sub_z.dt[sub_idx];
-                        this.activation.dt[all_idx + j] = param.sub_activation.dt[sub_idx];
-                        sub_idx++;
-                    }
-                    all_idx += miniBatchSize;
-                }
-            }
+            };
         }
+
+        var param = this.params[param_id];
+
+        param.args["prev_activation"].value = prev_activation.dt;
+        WebGL2.compute(param);
     }
 
     cpuForward() {
@@ -383,17 +345,17 @@ class ConvolutionalLayer extends Layer{
         // 出力先
         var output_idx = 0;
 
-        // すべての特徴マップに対し
-        for (var feature_idx = 0; feature_idx < this.featureCount; feature_idx++) {
+        // バッチ内のデータに対し
+        for (var batch_idx = 0; batch_idx < miniBatchSize; batch_idx++) {
 
-            // 出力の行に対し
-            for (var r1 = 0; r1 < this.imgRows; r1++) {
+            // すべての特徴マップに対し
+            for (var feature_idx = 0; feature_idx < this.featureCount; feature_idx++) {
 
-                // 出力の列に対し
-                for (var c1 = 0; c1 < this.imgCols; c1++) {
+                // 出力の行に対し
+                for (var r1 = 0; r1 < this.imgRows; r1++) {
 
-                    // バッチ内のデータに対し
-                    for (var batch_idx = 0; batch_idx < miniBatchSize; batch_idx++) {
+                    // 出力の列に対し
+                    for (var c1 = 0; c1 < this.imgCols; c1++) {
 
                         var sum = 0.0;
 
@@ -403,12 +365,12 @@ class ConvolutionalLayer extends Layer{
                             // フィルターの列に対し
                             for (var c2 = 0; c2 < this.filterSize; c2++) {
                                 var weight_idx = (feature_idx * this.filterSize + r2) * this.filterSize + c2;
-                                var prev_activation_idx = ( (r1 + r2) * prev_Layer.imgCols + (c1 + c2) ) * miniBatchSize + batch_idx;
+                                var prev_activation_idx = batch_idx * prev_Layer.unitSize + (r1 + r2) * prev_Layer.imgCols + (c1 + c2);
                                 sum += prev_activation_dt[prev_activation_idx] * this.weights.dt[weight_idx];
                             }
                         }
 
-                        var z_val = sum + this.biases.dt[feature_idx];;
+                        var z_val = sum + this.biases.dt[feature_idx];
 
                         z_dt[output_idx] = z_val;
                         activation_dt[output_idx] = sigmoidF(z_val);
@@ -444,10 +406,10 @@ class ConvolutionalLayer extends Layer{
 
         // 出力先
         var output_idx = 0;
-        for (var feature_idx = 0; feature_idx < this.featureCount; feature_idx++) {
-            for (var r1 = 0; r1 < this.imgRows; r1++) {
-                for (var c1 = 0; c1 < this.imgCols; c1++) {
-                    for (var batch_idx = 0; batch_idx < miniBatchSize; batch_idx++) {
+        for (var batch_idx = 0; batch_idx < miniBatchSize; batch_idx++) {
+            for (var feature_idx = 0; feature_idx < this.featureCount; feature_idx++) {
+                for (var r1 = 0; r1 < this.imgRows; r1++) {
+                    for (var c1 = 0; c1 < this.imgCols; c1++) {
                         var diff = Math.max(Math.abs(z_gpu_dt[output_idx] - this.z.dt[output_idx]), Math.abs(activation_gpu_dt[output_idx] - this.activation.dt[output_idx]));
                         if (max_diff < diff) {
                             if(0.0001 < diff){
@@ -481,13 +443,13 @@ class ConvolutionalLayer extends Layer{
         var param_id = vs_id + ":" + this.featureCount + ":" + this.filterSize + ":" + this.imgRows + ":" + this.imgCols + ":" + miniBatchSize;
         var param;
 
-        if (this.param[param_id] == undefined) {
+        if (this.params[param_id] == undefined) {
 
             param = {};
 
             param.id = param_id;
 
-            this.param[param.id] = param;
+            this.params[param.id] = param;
 
             param.elementCount = this.featureCount * this.filterSize * this.filterSize;
 
@@ -510,7 +472,7 @@ class ConvolutionalLayer extends Layer{
         }
         else {
 
-            param = this.param[param_id];
+            param = this.params[param_id];
         }
 
         WebGL2.compute(param);
@@ -520,8 +482,6 @@ class ConvolutionalLayer extends Layer{
         var prev_Layer = this.prevLayer;
 
         // すべての特徴マップに対し
-        var delta_z_idx = 0;
-        var delta_z_idx_sv = 0;
         var weights_idx = 0;
         for (var feature_idx = 0; feature_idx < this.featureCount; feature_idx++) {
 
@@ -532,7 +492,6 @@ class ConvolutionalLayer extends Layer{
                 for (var c2 = 0; c2 < this.filterSize; c2++) {
 
                     var nabla_w = 0.0;
-                    delta_z_idx = delta_z_idx_sv;
 
                     // 出力の行に対し
                     for (var r1 = 0; r1 < this.imgRows; r1++) {
@@ -541,15 +500,16 @@ class ConvolutionalLayer extends Layer{
                         for (var c1 = 0; c1 < this.imgCols; c1++) {
 
                             // バッチ内のデータに対し
+                            var delta_z_idx = feature_idx * (r1 * c1) + r1 * this.imgCols;
                             for (var batch_idx = 0; batch_idx < miniBatchSize; batch_idx++) {
 
                                 var delta = delta_z.dt[delta_z_idx];
                                 if (delta != 0) {
 
-                                    var prev_activation_idx = ((r1 + r2) * prev_Layer.imgCols + (c1 + c2)) * miniBatchSize + batch_idx;
+                                    var prev_activation_idx = batch_idx * prev_Layer.unitSize + (r1 + r2) * prev_Layer.imgCols + (c1 + c2);
                                     nabla_w += delta * prev_Layer.activation.dt[prev_activation_idx];
                                 }
-                                delta_z_idx++;
+                                delta_z_idx += this.unitSize;
                             }
                         }
                     }
@@ -558,14 +518,12 @@ class ConvolutionalLayer extends Layer{
                     weights_idx++;
                 }
             }
-            delta_z_idx_sv = delta_z_idx;
         }
-        Assert(delta_z_idx == delta_z.dt.length && weights_idx == this.nablaWeights.dt.length);
+        Assert(weights_idx == this.nablaWeights.dt.length);
     }
 
     cpuNablaBiases(delta_z){
         // すべての特徴マップに対し
-        var delta_z_idx = 0;
         for (var feature_idx = 0; feature_idx < this.featureCount; feature_idx++) {
 
             var nabla_b = 0.0;
@@ -577,10 +535,11 @@ class ConvolutionalLayer extends Layer{
                 for (var c1 = 0; c1 < this.imgCols; c1++) {
 
                     // バッチ内のデータに対し
+                    var delta_z_idx = feature_idx * (r1 * c1) + r1 * this.imgCols;
                     for (var batch_idx = 0; batch_idx < miniBatchSize; batch_idx++) {
 
                         nabla_b += delta_z.dt[delta_z_idx];
-                        delta_z_idx++;
+                        delta_z_idx += this.unitSize;
 
                         //!!!!!! 直前が入力層なら必要なし !!!!!
                         // this.costDerivative.dt[output_idx] = this.nextLayer.DeltaT[output_idx];
@@ -590,13 +549,12 @@ class ConvolutionalLayer extends Layer{
 
             this.nablaBiases.dt[feature_idx] = nabla_b;
         }
-        Assert(delta_z_idx == delta_z.dt.length);
     }
 
-    backward(Y, eta2) {
+    backward(Y) {
         var lap = new Lap(this.bwTime);
 
-        var delta_z = new ArrayView(this.unitSize, miniBatchSize, new Float32Array(this.nextLayer.deltaX.dt));
+        var delta_z = new ArrayView(miniBatchSize, this.unitSize, new Float32Array(this.nextLayer.deltaX.dt));
         lap.Time();
 
         for (var i = 0; i < delta_z.dt.length; i++) {
@@ -621,29 +579,36 @@ class ConvolutionalLayer extends Layer{
         lap.Time();
     }
 
-    updateParameter(eta2) {
+    updateParameter() {
         var lap = new Lap(this.udTime);
 
-        var eta3 = eta2;// / (this.filterSize * this.filterSize);
+        var eta = learningRate / miniBatchSize;
 
         // すべての特徴マップに対し
         var weights_idx = 0;
         for (var feature_idx = 0; feature_idx < this.featureCount; feature_idx++) {
 
-            this.biases.dt[feature_idx] -= eta3 * this.nablaBiases.At2(feature_idx, 0);
+            this.biases.dt[feature_idx] -= eta * this.nablaBiases.At2(feature_idx, 0);
 
             // フィルターの行に対し
             for (var r2 = 0; r2 < this.filterSize; r2++) {
 
                 // フィルターの列に対し
                 for (var c2 = 0; c2 < this.filterSize; c2++) {
-                    this.weights.dt[weights_idx] -= eta3 * this.nablaWeights.dt[weights_idx];
+                    this.weights.dt[weights_idx] -= eta * this.nablaWeights.dt[weights_idx];
                     weights_idx++;
                 }
             }
         }
         Assert(weights_idx == this.weights.dt.length);
         lap.Time();
+    }
+
+    clear(){
+        for(var key in this.params){
+            WebGL2.clear(this.params[key].id);
+        }
+        this.params = {};
     }
 }
 
@@ -668,9 +633,11 @@ class PoolingLayer extends Layer {
     }
 
     miniBatchSizeChanged(){
-        this.activation = new ArrayView(this.unitSize, miniBatchSize);
-        this.maxIdx     = new Int8Array(this.unitSize * miniBatchSize);
-        this.deltaX = new ArrayView(prev_Layer.unitSize, miniBatchSize);
+        super.miniBatchSizeChanged();
+
+        this.activation = new ArrayView(miniBatchSize, this.unitSize);
+        this.maxIdx     = new Int8Array(miniBatchSize, this.unitSize);
+        this.deltaX = new ArrayView(miniBatchSize, this.prevLayer.unitSize);
     }
 
     forward() {
@@ -683,19 +650,19 @@ class PoolingLayer extends Layer {
         // 出力先
         var output_idx = 0;
 
-        // すべての特徴マップに対し
-        for (var feature_idx = 0; feature_idx < this.featureCount; feature_idx++) {
+        // バッチ内のデータに対し
+        for (var batch_idx = 0; batch_idx < miniBatchSize; batch_idx++) {
 
-            // 出力の行に対し
-            for (var r1 = 0; r1 < this.imgRows; r1++) {
-                var r0 = r1 * this.filterSize;
+            // すべての特徴マップに対し
+            for (var feature_idx = 0; feature_idx < this.featureCount; feature_idx++) {
 
-                // 出力の列に対し
-                for (var c1 = 0; c1 < this.imgCols; c1++) {
-                    var c0 = c1 * this.filterSize;
+                // 出力の行に対し
+                for (var r1 = 0; r1 < this.imgRows; r1++) {
+                    var r0 = r1 * this.filterSize;
 
-                    // バッチ内のデータに対し
-                    for (var batch_idx = 0; batch_idx < miniBatchSize; batch_idx++) {
+                    // 出力の列に対し
+                    for (var c1 = 0; c1 < this.imgCols; c1++) {
+                        var c0 = c1 * this.filterSize;
 
                         var max_val = -10000;
                         var max_idx;
@@ -706,7 +673,7 @@ class PoolingLayer extends Layer {
                             // フィルターの列に対し
                             for (var c2 = 0; c2 < this.filterSize; c2++) {
 
-                                var prev_activation_idx = ( (feature_idx * prev_Layer.imgRows + (r0 + r2)) * prev_Layer.imgCols + (c0 + c2) ) * miniBatchSize + batch_idx;
+                                var prev_activation_idx = batch_idx * prev_Layer.unitSize + (feature_idx * prev_Layer.imgRows + (r0 + r2)) * prev_Layer.imgCols + (c0 + c2);
                                 var val = prev_activation_dt[prev_activation_idx];
                                 if (max_val < val) {
 
@@ -727,7 +694,7 @@ class PoolingLayer extends Layer {
         lap.Time();
     }
 
-    backward(Y, eta2) {
+    backward(Y) {
         var lap = new Lap(this.bwTime);
 
         var prev_Layer = this.prevLayer;
@@ -742,19 +709,19 @@ class PoolingLayer extends Layer {
         // 出力先
         var output_idx = 0;
 
-        // すべての特徴マップに対し
-        for (var feature_idx = 0; feature_idx < this.featureCount; feature_idx++) {
+        // バッチ内のデータに対し
+        for (var batch_idx = 0; batch_idx < miniBatchSize; batch_idx++) {
 
-            // 出力の行に対し
-            for (var r1 = 0; r1 < this.imgRows; r1++) {
-                var r0 = r1 * this.filterSize;
+            // すべての特徴マップに対し
+            for (var feature_idx = 0; feature_idx < this.featureCount; feature_idx++) {
 
-                // 出力の列に対し
-                for (var c1 = 0; c1 < this.imgCols; c1++) {
-                    var c0 = c1 * this.filterSize;
+                // 出力の行に対し
+                for (var r1 = 0; r1 < this.imgRows; r1++) {
+                    var r0 = r1 * this.filterSize;
 
-                    // バッチ内のデータに対し
-                    for (var batch_idx = 0; batch_idx < miniBatchSize; batch_idx++) {
+                    // 出力の列に対し
+                    for (var c1 = 0; c1 < this.imgCols; c1++) {
+                        var c0 = c1 * this.filterSize;
 
                         var delta = this.nextLayer.deltaX.dt[output_idx];
                         if(delta != 0){
@@ -763,7 +730,7 @@ class PoolingLayer extends Layer {
 
                             var r2 = Math.floor(max_idx / this.filterSize);
                             var c2 = max_idx - r2 * this.filterSize;
-                            var prev_activation_idx = ( (feature_idx * prev_Layer.imgRows + (r0 + r2)) * prev_Layer.imgCols + (c0 + c2) ) * miniBatchSize + batch_idx;
+                            var prev_activation_idx = batch_idx * prev_Layer.unitSize + (feature_idx * prev_Layer.imgRows + (r0 + r2)) * prev_Layer.imgCols + (c0 + c2);
 
                             this.deltaX.dt[prev_activation_idx] = delta;
                         }
@@ -782,6 +749,7 @@ class PoolingLayer extends Layer {
 class Network {
     constructor(layers) {
         this.layers = layers;
+        this.lastLayer = layers[layers.length - 1];
 
         var prev_layer = null;
         for(let layer of layers) {
@@ -809,20 +777,6 @@ class Network {
         return X;
     }
 
-    update_mini_batch(X, Y, eta) {
-        this.layers[0].activation = X;
-        this.layers.forEach(x => x.forward());
-
-        var eta2 = eta / X.ncol;
-
-        for (var i = this.layers.length - 1; 1 <= i; i--) {
-            this.layers[i].backward(Y, eta2);
-        }
-
-
-        this.layers.forEach(x => x.updateParameter(eta2));
-    }
-
     costAvg(cost) {
         return xrange(cost.ncol).map(c => cost.Col(c).dt.map(x => Math.abs(x)).reduce((x, y) => x + y) / cost.nrow);
     }
@@ -838,58 +792,89 @@ class Network {
         return a;
     }
 
-    evaluate(test_data) {
-        var cnt = test_data["count"];
-        var labels = test_data["label"];
+    CorrectCount(Y){
+        var result = this.lastLayer.activation;
 
-        var X = new ArrayView(cnt, 28 * 28, TestData["image"]).T();
-        this.layers[0].activation = X;
-        this.layers.forEach(x => x.forward());
+        var ok_cnt = 0;
+        // バッチ内のデータに対し
+        for (var batch_idx = 0; batch_idx < miniBatchSize; batch_idx++) {
+            var max_idx = np.argmax(result.Row(batch_idx));
+            if(Y.dt[batch_idx * this.lastLayer.unitSize + max_idx] == 1){
+                ok_cnt++;
+            }
+        }
 
-        var result = this.layers[this.layers.length - 1].activation;
-
-        return xrange(cnt).map(c => np.argmax(result.Col(c)) == labels[c] ? 1 : 0).reduce((x, y) => x + y);
-
-//        var test_results = test_data.map($ => { var x = $[0]; var y = $[1]; return [np.argmax(this.feedforward(x)), y]; });
-//        return sum(test_results.map($ => {var x = $[0];var y = $[1];return /*int*/(x == y ? 1 : 0);}));
+        return ok_cnt;
     }
 
     * SGD(training_data, epochs, mini_batch_size, eta, test_data) {
-        miniBatchSize = mini_batch_size;
+        learningRate = eta;
 
-        for (let j of xrange(epochs)) {
+        for (let epoch_idx of xrange(epochs)) {
 
-            var idx_list = np.random.RandomSampling(training_data.X.shape[0]);
+            for(var mode = 0; mode < 2; mode++){
+                var data;
+                var ok_cnt = 0;
 
-            var show_time = new Date();
-            this.layers.forEach(x => x.miniBatchSizeChanged());
+                if(mode == 0){
 
-            var training_data_cnt = training_data.X.shape[0];
-            var mini_batch_cnt = training_data_cnt / mini_batch_size;
-            for (var idx = 0; idx < mini_batch_cnt; idx++) {
-                var X = this.Laminate(training_data.X, idx_list, idx * mini_batch_size, mini_batch_size);
-                var Y = this.Laminate(training_data.Y, idx_list, idx * mini_batch_size, mini_batch_size);
-                this.update_mini_batch(X, Y, eta);
-                if (60 * 1000 < new Date() - show_time) {
-
-                    var s = "" + idx + " ";
-                    for(let layer of this.layers.slice(1)) {
-                        s += " (" + Stats(layer.fwTime, idx) + " " + Stats(layer.bwTime, idx) + " " + Stats(layer.udTime, idx) + ")";
-                    }
-                    console.log("update mini batch:" + s);
-                    yield 1;
-
-                    show_time = new Date();
+                    console.log("トレーニング %d", epoch_idx);
+                    data = training_data;
+                    miniBatchSize = mini_batch_size;
                 }
+                else{
+
+                    console.log("テスト %d", epoch_idx);
+                    data = test_data;
+                    miniBatchSize = 100 * mini_batch_size;
+                }
+
+                this.layers.forEach(x => x.miniBatchSizeChanged());
+
+                var idx_list = np.random.RandomSampling(data.X.shape[0]);
+
+                var show_time = new Date();
+
+                var data_cnt = data.X.shape[0];
+                var mini_batch_cnt = Math.floor(data_cnt / miniBatchSize);
+                for (var idx = 0; idx < mini_batch_cnt; idx++) {
+                    var X = this.Laminate(data.X, idx_list, idx * miniBatchSize, miniBatchSize);
+                    var Y = this.Laminate(data.Y, idx_list, idx * miniBatchSize, miniBatchSize);
+
+                    this.layers[0].activation = X;
+                    this.layers.forEach(x => x.forward());
+
+                    if(mode == 0){
+
+                        for (var i = this.layers.length - 1; 1 <= i; i--) {
+                            this.layers[i].backward(Y);
+                        }
+
+
+                        this.layers.forEach(x => x.updateParameter());
+                    }
+
+                    ok_cnt += this.CorrectCount(Y);
+
+                    if (10 * 1000 < new Date() - show_time) {
+
+                        var s = "" + idx + " ";
+                        for(let layer of this.layers.slice(1)) {
+                            s += " (" + Stats(layer.fwTime, idx) + " " + Stats(layer.bwTime, idx) + " " + Stats(layer.udTime, idx) + ")";
+                        }
+                        console.log("update mini batch: %d / %d  %s", ok_cnt, idx * miniBatchSize, s);
+                        yield 1;
+
+                        show_time = new Date();
+                    }
+                }
+
+                this.layers.forEach(x => x.clear());
+
+                console.log("Epoch %d / %d ", ok_cnt, data_cnt);
             }
+
             yield 2;
-
-            this.layers.forEach(x => x.miniBatchSizeChanged());
-            var e = this.evaluate(test_data);
-
-            console.log("Epoch %d: %d / %d ", j, e, test_data["count"]);
-
-            yield 3;
         }
 
         yield 0;
