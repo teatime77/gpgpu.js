@@ -1,5 +1,6 @@
 ﻿var miniBatchSize;
 var learningRate;
+var useSoftMax = true;
 
 function Stats(tm, idx){
     switch(tm.length){
@@ -51,13 +52,20 @@ class Layer {
     forward() {
     }
 
-    backward(Y) {
+    backward() {
     }
 
     updateParameter() {
     }
 
     clear(){
+        if(this.params){
+
+            for(var key in this.params){
+                WebGL2.clear(this.params[key].id);
+            }
+            this.params = {};
+        }
     }
 }
 
@@ -76,6 +84,7 @@ class FullyConnectedLayer extends Layer{
         super();
 
         this.unitSize = size;
+        this.params = {};
     }
 
     init(prev_layer) {
@@ -95,7 +104,7 @@ class FullyConnectedLayer extends Layer{
         this.prevLayerActivation = new ArrayView(miniBatchSize,  this.prevLayer.unitSize);
     }
 
-    gpuForward(){
+    gpuForwardSigmoid(){
         var vertex_shader =
            `in float zero;
 
@@ -138,20 +147,103 @@ class FullyConnectedLayer extends Layer{
             activation = sigmoid(z);
         }`;
 
+        /*
+        var param_id = "Fully-Connected-Layer-forward," + miniBatchSize + "," + this.prevLayer.unitSize + "," + this.unitSize;
+        if (true || this.params[param_id] == undefined){
+
+            this.params[param_id] = {
+                id : param_id,
+                vertexShader: vertex_shader,
+                args : {
+                    "zero": this.outZero,
+                    "X": WebGL2.makeTextureInfo("float", [ miniBatchSize, this.prevLayer.unitSize]),
+                    "W": WebGL2.makeTextureInfo("float", this.weight.shape, this.weight.dt),
+                    "Bias": WebGL2.makeTextureInfo("float", [ 1, this.bias.dt.length ], this.bias.dt),
+                    "z": this.z.dt,
+                    "activation" : this.activation.dt
+                }
+            };
+        }
+
+        var param = this.params[param_id];
+        //param.args["X"].value = this.prevLayer.activation.dt;
+        //param.args["W"].value = this.
+        //param.args["Bias"].value = this.
+
+        WebGL2.compute(param);
+        */
+
+
         this.param = {
             id : "Fully-Connected-Layer-forward," + miniBatchSize + "," + this.prevLayer.unitSize + "," + this.unitSize,
-            vertexShader: vertex_shader,
-            args : {
+                    vertexShader: vertex_shader,
+                args : {
                 "zero": this.outZero,
                 "X": WebGL2.makeTextureInfo("float", [ miniBatchSize, this.prevLayer.unitSize], this.prevLayer.activation.dt),
                 "W": WebGL2.makeTextureInfo("float", this.weight.shape, this.weight.dt),
                 "Bias": WebGL2.makeTextureInfo("float", [ 1, this.bias.dt.length ], this.bias.dt),
                 "z": this.z.dt,
                 "activation" : this.activation.dt
+                }
+                };
+
+        WebGL2.compute(this.param);
+
+    }
+
+
+    gpuForwardSoftMax(){
+        var vertex_shader =
+           `in float zero;
+
+       // 2次元配列のテクスチャ
+        uniform sampler2D W;
+        uniform sampler2D X;
+        uniform sampler2D Bias;
+
+        out float activation;
+
+        float sigmoid(float x){
+            return 1.0 / (1.0 + exp(-x));
+        }
+
+        void main() {
+            ivec2 X_sz = textureSize(X, 0);
+            ivec2 Bias_sz = textureSize(Bias, 0);
+
+            int batch_idx = gl_VertexID / Bias_sz.x;
+            int out_idx   = gl_VertexID % Bias_sz.x;
+
+            float sum = 0.0f;
+            for(int i = 0; i < X_sz.x; i++) {
+
+                vec4 w = texelFetch(W, ivec2(i, out_idx), 0);
+
+                vec4 x = texelFetch(X, ivec2(i, batch_idx), 0);
+
+                sum += w.r * x.r;
+            }
+
+            vec4 bias = texelFetch(Bias, ivec2(out_idx, 0), 0);
+            sum += bias.r;
+
+            activation = sum + zero;
+        }`;
+
+        this.param = {
+            id : "Fully-Connected-Layer-forward-soft-max," + miniBatchSize + "," + this.prevLayer.unitSize + "," + this.unitSize,
+            vertexShader: vertex_shader,
+            args : {
+                "zero": this.outZero,
+                "X": WebGL2.makeTextureInfo("float", [ miniBatchSize, this.prevLayer.unitSize], this.prevLayer.activation.dt),
+                "W": WebGL2.makeTextureInfo("float", this.weight.shape, this.weight.dt),
+                "Bias": WebGL2.makeTextureInfo("float", [ 1, this.bias.dt.length ], this.bias.dt),
+                "activation" : this.activation.dt
             }
         };
 
         WebGL2.compute(this.param);
+
     }
 
     forward() {
@@ -166,7 +258,14 @@ class FullyConnectedLayer extends Layer{
         }
         else{
 
-            this.gpuForward();
+            if(useSoftMax){
+
+                this.gpuForwardSoftMax();
+            }
+            else{
+
+                this.gpuForwardSigmoid();
+            }
         }
         lap.Time();
     }
@@ -197,21 +296,28 @@ class FullyConnectedLayer extends Layer{
         }
     }
 
-    backward(Y) {
+    backward() {
         var lap = new Lap(this.bwTime);
 
-        if (!this.nextLayer) {
+        if (! this.nextLayer) {
             // 最後のレイヤーの場合
 
-            this.costDerivative = cost_derivative(this.activation, Y);
+            if(useSoftMax){
+
+                this.Delta = new ArrayView(miniBatchSize, this.unitSize, this.costDerivative.dt);
+            }
+            else{
+
+                this.Delta = this.costDerivative.Mul(sigmoid_prime(this.z));
+            }
         }
-        else {
+        else{
             // 最後のレイヤーでない場合
 
             this.costDerivative = this.nextLayer.deltaX;
+            this.Delta = this.costDerivative.Mul(sigmoid_prime(this.z));
         }
 
-        this.Delta = this.costDerivative.Mul(sigmoid_prime(this.z));
         lap.Time();
 
         this.nabla_b = this.Delta.Reduce((x, y) => x + y);
@@ -274,7 +380,7 @@ class ConvolutionalLayer extends Layer{
 
         this.imgRows = this.prevLayer.imgRows - this.filterSize + 1;
         this.imgCols = this.prevLayer.imgCols - this.filterSize + 1;
-        this.unitSize = this.imgRows * this.imgCols * this.featureCount;
+        this.unitSize = this.featureCount * this.imgRows * this.imgCols;
 
         // xrange(this.featureCount).map(x => np.random.randn());
         this.biases = new ArrayView(this.featureCount);
@@ -551,7 +657,7 @@ class ConvolutionalLayer extends Layer{
         }
     }
 
-    backward(Y) {
+    backward() {
         var lap = new Lap(this.bwTime);
 
         var delta_z = new ArrayView(miniBatchSize, this.unitSize, new Float32Array(this.nextLayer.deltaX.dt));
@@ -588,7 +694,7 @@ class ConvolutionalLayer extends Layer{
         var weights_idx = 0;
         for (var feature_idx = 0; feature_idx < this.featureCount; feature_idx++) {
 
-            this.biases.dt[feature_idx] -= eta * this.nablaBiases.At2(feature_idx, 0);
+            this.biases.dt[feature_idx] -= eta * this.nablaBiases.dt[feature_idx];
 
             // フィルターの行に対し
             for (var r2 = 0; r2 < this.filterSize; r2++) {
@@ -694,7 +800,7 @@ class PoolingLayer extends Layer {
         lap.Time();
     }
 
-    backward(Y) {
+    backward() {
         var lap = new Lap(this.bwTime);
 
         var prev_Layer = this.prevLayer;
@@ -807,9 +913,51 @@ class Network {
         return ok_cnt;
     }
 
+    /*
+    損失関数の微分
+    */
+    SoftMax(cost_derivative, last_y, batch_Y, exp_work, range_len, batch_idx) {
+        var max_val = -10000;
+        for (var i = 0; i < range_len; i++) {
+            var k = batch_idx * range_len + i;
+
+            if (max_val < last_y[k]) {
+                max_val = last_y[k];
+            }
+        }
+
+        var sum = 0;
+        for (var i = 0; i < range_len; i++) {
+            var k = batch_idx * range_len + i;
+
+            var d = Math.exp(last_y[k] - max_val);
+            sum += d;
+            exp_work[i] = d;
+        }
+
+        var cost_sum = 0;
+        for (var i = 0; i < range_len; i++) {
+            var k = batch_idx * range_len + i;
+
+            var y = exp_work[i] / sum;
+            cost_derivative[k] = y - batch_Y[k];
+
+            cost_sum += (batch_Y[k] * Math.log(y));
+        }
+
+        return - cost_sum;
+    }
+
+
     * SGD(training_data, epochs, mini_batch_size, eta, test_data) {
         learningRate = eta;
+        var last_layer = this.layers[this.layers.length - 1];
+        last_layer.costDerivative = new ArrayView(mini_batch_size, last_layer.unitSize);
+        var exp_work = new Float32Array(last_layer.unitSize);
 
+        var max_ok_cnt = 0;
+        var max_eta = 0;
+        var try_cnt = 20;
         for (let epoch_idx of xrange(epochs)) {
 
             for(var mode = 0; mode < 2; mode++){
@@ -836,7 +984,16 @@ class Network {
                 var show_time = new Date();
 
                 var data_cnt = data.X.shape[0];
-                var mini_batch_cnt = Math.floor(data_cnt / miniBatchSize);
+                var mini_batch_cnt;
+                if(epoch_idx < try_cnt){
+
+                    learningRate = epoch_idx * 0.1;
+                    mini_batch_cnt = Math.floor(1000 / miniBatchSize);
+                }
+                else{
+
+                    mini_batch_cnt = Math.floor(data_cnt / miniBatchSize);
+                }
                 for (var idx = 0; idx < mini_batch_cnt; idx++) {
                     var X = this.Laminate(data.X, idx_list, idx * miniBatchSize, miniBatchSize);
                     var Y = this.Laminate(data.Y, idx_list, idx * miniBatchSize, miniBatchSize);
@@ -846,10 +1003,24 @@ class Network {
 
                     if(mode == 0){
 
-                        for (var i = this.layers.length - 1; 1 <= i; i--) {
-                            this.layers[i].backward(Y);
+                        if(useSoftMax){
+
+                            var cost = 0;
+                            for (var batch_idx = 0; batch_idx < miniBatchSize; batch_idx++) {
+                                var cost2 = this.SoftMax(last_layer.costDerivative.dt, last_layer.activation.dt, Y.dt, exp_work, last_layer.unitSize, batch_idx);
+
+                                cost += cost2;
+                            }
+                            cost /= miniBatchSize;
+                        }
+                        else{
+
+                            last_layer.costDerivative = cost_derivative(last_layer.activation, Y);                    
                         }
 
+                        for (var i = this.layers.length - 1; 1 <= i; i--) {
+                            this.layers[i].backward();
+                        }
 
                         this.layers.forEach(x => x.updateParameter());
                     }
@@ -871,7 +1042,20 @@ class Network {
 
                 this.layers.forEach(x => x.clear());
 
-                console.log("Epoch %d / %d ", ok_cnt, data_cnt);
+                console.log("Epoch %d / %d eta:%.02f", ok_cnt, mini_batch_cnt * miniBatchSize, learningRate);
+                if(epoch_idx < try_cnt){
+
+                    if(max_ok_cnt < ok_cnt){
+                        max_ok_cnt = ok_cnt;
+                        max_eta = learningRate;
+                    }
+
+                    if(epoch_idx == try_cnt - 1){
+                        learningRate = max_eta;
+                    }
+
+                    break;
+                }
             }
 
             yield 2;
