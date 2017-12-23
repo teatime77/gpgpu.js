@@ -449,10 +449,10 @@ class ArrayView {
     }
 
     diff(m) {
-        Assert(m.dt.length == this.dt.length);
+        Assert(m.length == this.dt.length);
         var x = 0;
         for (var i = 0; i < this.dt.length; i++) {
-            x = Math.max(x, Math.abs(m.dt[i] - this.dt[i]));
+            x = Math.max(x, Math.abs(m[i] - this.dt[i]));
         }
 
         return x;

@@ -173,7 +173,6 @@ class FullyConnectedLayer extends Layer{
         WebGL2.compute(param);
         */
 
-
         this.param = {
             id : "Fully-Connected-Layer-forward," + miniBatchSize + "," + this.prevLayer.unitSize + "," + this.unitSize,
                     vertexShader: vertex_shader,
@@ -230,20 +229,26 @@ class FullyConnectedLayer extends Layer{
             activation = sum + zero;
         }`;
 
-        this.param = {
-            id : "Fully-Connected-Layer-forward-soft-max," + miniBatchSize + "," + this.prevLayer.unitSize + "," + this.unitSize,
-            vertexShader: vertex_shader,
-            args : {
-                "zero": this.outZero,
-                "X": WebGL2.makeTextureInfo("float", [ miniBatchSize, this.prevLayer.unitSize], this.prevLayer.activation.dt),
-                "W": WebGL2.makeTextureInfo("float", this.weight.shape, this.weight.dt),
-                "Bias": WebGL2.makeTextureInfo("float", [ 1, this.bias.dt.length ], this.bias.dt),
-                "activation" : this.activation.dt
-            }
-        };
+        var param_id = "Fully-Connected-Layer-forward-soft-max," + miniBatchSize + "," + this.prevLayer.unitSize + "," + this.unitSize;
+        if (this.params[param_id] == undefined){
 
-        WebGL2.compute(this.param);
+            this.params[param_id] = {
+                id : param_id,
+                vertexShader: vertex_shader,
+                args : {
+                    "zero": this.outZero,
+                    "X": WebGL2.makeTextureInfo("float", [ miniBatchSize, this.prevLayer.unitSize], this.prevLayer.activation.dt),
+                    "W": WebGL2.makeTextureInfo("float", this.weight.shape, this.weight.dt),
+                    "Bias": WebGL2.makeTextureInfo("float", [ 1, this.bias.dt.length ], this.bias.dt),
+                    "activation" : this.activation.dt
+                }
+            };
+        }
 
+        var param = this.params[param_id];
+        param.args["X"].value = this.prevLayer.activation.dt;
+
+        WebGL2.compute(param);
     }
 
     forward() {
@@ -270,6 +275,56 @@ class FullyConnectedLayer extends Layer{
         lap.Time();
     }
 
+    gpuDeltaX(){
+        var vertex_shader =
+           `in float zero;
+
+       // 2次元配列のテクスチャ
+        uniform sampler2D W;
+        uniform sampler2D deltaZ;
+
+        out float deltaX;
+
+        void main() {
+            ivec2 W_sz = textureSize(W, 0);
+
+            int batch_idx = gl_VertexID / W_sz.x;
+            int delta_x_idx   = gl_VertexID % W_sz.x;
+
+            float sum = 0.0f;
+            for(int i = 0; i < W_sz.y; i++) {
+
+                vec4 w = texelFetch(W, ivec2(delta_x_idx, i), 0);
+
+                vec4 z = texelFetch(deltaZ, ivec2(i, batch_idx), 0);
+
+                sum += w.r * z.r;
+            }
+
+            deltaX = sum + zero;
+        }`;
+
+        var param_id = "Fully-Connected-Layer-gpu-delta-X," + miniBatchSize + "," + this.prevLayer.unitSize + "," + this.unitSize;
+        if (this.params[param_id] == undefined){
+
+            this.params[param_id] = {
+                id : param_id,
+                vertexShader: vertex_shader,
+                args : {
+                    "zero": new Float32Array(miniBatchSize * this.prevLayer.unitSize),
+                    "W": makeTextureInfo(WebGL2, "float", this.weight),
+                    "deltaZ": makeTextureInfo(WebGL2, "float", this.deltaZ),
+                    "deltaX" : this.deltaX.dt
+                }
+            };
+        }
+
+        var param = this.params[param_id];
+        param.args["deltaZ"].value = this.deltaZ.dt;
+
+        WebGL2.compute(param);
+    }
+
     cpuDeltaX(){
 
         // 出力先
@@ -283,11 +338,11 @@ class FullyConnectedLayer extends Layer{
 
                 var sum = 0.0;
 
-                // 重みの行とδyの内積
+                // 重みの行とδzの内積
                 for (var k = 0; k < this.weight.nrow; k++) {
                     var weight_idx = k * this.weight.ncol + x_idx;
-                    var delta_idx = batch_idx * this.unitSize + k;
-                    sum += this.Delta.dt[delta_idx] * this.weight.dt[weight_idx];
+                    var delta_z_idx = batch_idx * this.unitSize + k;
+                    sum += this.deltaZ.dt[delta_z_idx] * this.weight.dt[weight_idx];
                 }
 
                 this.deltaX.dt[output_idx] = sum;
@@ -304,41 +359,48 @@ class FullyConnectedLayer extends Layer{
 
             if(useSoftMax){
 
-                this.Delta = new ArrayView(miniBatchSize, this.unitSize, this.costDerivative.dt);
+                this.deltaZ = new ArrayView(miniBatchSize, this.unitSize, this.costDerivative.dt);
             }
             else{
 
-                this.Delta = this.costDerivative.Mul(sigmoid_prime(this.z));
+                this.deltaZ = this.costDerivative.Mul(sigmoid_prime(this.z));
             }
         }
         else{
             // 最後のレイヤーでない場合
 
             this.costDerivative = this.nextLayer.deltaX;
-            this.Delta = this.costDerivative.Mul(sigmoid_prime(this.z));
+            this.deltaZ = this.costDerivative.Mul(sigmoid_prime(this.z));
         }
 
         lap.Time();
 
-        this.nabla_b = this.Delta.Reduce((x, y) => x + y);
+        this.nabla_b = this.deltaZ.Reduce((x, y) => x + y);
         lap.Time();
 
         if(false){
 
-            this.nabla_w = np.dot(this.Delta, this.prevLayer.activation);
+            this.nabla_w = np.dot(this.deltaZ, this.prevLayer.activation);
             lap.Time();
 
             //!!!!! 直前が入力層なら必要なし !!!!!
-            this.deltaX = np.dot(this.weight.T(), this.Delta);
+            this.deltaX = np.dot(this.weight.T(), this.deltaZ);
         }
         else{
             this.prevLayerActivation.dt = this.prevLayer.activation.dt;
-            this.nabla_w = this.Delta.T().Dot2(this.prevLayerActivation);
+            this.nabla_w = this.deltaZ.T().Dot2(this.prevLayerActivation);
             lap.Time();
 
             //!!!!! 直前が入力層なら必要なし !!!!!
-//            this.deltaX = this.weight.T().Dot2(this.Delta);
-            this.cpuDeltaX();
+            this.gpuDeltaX();
+            if(Math.random() < 0.01){
+
+                var gpu_delta_x = new Float32Array(this.deltaX.dt);
+                this.cpuDeltaX();
+
+                var diff = this.deltaX.diff(gpu_delta_x);
+                Assert(diff < 0.01, "delta-X");
+            }
         }
         lap.Time();
     }
@@ -357,10 +419,6 @@ class FullyConnectedLayer extends Layer{
             this.bias.dt[i] -= eta * this.nabla_b.dt[i];
         }
         lap.Time();
-    }
-
-    clear(){
-        WebGL2.clear(this.param.id);
     }
 }
 
@@ -957,7 +1015,8 @@ class Network {
 
         var max_ok_cnt = 0;
         var max_eta = 0;
-        var try_cnt = 20;
+        var try_cnt = 0;
+        var prev_ratio = 0;
         for (let epoch_idx of xrange(epochs)) {
 
             for(var mode = 0; mode < 2; mode++){
@@ -1055,6 +1114,13 @@ class Network {
                     }
 
                     break;
+                }
+                if(mode == 1){
+                    var ratio = ok_cnt / (mini_batch_cnt * miniBatchSize);
+                    if(ratio < prev_ratio){
+                        learningRate *= 0.9;
+                    }
+                    prev_ratio = ratio;
                 }
             }
 
