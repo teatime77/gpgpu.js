@@ -54,7 +54,7 @@ class ConvolutionalLayerTest extends ConvolutionalLayer {
     }
 }
 
-class NetworkTest extends Network {
+class NetworkTest extends NeuralNetwork {
 
     gpuTest() {
         var dt = new Float32Array(4 * 3 * 28 * 28);

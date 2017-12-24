@@ -1,6 +1,8 @@
-﻿var miniBatchSize;
+﻿
+var miniBatchSize;
 var learningRate;
 var useSoftMax = true;
+var WebGL2;
 
 function Stats(tm, idx){
     switch(tm.length){
@@ -106,9 +108,9 @@ class FullyConnectedLayer extends Layer{
 
     gpuForwardSigmoid(){
         var vertex_shader =
-           `in float zero;
+            `in float zero;
 
-       // 2次元配列のテクスチャ
+        // 2次元配列のテクスチャ
         uniform sampler2D W;
         uniform sampler2D X;
         uniform sampler2D Bias;
@@ -193,9 +195,9 @@ class FullyConnectedLayer extends Layer{
 
     gpuForwardSoftMax(){
         var vertex_shader =
-           `in float zero;
+            `in float zero;
 
-       // 2次元配列のテクスチャ
+        // 2次元配列のテクスチャ
         uniform sampler2D W;
         uniform sampler2D X;
         uniform sampler2D Bias;
@@ -277,9 +279,9 @@ class FullyConnectedLayer extends Layer{
 
     gpuDeltaX(){
         var vertex_shader =
-           `in float zero;
+            `in float zero;
 
-       // 2次元配列のテクスチャ
+        // 2次元配列のテクスチャ
         uniform sampler2D W;
         uniform sampler2D deltaZ;
 
@@ -479,7 +481,7 @@ class ConvolutionalLayer extends Layer{
                 .replace(/colCount/g, this.imgCols.toString() + "u")
                 .replace(/filterSize/g, this.filterSize.toString() + "u");
 
-           this.params[param_id]  = {
+            this.params[param_id]  = {
                 id : param_id,
                 vertexShader: shader_src,
                 args : {
@@ -592,7 +594,7 @@ class ConvolutionalLayer extends Layer{
         this.forwardCPU += t2 - t1;
         if (this.forwardCnt % 100 == 0 || 100 <= miniBatchSize) {
 
-            console.log("forward diff:%f cnt:%d GPU:%dms CPU:%dms", max_diff, this.forwardCnt, Math.round(this.forwardGPU / this.forwardCnt), Math.round(this.forwardCPU / this.forwardCnt));
+//            console.log("forward diff:%f cnt:%d GPU:%dms CPU:%dms", max_diff, this.forwardCnt, Math.round(this.forwardGPU / this.forwardCnt), Math.round(this.forwardCPU / this.forwardCnt));
         }
     }
 
@@ -910,8 +912,9 @@ class PoolingLayer extends Layer {
     }
 }
 
-class Network {
-    constructor(layers) {
+class NeuralNetwork {
+    constructor(gpgpu, layers) {
+        WebGL2 = gpgpu;
         this.layers = layers;
         this.lastLayer = layers[layers.length - 1];
 
@@ -1007,8 +1010,8 @@ class Network {
     }
 
 
-    * SGD(training_data, epochs, mini_batch_size, eta, test_data) {
-        learningRate = eta;
+    * SGD(training_data, test_data, epochs, mini_batch_size, learning_rate) {
+        learningRate = learning_rate;
         var last_layer = this.layers[this.layers.length - 1];
         last_layer.costDerivative = new ArrayView(mini_batch_size, last_layer.unitSize);
         var exp_work = new Float32Array(last_layer.unitSize);
@@ -1025,13 +1028,11 @@ class Network {
 
                 if(mode == 0){
 
-                    console.log("トレーニング %d", epoch_idx);
                     data = training_data;
                     miniBatchSize = mini_batch_size;
                 }
                 else{
 
-                    console.log("テスト %d", epoch_idx);
                     data = test_data;
                     miniBatchSize = 100 * mini_batch_size;
                 }
@@ -1088,11 +1089,11 @@ class Network {
 
                     if (10 * 1000 < new Date() - show_time) {
 
-                        var s = "" + idx + " ";
+                        var s = "";
                         for(let layer of this.layers.slice(1)) {
                             s += " (" + Stats(layer.fwTime, idx) + " " + Stats(layer.bwTime, idx) + " " + Stats(layer.udTime, idx) + ")";
                         }
-                        console.log("update mini batch: %d / %d  %s", ok_cnt, idx * miniBatchSize, s);
+//                        console.log("update mini batch: %d / %d  %s", ok_cnt, idx * miniBatchSize, s);
                         yield 1;
 
                         show_time = new Date();
@@ -1101,7 +1102,10 @@ class Network {
 
                 this.layers.forEach(x => x.clear());
 
-                console.log("Epoch %d / %d eta:%.02f", ok_cnt, mini_batch_cnt * miniBatchSize, learningRate);
+                if(mode == 1){
+
+                    console.log("Epoch %d  %d / %d eta:%.02f", epoch_idx, ok_cnt, mini_batch_cnt * miniBatchSize, learningRate);
+                }
                 if(epoch_idx < try_cnt){
 
                     if(max_ok_cnt < ok_cnt){
@@ -1130,7 +1134,6 @@ class Network {
         yield 0;
     }
 }
-
 
 function cost_derivative(output_activations, y){
     return (output_activations.Sub(y));

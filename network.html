@@ -31,12 +31,8 @@ Chromeの場合Ctrl+Shift+Iでデベロッパーツールのコンソールを�
 <output id="list"></output>
 
     <script type="text/javascript">
-        var WebGL2;
         var TrainingImgCnt, TrainingDataImage, TrainingDataLabel, TrainingData;
         var TestImgCnt, TestDataImage, TestDataLabel, TestData;
-        var Net;
-        var GenSGD;
-        var TimerSGD;
 
         var ret = np.random.RandomSampling(6, 6);
         for(let i of ret) {
@@ -55,24 +51,10 @@ Chromeの場合Ctrl+Shift+Iでデベロッパーツールのコンソールを�
         var Ctx = null;
         var imageData;
 
-        function StartSGD(net, training_data, epochs, mini_batch_size, eta, test_data) {
-            GenSGD = net.SGD(training_data, epochs, mini_batch_size, eta, test_data);
+        function RunNeuralNetwork(training_data, test_data) {
+            var gpgpu = CreateGPGPU();
 
-            TimerSGD = setInterval(function () {
-                var ret = GenSGD.next().value;
-                if (ret == 0) {
-
-                    clearInterval(TimerSGD);
-
-                    WebGL2.WebGLClear();
-                }
-            }, 1)
-        }
-
-        function RunNetwork() {
-            WebGL2 = CreateGPGPU();
-
-            Net = new Network([
+            var net = new NeuralNetwork(gpgpu, [
                 new InputLayer(28, 28),
                 new ConvolutionalLayer(5, 20),
                 new PoolingLayer(2),
@@ -80,15 +62,32 @@ Chromeの場合Ctrl+Shift+Iでデベロッパーツールのコンソールを�
                 new FullyConnectedLayer(10)
             ]);
 
-            var epochs = 10000;
-            if (Net.layers.length == 3) {
+            var epochs = 10;
+            var mini_batch_size = 10;
+            var learning_rate;
+            if (net.layers.length == 3) {
 
-                StartSGD(Net, TrainingData, epochs, 10, 3.0, TestData);
+                learning_rate = 3.0;
             }
             else {
 
-                StartSGD(Net, TrainingData, epochs, 10, 0.1, TestData); //0.5
+                learning_rate = 0.1;
             }
+
+            var sgd_generator = net.SGD(training_data, test_data, epochs, mini_batch_size, learning_rate);
+
+            var timer_fnc = setInterval(function () {
+                var ret = sgd_generator.next().value;
+                if (ret == 0) {
+
+                    clearInterval(timer_fnc);
+
+                    gpgpu.clearAll();
+                    console.log("学習が終わりました。");
+
+                    RunNeuralNetwork(training_data, test_data);
+                }
+            }, 1)
         }
 
         // MNIST http://yann.lecun.com/exdb/mnist/
@@ -180,7 +179,7 @@ Chromeの場合Ctrl+Shift+Iでデベロッパーツールのコンソールを�
                             TrainingData = make_data(TrainingImgCnt, TrainingDataImage, TrainingDataLabel);
                             TestData     = make_data(TestImgCnt    , TestDataImage    , TestDataLabel);
 
-                            RunNetwork();
+                            RunNeuralNetwork(TrainingData, TestData);
                         }
                     };
                 })(f);
