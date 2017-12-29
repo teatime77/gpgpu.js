@@ -1,7 +1,7 @@
 ﻿
 var miniBatchSize;
 var learningRate;
-var useSoftMax = false;
+var useSoftMax = true;
 var WebGL2;
 var isTest = false;
 
@@ -52,7 +52,7 @@ class Layer {
         this.udTime = [];
     }
 
-    forward(Y) {
+    forward() {
     }
 
     backward() {
@@ -209,7 +209,7 @@ class FullyConnectedLayer extends Layer{
         uniform sampler2D X;
         uniform sampler2D Bias;
 
-        out float z;
+        out float activation;
 
         float sigmoid(float x){
             return 1.0 / (1.0 + exp(-x));
@@ -235,7 +235,7 @@ class FullyConnectedLayer extends Layer{
             vec4 bias = texelFetch(Bias, ivec2(out_idx, 0), 0);
             sum += bias.r;
 
-            z = sum + zero;
+            activation = sum + zero;
         }`;
 
         var param_id = "Fully-Connected-Layer-forward-soft-max," + miniBatchSize + "," + this.prevLayer.unitSize + "," + this.unitSize;
@@ -249,7 +249,7 @@ class FullyConnectedLayer extends Layer{
                     "X": WebGL2.makeTextureInfo("float", [ miniBatchSize, this.prevLayer.unitSize], this.prevLayer.activation.dt),
                     "W": WebGL2.makeTextureInfo("float", this.weight.shape, this.weight.dt),
                     "Bias": WebGL2.makeTextureInfo("float", [ 1, this.bias.dt.length ], this.bias.dt),
-                    "z" : this.z.dt
+                    "activation" : this.activation.dt
                 }
             };
         }
@@ -261,50 +261,17 @@ class FullyConnectedLayer extends Layer{
     }
 
 
-    /*
-    損失関数の微分
-    */
-    SoftMax(cost_derivative, z, batch_Y, activation, range_len) {
-        var cost_sum = 0;
-
-        for (var batch_idx = 0; batch_idx < miniBatchSize; batch_idx++) {
-            var start = batch_idx * range_len;
-            var end   = start + range_len;
-
-            var max_val = -10000;
-            for (var k = start; k < end; k++) {
-
-                if (max_val < z[k]) {
-                    max_val = z[k];
-                }
-            }
-
-            var sum = 0;
-            for (var k = start; k < end; k++) {
-
-                var d = Math.exp(z[k] - max_val);
-                sum += d;
-                activation[k] = d;
-            }
-
-            for (var k = start; k < end; k++) {
-
-                activation[k] /= sum;
-                cost_derivative[k] = activation[k] - batch_Y[k];
-
-                cost_sum += (batch_Y[k] * Math.log(activation[k]));
-            }
-        }
-        
-        cost_sum /= miniBatchSize;
-        
-        return - cost_sum;
-    }
-
-
-    forward(Y) {
+    forward() {
         var lap = new Lap(this.fwTime);
+        if(useSoftMax && ! this.nextLayer){
 
+            this.gpuForwardSoftMax();
+        }
+        else{
+
+            this.gpuForwardSigmoid();
+        }
+/*
         if(false){
 
             this.z = np.dot(this.weight, this.prevLayer.activation).AddVec(this.bias);
@@ -340,6 +307,7 @@ class FullyConnectedLayer extends Layer{
                 }
             }
         }
+*/
         lap.Time();
     }
 
@@ -614,7 +582,7 @@ class ConvolutionalLayer extends Layer{
         }
     }
 
-    forward(Y) {
+    forward() {
         var lap = new Lap(this.fwTime);
 
         var t0 = new Date();
@@ -872,7 +840,7 @@ class PoolingLayer extends Layer {
         this.deltaX = new ArrayView(miniBatchSize, this.prevLayer.unitSize);
     }
 
-    forward(Y) {
+    forward() {
         var lap = new Lap(this.fwTime);
 
         var prev_Layer = this.prevLayer;
@@ -999,17 +967,24 @@ class DropoutLayer extends Layer {
         this.valid      = new Int8Array(miniBatchSize * this.unitSize);
     }
 
-    forward(Y) {
+    forward() {
         for(var i = 0; i < this.activation.dt.length; i++){
-            if(isTest || this.ratio <= Math.random()){
+            if(! isTest){
 
-                this.valid[i]   = 1;
-                this.activation.dt[i] = this.prevLayer.activation.dt[i];
+                if(this.ratio <= Math.random()){
+
+                    this.valid[i]   = 1;
+                    this.activation.dt[i] = this.prevLayer.activation.dt[i];
+                }
+                else{
+
+                    this.valid[i]   = 0;
+                    this.activation.dt[i] = 0;
+                }
             }
             else{
 
-                this.valid[i]   = 0;
-                this.activation.dt[i] = 0;
+                this.activation.dt[i] = (1 - this.ratio) *  this.prevLayer.activation.dt[i];
             }
         }
     }
@@ -1090,6 +1065,41 @@ class NeuralNetwork {
         return ok_cnt;
     }
 
+    /*
+    損失関数の微分
+    */
+    SoftMax(cost_derivative, last_y, batch_Y, exp_work, range_len, batch_idx) {
+        var max_val = -10000;
+        for (var i = 0; i < range_len; i++) {
+            var k = batch_idx * range_len + i;
+
+            if (max_val < last_y[k]) {
+                max_val = last_y[k];
+            }
+        }
+
+        var sum = 0;
+        for (var i = 0; i < range_len; i++) {
+            var k = batch_idx * range_len + i;
+
+            var d = Math.exp(last_y[k] - max_val);
+            sum += d;
+            exp_work[i] = d;
+        }
+
+        var cost_sum = 0;
+        for (var i = 0; i < range_len; i++) {
+            var k = batch_idx * range_len + i;
+
+            var y = exp_work[i] / sum;
+            cost_derivative[k] = y - batch_Y[k];
+
+            cost_sum += (batch_Y[k] * Math.log(y));
+        }
+
+        return - cost_sum;
+    }
+
     * SGD(training_data, test_data, epochs, mini_batch_size, learning_rate) {
         learningRate = learning_rate;
         var last_layer = this.layers[this.layers.length - 1];
@@ -1140,9 +1150,24 @@ class NeuralNetwork {
                     var Y = this.Laminate(data.Y, idx_list, idx * miniBatchSize, miniBatchSize);
 
                     this.layers[0].activation = X;
-                    this.layers.forEach(x => x.forward(Y));
+                    this.layers.forEach(x => x.forward());
 
                     if(mode == 0){
+
+                        if(useSoftMax){
+
+                            var cost = 0;
+                            for (var batch_idx = 0; batch_idx < miniBatchSize; batch_idx++) {
+                                var cost2 = this.SoftMax(last_layer.costDerivative.dt, last_layer.activation.dt, Y.dt, exp_work, last_layer.unitSize, batch_idx);
+
+                                cost += cost2;
+                            }
+                            cost /= miniBatchSize;
+                        }
+                        else{
+
+                            last_layer.costDerivative = cost_derivative(last_layer.activation, Y);                    
+                        }
 
                         for (var i = this.layers.length - 1; 1 <= i; i--) {
                             this.layers[i].backward();
@@ -1199,6 +1224,10 @@ class NeuralNetwork {
 
         yield 0;
     }
+}
+
+function cost_derivative(output_activations, y){
+    return (output_activations.Sub(y));
 }
 
 function sigmoid(z){
