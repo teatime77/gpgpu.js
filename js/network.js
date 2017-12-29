@@ -271,43 +271,7 @@ class FullyConnectedLayer extends Layer{
 
             this.gpuForwardSigmoid();
         }
-/*
-        if(false){
 
-            this.z = np.dot(this.weight, this.prevLayer.activation).AddVec(this.bias);
-            lap.Time();
-
-            this.activation = sigmoid(this.z);
-        }
-        else{
-
-            if(this.nextLayer){
-                // 最後でない場合
-
-                this.gpuForwardSigmoid();
-            }
-            else{
-                // 最後の場合
-
-                if(useSoftMax){
-
-                    this.gpuForwardSoftMax();
-                    this.SoftMax(this.costDerivative.dt, this.z.dt, Y.dt, this.activation.dt, this.unitSize);
-                }
-                else{
-
-                    this.gpuForwardSigmoid();
-                    if(!isTest){
-                        // テストでない場合
-
-                        for(var k = 0; k < this.costDerivative.dt.length; k++){
-                            this.costDerivative.dt[k] = this.activation.dt[k] - Y.dt[k];
-                        }
-                    }
-                }
-            }
-        }
-*/
         lap.Time();
     }
 
@@ -1068,36 +1032,39 @@ class NeuralNetwork {
     /*
     損失関数の微分
     */
-    SoftMax(cost_derivative, last_y, batch_Y, exp_work, range_len, batch_idx) {
-        var max_val = -10000;
-        for (var i = 0; i < range_len; i++) {
-            var k = batch_idx * range_len + i;
+    SoftMax(cost_derivative, last_y, batch_Y, exp_work, range_len) {
+        var cost_sum = 0;
+        for (var batch_idx = 0; batch_idx < miniBatchSize; batch_idx++){
 
-            if (max_val < last_y[k]) {
-                max_val = last_y[k];
+            var max_val = -10000;
+            for (var i = 0; i < range_len; i++) {
+                var k = batch_idx * range_len + i;
+
+                if (max_val < last_y[k]) {
+                    max_val = last_y[k];
+                }
+            }
+
+            var sum = 0;
+            for (var i = 0; i < range_len; i++) {
+                var k = batch_idx * range_len + i;
+
+                var d = Math.exp(last_y[k] - max_val);
+                sum += d;
+                exp_work[i] = d;
+            }
+
+            for (var i = 0; i < range_len; i++) {
+                var k = batch_idx * range_len + i;
+
+                var y = exp_work[i] / sum;
+                cost_derivative[k] = y - batch_Y[k];
+
+                cost_sum += (batch_Y[k] * Math.log(y));
             }
         }
 
-        var sum = 0;
-        for (var i = 0; i < range_len; i++) {
-            var k = batch_idx * range_len + i;
-
-            var d = Math.exp(last_y[k] - max_val);
-            sum += d;
-            exp_work[i] = d;
-        }
-
-        var cost_sum = 0;
-        for (var i = 0; i < range_len; i++) {
-            var k = batch_idx * range_len + i;
-
-            var y = exp_work[i] / sum;
-            cost_derivative[k] = y - batch_Y[k];
-
-            cost_sum += (batch_Y[k] * Math.log(y));
-        }
-
-        return - cost_sum;
+        return - cost_sum / miniBatchSize;
     }
 
     * SGD(training_data, test_data, epochs, mini_batch_size, learning_rate) {
@@ -1156,13 +1123,7 @@ class NeuralNetwork {
 
                         if(useSoftMax){
 
-                            var cost = 0;
-                            for (var batch_idx = 0; batch_idx < miniBatchSize; batch_idx++) {
-                                var cost2 = this.SoftMax(last_layer.costDerivative.dt, last_layer.activation.dt, Y.dt, exp_work, last_layer.unitSize, batch_idx);
-
-                                cost += cost2;
-                            }
-                            cost /= miniBatchSize;
+                            var cost = this.SoftMax(last_layer.costDerivative.dt, last_layer.activation.dt, Y.dt, exp_work, last_layer.unitSize);
                         }
                         else{
 
@@ -1184,7 +1145,7 @@ class NeuralNetwork {
                         for(let layer of this.layers.slice(1)) {
                             s += " (" + Stats(layer.fwTime, idx) + " " + Stats(layer.bwTime, idx) + " " + Stats(layer.udTime, idx) + ")";
                         }
-//                        console.log("update mini batch: %d / %d  %s", ok_cnt, idx * miniBatchSize, s);
+//                        console.log("update mini batch: %.2f %d  %s", ok_cnt / idx * miniBatchSize, idx * miniBatchSize, s);
                         yield 1;
 
                         show_time = new Date();
