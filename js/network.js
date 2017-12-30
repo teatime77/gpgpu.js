@@ -664,13 +664,13 @@ class ConvolutionalLayer extends Layer{
                         for (var c1 = 0; c1 < this.imgCols; c1++) {
 
                             // バッチ内のデータに対し
-                            var delta_z_idx = feature_idx * (r1 * c1) + r1 * this.imgCols;
+                            var delta_z_idx = feature_idx * (r1 * c1) + r1 * (this.imgCols | 0);
                             for (var batch_idx = 0; batch_idx < miniBatchSize; batch_idx++) {
 
                                 var delta = delta_z.dt[delta_z_idx];
                                 if (delta != 0) {
 
-                                    var prev_activation_idx = batch_idx * prev_Layer.unitSize + (r1 + r2) * prev_Layer.imgCols + (c1 + c2);
+                                    var prev_activation_idx = batch_idx * (prev_Layer.unitSize | 0) + (r1 + r2) * (prev_Layer.imgCols | 0) + (c1 + c2);
                                     nabla_w += delta * prev_Layer.activation.dt[prev_activation_idx];
                                 }
                                 delta_z_idx += this.unitSize;
@@ -800,7 +800,8 @@ class PoolingLayer extends Layer {
         super.miniBatchSizeChanged();
 
         this.activation = new ArrayView(miniBatchSize, this.unitSize);
-        this.maxIdx     = new Int8Array(miniBatchSize, this.unitSize);
+        this.maxRow     = new Int8Array(miniBatchSize, this.unitSize);
+        this.maxCol     = new Int8Array(miniBatchSize, this.unitSize);
         this.deltaX = new ArrayView(miniBatchSize, this.prevLayer.unitSize);
     }
 
@@ -829,7 +830,7 @@ class PoolingLayer extends Layer {
                         var c0 = c1 * this.filterSize;
 
                         var max_val = -10000;
-                        var max_idx;
+                        var max_row, max_col;
 
                         // フィルターの行に対し
                         for (var r2 = 0; r2 < this.filterSize; r2++) {
@@ -842,19 +843,23 @@ class PoolingLayer extends Layer {
                                 if (max_val < val) {
 
                                     max_val = val;
-                                    max_idx = r2 * this.filterSize + c2;
+                                    max_row = r2;
+                                    max_col = c2;
                                 }
                             }
                         }
 
                         this.activation.dt[output_idx] = max_val;
-                        this.maxIdx[output_idx] = max_idx;
+                        this.maxRow[output_idx] = max_row;
+                        this.maxCol[output_idx] = max_col;
 
                         output_idx++;
                     }
                 }
             }
         }
+
+        Assert(output_idx == this.activation.dt.length);
         lap.Time();
     }
 
@@ -878,6 +883,7 @@ class PoolingLayer extends Layer {
 
             // すべての特徴マップに対し
             for (var feature_idx = 0; feature_idx < this.featureCount; feature_idx++) {
+                var offset = batch_idx * prev_Layer.unitSize + feature_idx * prev_Layer.imgRows * prev_Layer.imgCols;
 
                 // 出力の行に対し
                 for (var r1 = 0; r1 < this.imgRows; r1++) {
@@ -890,12 +896,9 @@ class PoolingLayer extends Layer {
                         var delta = this.nextLayer.deltaX.dt[output_idx];
                         if(delta != 0){
 
-                            var max_idx = this.maxIdx[output_idx];
-
-                            var r2 = Math.floor(max_idx / this.filterSize);
-                            var c2 = max_idx - r2 * this.filterSize;
-                            var prev_activation_idx = batch_idx * prev_Layer.unitSize + (feature_idx * prev_Layer.imgRows + (r0 + r2)) * prev_Layer.imgCols + (c0 + c2);
-
+                            var r2 = this.maxRow[output_idx] | 0;
+                            var c2 = this.maxCol[output_idx] | 0;
+                            var prev_activation_idx = offset + (r0 + r2) * prev_Layer.imgCols + (c0 + c2);
                             this.deltaX.dt[prev_activation_idx] = delta;
                         }
 
@@ -932,6 +935,7 @@ class DropoutLayer extends Layer {
     }
 
     forward() {
+        var lap = new Lap(this.fwTime);
         for(var i = 0; i < this.activation.dt.length; i++){
             if(! isTest){
 
@@ -951,9 +955,11 @@ class DropoutLayer extends Layer {
                 this.activation.dt[i] = (1 - this.ratio) *  this.prevLayer.activation.dt[i];
             }
         }
+        lap.Time();
     }
 
     backward() {
+        var lap = new Lap(this.bwTime);
         for(var i = 0; i < this.activation.dt.length; i++){
             if(this.valid[i] == 1){
 
@@ -964,6 +970,7 @@ class DropoutLayer extends Layer {
                 this.deltaX.dt[i] = 0;
             }
         }
+        lap.Time();
     }
 }
 
@@ -1073,10 +1080,6 @@ class NeuralNetwork {
         last_layer.costDerivative = new ArrayView(mini_batch_size, last_layer.unitSize);
         var exp_work = new Float32Array(last_layer.unitSize);
 
-        var max_ok_cnt = 0;
-        var max_eta = 0;
-        var try_cnt = 0;
-        var prev_ratio = 0;
         for (let epoch_idx of xrange(epochs)) {
 
             for(var mode = 0; mode < 2; mode++){
@@ -1102,22 +1105,18 @@ class NeuralNetwork {
                 var show_time = new Date();
 
                 var data_cnt = data.X.shape[0];
-                var mini_batch_cnt;
-                if(epoch_idx < try_cnt){
-
-                    learningRate = epoch_idx * 0.1;
-                    mini_batch_cnt = Math.floor(1000 / miniBatchSize);
-                }
-                else{
-
-                    mini_batch_cnt = Math.floor(data_cnt / miniBatchSize);
-                }
+                var mini_batch_cnt = Math.floor(data_cnt / miniBatchSize);
+                var mini_batch_time = [];
                 for (var idx = 0; idx < mini_batch_cnt; idx++) {
+                    var lap = new Lap(mini_batch_time);
                     var X = this.Laminate(data.X, idx_list, idx * miniBatchSize, miniBatchSize);
+                    lap.Time();
                     var Y = this.Laminate(data.Y, idx_list, idx * miniBatchSize, miniBatchSize);
+                    lap.Time();
 
                     this.layers[0].activation = X;
                     this.layers.forEach(x => x.forward());
+                    lap.Time();
 
                     if(mode == 0){
 
@@ -1129,23 +1128,26 @@ class NeuralNetwork {
 
                             last_layer.costDerivative = cost_derivative(last_layer.activation, Y);                    
                         }
+                        lap.Time();
 
                         for (var i = this.layers.length - 1; 1 <= i; i--) {
                             this.layers[i].backward();
                         }
+                        lap.Time();
 
                         this.layers.forEach(x => x.updateParameter());
+                        lap.Time();
                     }
 
                     ok_cnt += this.CorrectCount(Y);
 
                     if (60 * 1000 < new Date() - show_time) {
 
-                        var s = "";
+                        var s = Stats(mini_batch_time, idx);
                         for(let layer of this.layers.slice(1)) {
                             s += " (" + Stats(layer.fwTime, idx) + " " + Stats(layer.bwTime, idx) + " " + Stats(layer.udTime, idx) + ")";
                         }
-//                        console.log("update mini batch: %.2f %d  %s", ok_cnt / idx * miniBatchSize, idx * miniBatchSize, s);
+                        console.log("update mini batch: %.2f %d  %s", ok_cnt / (idx * miniBatchSize), idx * miniBatchSize, s);
                         yield 1;
 
                         show_time = new Date();
@@ -1157,26 +1159,6 @@ class NeuralNetwork {
                 if(mode == 1){
 
                     console.log("Epoch %d  %d / %d eta:%.02f", epoch_idx, ok_cnt, mini_batch_cnt * miniBatchSize, learningRate);
-                }
-                if(epoch_idx < try_cnt){
-
-                    if(max_ok_cnt < ok_cnt){
-                        max_ok_cnt = ok_cnt;
-                        max_eta = learningRate;
-                    }
-
-                    if(epoch_idx == try_cnt - 1){
-                        learningRate = max_eta;
-                    }
-
-                    break;
-                }
-                if(mode == 1){
-                    var ratio = ok_cnt / (mini_batch_cnt * miniBatchSize);
-                    if(ratio < prev_ratio){
-                        learningRate *= 0.9;
-                    }
-                    prev_ratio = ratio;
                 }
             }
 
