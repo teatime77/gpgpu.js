@@ -899,7 +899,7 @@ class PoolingLayer extends Layer {
                             var r2 = this.maxRow[output_idx] | 0;
                             var c2 = this.maxCol[output_idx] | 0;
                             var prev_activation_idx = offset + (r0 + r2) * prev_Layer.imgCols + (c0 + c2);
-                            this.deltaX.dt[prev_activation_idx] = delta;
+                            this.deltaX.dt[prev_activation_idx] += delta;
                         }
 
                         output_idx++;
@@ -1147,7 +1147,7 @@ class NeuralNetwork {
                         for(let layer of this.layers.slice(1)) {
                             s += " (" + Stats(layer.fwTime, idx) + " " + Stats(layer.bwTime, idx) + " " + Stats(layer.udTime, idx) + ")";
                         }
-                        console.log("update mini batch: %.2f %d  %s", ok_cnt / (idx * miniBatchSize), idx * miniBatchSize, s);
+//                        console.log("update mini batch: %.2f %d  %s", ok_cnt / (idx * miniBatchSize), idx * miniBatchSize, s);
                         yield 1;
 
                         show_time = new Date();

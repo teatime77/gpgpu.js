@@ -50,6 +50,7 @@ Chromeの場合Ctrl+Shift+Iでデベロッパーツールのコンソールを�
         var DigitCanvas;
         var Ctx = null;
         var imageData;
+        var RunIdx = 1;
 
         function RunNeuralNetwork(training_data, test_data) {
             var gpgpu = CreateGPGPU();
@@ -63,7 +64,7 @@ Chromeの場合Ctrl+Shift+Iでデベロッパーツールのコンソールを�
                 new FullyConnectedLayer(10)
             ]);
 
-            var epochs = 30;
+            var epochs = 10;
             var mini_batch_size = 10;
             var learning_rate;
             if (net.layers.length == 3) {
@@ -72,7 +73,7 @@ Chromeの場合Ctrl+Shift+Iでデベロッパーツールのコンソールを�
             }
             else {
 
-                learning_rate = 0.1;// 0.05;// 0.1;
+                learning_rate = 0.02 * RunIdx;// 0.05;// 0.1;
             }
 
             var sgd_generator = net.SGD(training_data, test_data, epochs, mini_batch_size, learning_rate);
@@ -86,6 +87,7 @@ Chromeの場合Ctrl+Shift+Iでデベロッパーツールのコンソールを�
                     gpgpu.clearAll();
                     console.log("学習が終わりました。");
 
+                    RunIdx++;
                     RunNeuralNetwork(training_data, test_data);
                 }
             }, 1)
