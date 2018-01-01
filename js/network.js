@@ -4,6 +4,9 @@ var learningRate;
 var useSoftMax = true;
 var WebGL2;
 var isTest = false;
+var TrainingDataCnt;
+var WeightDecay = 5.0;
+var Momentum = 0.9;
 
 function Stats(tm, idx){
     switch(tm.length){
@@ -95,6 +98,13 @@ class FullyConnectedLayer extends Layer{
 
         this.bias = np.random.randn(this.unitSize, 1);
         this.weight = np.random.randn(this.unitSize, this.prevLayer.unitSize);
+/*
+        var sd = Math.sqrt(prev_layer.unitSize);
+        for(var i = 0; i < this.weight.dt.length; i++){
+            this.weight.dt[i] /= sd;
+        }
+        this.weightV = new ArrayView(this.unitSize, this.prevLayer.unitSize);
+*/
     }
 
     miniBatchSizeChanged(){
@@ -155,32 +165,6 @@ class FullyConnectedLayer extends Layer{
 
             activation = sigmoid(z);
         }`;
-
-        /*
-        var param_id = "Fully-Connected-Layer-forward," + miniBatchSize + "," + this.prevLayer.unitSize + "," + this.unitSize;
-        if (true || this.params[param_id] == undefined){
-
-            this.params[param_id] = {
-                id : param_id,
-                vertexShader: vertex_shader,
-                args : {
-                    "zero": this.outZero,
-                    "X": WebGL2.makeTextureInfo("float", [ miniBatchSize, this.prevLayer.unitSize]),
-                    "W": WebGL2.makeTextureInfo("float", this.weight.shape, this.weight.dt),
-                    "Bias": WebGL2.makeTextureInfo("float", [ 1, this.bias.dt.length ], this.bias.dt),
-                    "z": this.z.dt,
-                    "activation" : this.activation.dt
-                }
-            };
-        }
-
-        var param = this.params[param_id];
-        //param.args["X"].value = this.prevLayer.activation.dt;
-        //param.args["W"].value = this.
-        //param.args["Bias"].value = this.
-
-        WebGL2.compute(param);
-        */
 
         this.param = {
             id : "Fully-Connected-Layer-forward," + miniBatchSize + "," + this.prevLayer.unitSize + "," + this.unitSize,
@@ -407,11 +391,18 @@ class FullyConnectedLayer extends Layer{
 
     updateParameter() {
         var eta = learningRate / miniBatchSize;
+        var c = 1.0 - learningRate * WeightDecay / TrainingDataCnt;
 
         var lap = new Lap(this.udTime);
 
         for(var i = 0; i < this.weight.dt.length; i++){
             this.weight.dt[i] -= eta * this.nabla_w.dt[i];
+/*
+            var v = Momentum * this.weightV.dt[i] - eta * this.nabla_w.dt[i];
+            this.weightV.dt[i] = v;
+
+            this.weight.dt[i] = c * this.weight.dt[i] + v;
+*/
         }
         lap.Time();
 
@@ -1105,6 +1096,7 @@ class NeuralNetwork {
                 var show_time = new Date();
 
                 var data_cnt = data.X.shape[0];
+                TrainingDataCnt = data_cnt;
                 var mini_batch_cnt = Math.floor(data_cnt / miniBatchSize);
                 var mini_batch_time = [];
                 for (var idx = 0; idx < mini_batch_cnt; idx++) {
