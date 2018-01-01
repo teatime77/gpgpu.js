@@ -1,5 +1,6 @@
 ﻿
 var miniBatchSize;
+var miniBatchIdx;
 var learningRate;
 var useSoftMax = true;
 var WebGL2;
@@ -76,9 +77,10 @@ class Layer {
 }
 
 class InputLayer extends Layer {
-    constructor(rows, cols) {
+    constructor(n_channel, rows, cols) {
         super();
 
+        this.nChannel = n_channel;
         this.imgRows = rows;
         this.imgCols = cols;
         this.unitSize = rows * cols;
@@ -437,21 +439,21 @@ class ConvolutionalLayer extends Layer{
             this.biases.dt[i] = np.random.randn();
         }
 
-        this.weights = new ArrayView(this.featureCount, this.filterSize, this.filterSize);
+        this.weights = new ArrayView(this.featureCount, prev_layer.nChannel, this.filterSize, this.filterSize);
         for (var i = 0; i < this.weights.dt.length; i++) {
             this.weights.dt[i] = np.random.randn();
         }
+
+        this.nablaBiases    = new ArrayView(this.featureCount);
+        this.nablaWeights   = new ArrayView(this.featureCount, prev_layer.nChannel, this.filterSize, this.filterSize);
     }
 
     miniBatchSizeChanged(){
         super.miniBatchSizeChanged();
 
-        this.forwardCnt = 0;
-        this.forwardGPU = 0;
-        this.forwardCPU = 0;
-
         this.z = new ArrayView(miniBatchSize, this.unitSize);
         this.activation = new ArrayView(miniBatchSize, this.unitSize);
+        this.zero = new Float32Array(miniBatchSize * this.unitSize);
     }
 
     gpuForward() {
@@ -460,12 +462,13 @@ class ConvolutionalLayer extends Layer{
         var prev_activation = new ArrayView(miniBatchSize, prev_Layer.unitSize, prev_Layer.activation.dt);
 
         var vs_id = "ConvolutionalLayer-forward";
-        var param_id = vs_id + ":" + this.filterSize + ":" + this.featureCount + ":" + this.imgRows + ":" + this.imgCols + ":" + miniBatchSize;
+        var param_id = vs_id + ":" + this.filterSize + ":" + prev_Layer.nChannel + ":" + this.featureCount + ":" + this.imgRows + ":" + this.imgCols + ":" + miniBatchSize;
 
         if (this.params[param_id] == undefined) {
 
             var shader_src = Shaders[vs_id]
                 .replace(/featureCount/g, this.featureCount.toString() + "u")
+                .replace(/nChannel/g, prev_Layer.nChannel.toString() + "u")
                 .replace(/rowCount/g, this.imgRows.toString() + "u")
                 .replace(/colCount/g, this.imgCols.toString() + "u")
                 .replace(/filterSize/g, this.filterSize.toString() + "u");
@@ -474,8 +477,8 @@ class ConvolutionalLayer extends Layer{
                 id : param_id,
                 vertexShader: shader_src,
                 args : {
-                    "idx_f": MakeFloat32Index(miniBatchSize * this.featureCount * this.imgRows * this.imgCols),
-                    "prev_activation": makeTextureInfo(WebGL2, "float", new ArrayView(miniBatchSize, prev_Layer.imgRows, prev_Layer.imgCols)),
+                    "zero": this.zero,
+                    "prev_activation": makeTextureInfo(WebGL2, "float", new ArrayView(miniBatchSize * prev_Layer.nChannel, prev_Layer.imgRows, prev_Layer.imgCols)),
                     "weights": this.weights.dt,
                     "biases": this.biases.dt,
                     "z": this.z.dt,
@@ -513,16 +516,23 @@ class ConvolutionalLayer extends Layer{
                     for (var c1 = 0; c1 < this.imgCols; c1++) {
 
                         var sum = 0.0;
+                        var weight_idx = feature_idx * prev_Layer.nChannel * this.filterSize * this.filterSize;
+                        var prev_activation_base = batch_idx * prev_Layer.nChannel * prev_Layer.imgRows * prev_Layer.imgCols;
 
-                        // フィルターの行に対し
-                        for (var r2 = 0; r2 < this.filterSize; r2++) {
+                        // すべてのチャネルに対し
+                        for(var channel_idx = 0; channel_idx < prev_Layer.nChannel; channel_idx++){
 
-                            // フィルターの列に対し
-                            for (var c2 = 0; c2 < this.filterSize; c2++) {
-                                var weight_idx = (feature_idx * this.filterSize + r2) * this.filterSize + c2;
-                                var prev_activation_idx = batch_idx * prev_Layer.unitSize + (r1 + r2) * prev_Layer.imgCols + (c1 + c2);
-                                sum += prev_activation_dt[prev_activation_idx] * this.weights.dt[weight_idx];
+                            // フィルターの行に対し
+                            for (var r2 = 0; r2 < this.filterSize; r2++) {
+
+                                // フィルターの列に対し
+                                for (var c2 = 0; c2 < this.filterSize; c2++) {
+                                    var prev_activation_idx = prev_activation_base + (r1 + r2) * prev_Layer.imgCols + (c1 + c2);
+                                    sum += prev_activation_dt[prev_activation_idx] * this.weights.dt[weight_idx];
+                                    weight_idx++;
+                                }
                             }
+                            prev_activation_base += prev_Layer.imgRows * prev_Layer.imgCols;
                         }
 
                         var z_val = sum + this.biases.dt[feature_idx];
@@ -532,6 +542,7 @@ class ConvolutionalLayer extends Layer{
 
                         output_idx++;
                     }
+
                 }
             }
         }
@@ -540,22 +551,19 @@ class ConvolutionalLayer extends Layer{
     forward() {
         var lap = new Lap(this.fwTime);
 
-        var t0 = new Date();
         this.gpuForward();
-        var t1 = new Date();
 
         lap.Time();
 
-        if(this.forwardCnt != 0 && 0.1 < Math.random()){
+        if(miniBatchIdx != 0 && 0.1 < Math.random()){
 
             return;
         }
 
-        var z_gpu_dt = new Float32Array(this.z.dt);
+        var z_gpu_dt          = new Float32Array(this.z.dt);
         var activation_gpu_dt = new Float32Array(this.activation.dt);
 
         this.cpuForward();
-        var t2 = new Date();
 
         var max_diff = 0;
 
@@ -578,13 +586,6 @@ class ConvolutionalLayer extends Layer{
             }
         }
         Assert(max_diff < 0.0001, "Convolutional-Layer-forward-diff");
-        this.forwardCnt++;
-        this.forwardGPU += t1 - t0;
-        this.forwardCPU += t2 - t1;
-        if (this.forwardCnt % 100 == 0 || 100 <= miniBatchSize) {
-
-//            console.log("forward diff:%f cnt:%d GPU:%dms CPU:%dms", max_diff, this.forwardCnt, Math.round(this.forwardGPU / this.forwardCnt), Math.round(this.forwardCPU / this.forwardCnt));
-        }
     }
 
     gpuNablaWeights(delta_z) {
@@ -635,42 +636,51 @@ class ConvolutionalLayer extends Layer{
 
     cpuNablaWeights(delta_z) {
         var prev_Layer = this.prevLayer;
+        var RC = this.imgRows * this.imgCols;
+        var prev_RC = prev_Layer.imgRows * prev_Layer.imgCols;
 
         // すべての特徴マップに対し
         var weights_idx = 0;
         for (var feature_idx = 0; feature_idx < this.featureCount; feature_idx++) {
 
-            // フィルターの行に対し
-            for (var r2 = 0; r2 < this.filterSize; r2++) {
+            // すべてのチャネルに対し
+            for(var channel_idx = 0; channel_idx < prev_Layer.nChannel; channel_idx++){
 
-                // フィルターの列に対し
-                for (var c2 = 0; c2 < this.filterSize; c2++) {
+                // フィルターの行に対し
+                for (var r2 = 0; r2 < this.filterSize; r2++) {
 
-                    var nabla_w = 0.0;
+                    // フィルターの列に対し
+                    for (var c2 = 0; c2 < this.filterSize; c2++) {
 
-                    // 出力の行に対し
-                    for (var r1 = 0; r1 < this.imgRows; r1++) {
+                        var nabla_w = 0.0;
 
-                        // 出力の列に対し
-                        for (var c1 = 0; c1 < this.imgCols; c1++) {
+                        // 出力の行に対し
+                        for (var r1 = 0; r1 < this.imgRows; r1++) {
 
-                            // バッチ内のデータに対し
-                            var delta_z_idx = feature_idx * (r1 * c1) + r1 * (this.imgCols | 0);
-                            for (var batch_idx = 0; batch_idx < miniBatchSize; batch_idx++) {
+                            // 出力の列に対し
+                            for (var c1 = 0; c1 < this.imgCols; c1++) {
 
-                                var delta = delta_z.dt[delta_z_idx];
-                                if (delta != 0) {
+                                var delta_z_idx = feature_idx * RC + r1 * (this.imgCols | 0) + c1;
+                                var prev_activation_idx = channel_idx * prev_RC + (r1 + r2) * (prev_Layer.imgCols | 0) + (c1 + c2);
 
-                                    var prev_activation_idx = batch_idx * (prev_Layer.unitSize | 0) + (r1 + r2) * (prev_Layer.imgCols | 0) + (c1 + c2);
-                                    nabla_w += delta * prev_Layer.activation.dt[prev_activation_idx];
+                                // バッチ内のデータに対し
+                                for (var batch_idx = 0; batch_idx < miniBatchSize; batch_idx++) {
+
+                                    var delta = delta_z.dt[delta_z_idx];
+                                    if (delta != 0) {
+
+                                        nabla_w += delta * prev_Layer.activation.dt[prev_activation_idx];
+                                    }
+
+                                    delta_z_idx += this.unitSize;
+                                    prev_activation_idx += (prev_Layer.unitSize | 0);
                                 }
-                                delta_z_idx += this.unitSize;
                             }
                         }
-                    }
 
-                    this.nablaWeights.dt[weights_idx] = nabla_w;
-                    weights_idx++;
+                        this.nablaWeights.dt[weights_idx] = nabla_w;
+                        weights_idx++;
+                    }
                 }
             }
         }
@@ -715,11 +725,6 @@ class ConvolutionalLayer extends Layer{
         for (var i = 0; i < delta_z.dt.length; i++) {
             delta_z.dt[i] *= sigmoid_primeF(this.z.dt[i]);
         }
-        lap.Time();
-
-        this.nablaBiases = new ArrayView(this.featureCount, 1);
-        this.nablaWeights = new ArrayView(this.featureCount, this.filterSize, this.filterSize);
-        this.costDerivative = new ArrayView(this.unitSize, 1);
         lap.Time();
 
         this.cpuNablaBiases(delta_z);
@@ -1100,6 +1105,7 @@ class NeuralNetwork {
                 var mini_batch_cnt = Math.floor(data_cnt / miniBatchSize);
                 var mini_batch_time = [];
                 for (var idx = 0; idx < mini_batch_cnt; idx++) {
+                    miniBatchIdx = idx;
                     var lap = new Lap(mini_batch_time);
                     var X = this.Laminate(data.X, idx_list, idx * miniBatchSize, miniBatchSize);
                     lap.Time();

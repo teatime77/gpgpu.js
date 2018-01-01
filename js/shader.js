@@ -56,18 +56,18 @@ void main() {
 Shaders["ConvolutionalLayer-forward"] = `
 precision highp sampler3D;
 
-uniform float weights[featureCount * filterSize * filterSize];
+uniform float weights[featureCount * nChannel * filterSize * filterSize];
 uniform float biases[featureCount];
 
 uniform sampler3D prev_activation;
 
-in float idx_f;
+in float zero;
 
 out float z;
 out float activation;
 
 void main() {
-    uint idx = uint(idx_f);
+    uint idx = uint(gl_VertexID);
 
     uint batch_idx = idx / (featureCount * rowCount * colCount);
     idx     -= batch_idx * (featureCount * rowCount * colCount);
@@ -78,50 +78,37 @@ void main() {
     uint r1 = idx / colCount;
     uint c1 = idx - r1 * colCount;
 
-    uint r2, c2;
+    uint batch_channel_idx = batch_idx * nChannel;
+
+    uint channel_idx, r2, c2;
     float sum = 0.0f;
-    int err_flg = 0;
-    uint weight_idx = feature_idx * filterSize * filterSize;
-    for (r2 = 0u; r2 < filterSize; r2++) {
+    uint weight_idx = feature_idx * nChannel * filterSize * filterSize;
 
-        for (c2 = 0u; c2 < filterSize; c2++) {
+    for(channel_idx = 0u; channel_idx < nChannel; channel_idx++) {
 
-            uint c3 = c1 + c2;
-            uint r3 = r1 + r2;
+        for (r2 = 0u; r2 < filterSize; r2++) {
 
-            if(c3 < colCount + filterSize - 1u  && r3 < rowCount + filterSize - 1u) {
+            for (c2 = 0u; c2 < filterSize; c2++) {
 
-                vec4  txl = texelFetch(prev_activation, ivec3(c3, r3, batch_idx), 0);
+                uint c3 = c1 + c2;
+                uint r3 = r1 + r2;
+
+                vec4  txl = texelFetch(prev_activation, ivec3(c3, r3, batch_channel_idx), 0);
 
                 sum += txl.r * weights[weight_idx];
+                weight_idx++;
             }
-            else {
-
-                err_flg = 1;
-                break;
-            }
-            weight_idx++;
         }
+        batch_channel_idx++;
     }
 
-    if(err_flg == 0) {
-
-        z = sum + biases[feature_idx];
-        activation = 1.0 / (1.0 +exp(-z));
-    }
-    else {
-
-        z          = 12345.0f;
-        activation = 12345.0f;
-    }
-
+    z = sum + biases[feature_idx] + zero;
+    activation = 1.0 / (1.0 + exp(-z));
 }`;
 
 
 Shaders["ConvolutionalLayer-backward"] = `
 precision highp sampler3D;
-
-uniform float weights[featureCount * filterSize * filterSize];
 
 uniform sampler3D prev_activation;
 uniform sampler3D delta_z;

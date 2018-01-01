@@ -56,7 +56,7 @@ Chromeの場合Ctrl+Shift+Iでデベロッパーツールのコンソールを�
             var gpgpu = CreateGPGPU();
 
             var net = new NeuralNetwork(gpgpu, [
-                new InputLayer(28, 28),
+                new InputLayer(1, 28, 28),
                 new ConvolutionalLayer(5, 20),
                 new PoolingLayer(2),
                 new FullyConnectedLayer(100),
