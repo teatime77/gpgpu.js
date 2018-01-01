@@ -77,10 +77,10 @@ class Layer {
 }
 
 class InputLayer extends Layer {
-    constructor(n_channel, rows, cols) {
+    constructor(channel_size, rows, cols) {
         super();
 
-        this.nChannel = n_channel;
+        this.channelSize = channel_size;
         this.imgRows = rows;
         this.imgCols = cols;
         this.unitSize = rows * cols;
@@ -416,11 +416,11 @@ class FullyConnectedLayer extends Layer{
 }
 
 class ConvolutionalLayer extends Layer{
-    constructor(filter_size, feature_count) {
+    constructor(filter_size, channel_size) {
         super();
 
         this.filterSize = filter_size;
-        this.featureCount = feature_count;
+        this.channelSize = channel_size;
         this.params = {};
     }
 
@@ -431,21 +431,20 @@ class ConvolutionalLayer extends Layer{
 
         this.imgRows = this.prevLayer.imgRows - this.filterSize + 1;
         this.imgCols = this.prevLayer.imgCols - this.filterSize + 1;
-        this.unitSize = this.featureCount * this.imgRows * this.imgCols;
+        this.unitSize = this.channelSize * this.imgRows * this.imgCols;
 
-        // xrange(this.featureCount).map(x => np.random.randn());
-        this.biases = new ArrayView(this.featureCount);
+        this.biases = new ArrayView(this.channelSize);
         for (var i = 0; i < this.biases.dt.length; i++) {
             this.biases.dt[i] = np.random.randn();
         }
 
-        this.weights = new ArrayView(this.featureCount, prev_layer.nChannel, this.filterSize, this.filterSize);
+        this.weights = new ArrayView(this.channelSize, prev_layer.channelSize, this.filterSize, this.filterSize);
         for (var i = 0; i < this.weights.dt.length; i++) {
             this.weights.dt[i] = np.random.randn();
         }
 
-        this.nablaBiases    = new ArrayView(this.featureCount);
-        this.nablaWeights   = new ArrayView(this.featureCount, prev_layer.nChannel, this.filterSize, this.filterSize);
+        this.nablaBiases    = new ArrayView(this.channelSize);
+        this.nablaWeights   = new ArrayView(this.channelSize, prev_layer.channelSize, this.filterSize, this.filterSize);
     }
 
     miniBatchSizeChanged(){
@@ -462,13 +461,13 @@ class ConvolutionalLayer extends Layer{
         var prev_activation = new ArrayView(miniBatchSize, prev_Layer.unitSize, prev_Layer.activation.dt);
 
         var vs_id = "ConvolutionalLayer-forward";
-        var param_id = vs_id + ":" + this.filterSize + ":" + prev_Layer.nChannel + ":" + this.featureCount + ":" + this.imgRows + ":" + this.imgCols + ":" + miniBatchSize;
+        var param_id = vs_id + ":" + this.filterSize + ":" + prev_Layer.channelSize + ":" + this.channelSize + ":" + this.imgRows + ":" + this.imgCols + ":" + miniBatchSize;
 
         if (this.params[param_id] == undefined) {
 
             var shader_src = Shaders[vs_id]
-                .replace(/featureCount/g, this.featureCount.toString() + "u")
-                .replace(/nChannel/g, prev_Layer.nChannel.toString() + "u")
+                .replace(/channelSize/g, this.channelSize.toString() + "u")
+                .replace(/prevChannelSize/g, prev_Layer.channelSize.toString() + "u")
                 .replace(/rowCount/g, this.imgRows.toString() + "u")
                 .replace(/colCount/g, this.imgCols.toString() + "u")
                 .replace(/filterSize/g, this.filterSize.toString() + "u");
@@ -478,7 +477,7 @@ class ConvolutionalLayer extends Layer{
                 vertexShader: shader_src,
                 args : {
                     "zero": this.zero,
-                    "prev_activation": makeTextureInfo(WebGL2, "float", new ArrayView(miniBatchSize * prev_Layer.nChannel, prev_Layer.imgRows, prev_Layer.imgCols)),
+                    "prev_activation": makeTextureInfo(WebGL2, "float", new ArrayView(miniBatchSize * prev_Layer.channelSize, prev_Layer.imgRows, prev_Layer.imgCols)),
                     "weights": this.weights.dt,
                     "biases": this.biases.dt,
                     "z": this.z.dt,
@@ -507,7 +506,7 @@ class ConvolutionalLayer extends Layer{
         for (var batch_idx = 0; batch_idx < miniBatchSize; batch_idx++) {
 
             // すべての特徴マップに対し
-            for (var feature_idx = 0; feature_idx < this.featureCount; feature_idx++) {
+            for (var channel_idx = 0; channel_idx < this.channelSize; channel_idx++) {
 
                 // 出力の行に対し
                 for (var r1 = 0; r1 < this.imgRows; r1++) {
@@ -516,11 +515,11 @@ class ConvolutionalLayer extends Layer{
                     for (var c1 = 0; c1 < this.imgCols; c1++) {
 
                         var sum = 0.0;
-                        var weight_idx = feature_idx * prev_Layer.nChannel * this.filterSize * this.filterSize;
-                        var prev_activation_base = batch_idx * prev_Layer.nChannel * prev_Layer.imgRows * prev_Layer.imgCols;
+                        var weight_idx = channel_idx * prev_Layer.channelSize * this.filterSize * this.filterSize;
+                        var prev_activation_base = batch_idx * prev_Layer.channelSize * prev_Layer.imgRows * prev_Layer.imgCols;
 
                         // すべてのチャネルに対し
-                        for(var channel_idx = 0; channel_idx < prev_Layer.nChannel; channel_idx++){
+                        for(var prev_channel_idx = 0; prev_channel_idx < prev_Layer.channelSize; prev_channel_idx++){
 
                             // フィルターの行に対し
                             for (var r2 = 0; r2 < this.filterSize; r2++) {
@@ -535,7 +534,7 @@ class ConvolutionalLayer extends Layer{
                             prev_activation_base += prev_Layer.imgRows * prev_Layer.imgCols;
                         }
 
-                        var z_val = sum + this.biases.dt[feature_idx];
+                        var z_val = sum + this.biases.dt[channel_idx];
 
                         z_dt[output_idx] = z_val;
                         activation_dt[output_idx] = sigmoidF(z_val);
@@ -570,7 +569,7 @@ class ConvolutionalLayer extends Layer{
         // 出力先
         var output_idx = 0;
         for (var batch_idx = 0; batch_idx < miniBatchSize; batch_idx++) {
-            for (var feature_idx = 0; feature_idx < this.featureCount; feature_idx++) {
+            for (var channel_idx = 0; channel_idx < this.channelSize; channel_idx++) {
                 for (var r1 = 0; r1 < this.imgRows; r1++) {
                     for (var c1 = 0; c1 < this.imgCols; c1++) {
                         var diff = Math.max(Math.abs(z_gpu_dt[output_idx] - this.z.dt[output_idx]), Math.abs(activation_gpu_dt[output_idx] - this.activation.dt[output_idx]));
@@ -592,11 +591,11 @@ class ConvolutionalLayer extends Layer{
         var prev_Layer = this.prevLayer;
 
         var prev_activation = new ArrayView(prev_Layer.imgRows, prev_Layer.imgCols, miniBatchSize, prev_Layer.activation.dt);
-        var delta_z_3D = new ArrayView(this.featureCount, this.imgRows, this.imgCols * miniBatchSize, delta_z.dt);
+        var delta_z_3D = new ArrayView(this.channelSize, this.imgRows, this.imgCols * miniBatchSize, delta_z.dt);
 
         var batch_vec4_count = miniBatchSize / 4;
         var vs_id = "ConvolutionalLayer-backward";
-        var param_id = vs_id + ":" + this.featureCount + ":" + this.filterSize + ":" + this.imgRows + ":" + this.imgCols + ":" + miniBatchSize;
+        var param_id = vs_id + ":" + this.channelSize + ":" + this.filterSize + ":" + this.imgRows + ":" + this.imgCols + ":" + miniBatchSize;
         var param;
 
         if (this.params[param_id] == undefined) {
@@ -607,7 +606,7 @@ class ConvolutionalLayer extends Layer{
 
             this.params[param.id] = param;
 
-            param.elementCount = this.featureCount * this.filterSize * this.filterSize;
+            param.elementCount = this.channelSize * this.filterSize * this.filterSize;
 
             param.args = {
                 "idx_f": MakeFloat32Index(param.elementCount),
@@ -617,7 +616,7 @@ class ConvolutionalLayer extends Layer{
             };
 
             var shader_src = Shaders[vs_id]
-                .replace(/featureCount/g, this.featureCount.toString() + "u")
+                .replace(/channelSize/g, this.channelSize.toString() + "u")
                 .replace(/rowCount/g, this.imgRows.toString() + "u")
                 .replace(/colCount/g, this.imgCols.toString() + "u")
                 .replace(/batchVec4Count/g, batch_vec4_count.toString() + "u")
@@ -641,10 +640,10 @@ class ConvolutionalLayer extends Layer{
 
         // すべての特徴マップに対し
         var weights_idx = 0;
-        for (var feature_idx = 0; feature_idx < this.featureCount; feature_idx++) {
+        for (var channel_idx = 0; channel_idx < this.channelSize; channel_idx++) {
 
             // すべてのチャネルに対し
-            for(var channel_idx = 0; channel_idx < prev_Layer.nChannel; channel_idx++){
+            for(var prev_channel_idx = 0; prev_channel_idx < prev_Layer.channelSize; prev_channel_idx++){
 
                 // フィルターの行に対し
                 for (var r2 = 0; r2 < this.filterSize; r2++) {
@@ -660,8 +659,8 @@ class ConvolutionalLayer extends Layer{
                             // 出力の列に対し
                             for (var c1 = 0; c1 < this.imgCols; c1++) {
 
-                                var delta_z_idx = feature_idx * RC + r1 * (this.imgCols | 0) + c1;
-                                var prev_activation_idx = channel_idx * prev_RC + (r1 + r2) * (prev_Layer.imgCols | 0) + (c1 + c2);
+                                var delta_z_idx = channel_idx * RC + r1 * (this.imgCols | 0) + c1;
+                                var prev_activation_idx = prev_channel_idx * prev_RC + (r1 + r2) * (prev_Layer.imgCols | 0) + (c1 + c2);
 
                                 // バッチ内のデータに対し
                                 for (var batch_idx = 0; batch_idx < miniBatchSize; batch_idx++) {
@@ -689,7 +688,7 @@ class ConvolutionalLayer extends Layer{
 
     cpuNablaBiases(delta_z){
         // すべての特徴マップに対し
-        for (var feature_idx = 0; feature_idx < this.featureCount; feature_idx++) {
+        for (var channel_idx = 0; channel_idx < this.channelSize; channel_idx++) {
 
             var nabla_b = 0.0;
 
@@ -700,7 +699,7 @@ class ConvolutionalLayer extends Layer{
                 for (var c1 = 0; c1 < this.imgCols; c1++) {
 
                     // バッチ内のデータに対し
-                    var delta_z_idx = feature_idx * (r1 * c1) + r1 * this.imgCols;
+                    var delta_z_idx = channel_idx * (r1 * c1) + r1 * this.imgCols;
                     for (var batch_idx = 0; batch_idx < miniBatchSize; batch_idx++) {
 
                         nabla_b += delta_z.dt[delta_z_idx];
@@ -712,7 +711,7 @@ class ConvolutionalLayer extends Layer{
                 }
             }
 
-            this.nablaBiases.dt[feature_idx] = nabla_b;
+            this.nablaBiases.dt[channel_idx] = nabla_b;
         }
     }
 
@@ -746,9 +745,9 @@ class ConvolutionalLayer extends Layer{
 
         // すべての特徴マップに対し
         var weights_idx = 0;
-        for (var feature_idx = 0; feature_idx < this.featureCount; feature_idx++) {
+        for (var channel_idx = 0; channel_idx < this.channelSize; channel_idx++) {
 
-            this.biases.dt[feature_idx] -= eta * this.nablaBiases.dt[feature_idx];
+            this.biases.dt[channel_idx] -= eta * this.nablaBiases.dt[channel_idx];
 
             // フィルターの行に対し
             for (var r2 = 0; r2 < this.filterSize; r2++) {
@@ -783,13 +782,13 @@ class PoolingLayer extends Layer {
 
         Assert(this.prevLayer instanceof ConvolutionalLayer, "Pooling-Layer-init");
 
-        this.featureCount = this.prevLayer.featureCount;
+        this.channelSize = this.prevLayer.channelSize;
         this.imgRows = this.prevLayer.imgRows / this.filterSize;
         this.imgCols = this.prevLayer.imgCols / this.filterSize;
 
         Assert(Math.ceil(this.imgRows) == this.imgRows && Math.ceil(this.imgCols) == this.imgCols);
 
-        this.unitSize = this.featureCount * this.imgRows * this.imgCols;
+        this.unitSize = this.channelSize * this.imgRows * this.imgCols;
     }
 
     miniBatchSizeChanged(){
@@ -815,7 +814,7 @@ class PoolingLayer extends Layer {
         for (var batch_idx = 0; batch_idx < miniBatchSize; batch_idx++) {
 
             // すべての特徴マップに対し
-            for (var feature_idx = 0; feature_idx < this.featureCount; feature_idx++) {
+            for (var channel_idx = 0; channel_idx < this.channelSize; channel_idx++) {
 
                 // 出力の行に対し
                 for (var r1 = 0; r1 < this.imgRows; r1++) {
@@ -834,7 +833,7 @@ class PoolingLayer extends Layer {
                             // フィルターの列に対し
                             for (var c2 = 0; c2 < this.filterSize; c2++) {
 
-                                var prev_activation_idx = batch_idx * prev_Layer.unitSize + (feature_idx * prev_Layer.imgRows + (r0 + r2)) * prev_Layer.imgCols + (c0 + c2);
+                                var prev_activation_idx = batch_idx * prev_Layer.unitSize + (channel_idx * prev_Layer.imgRows + (r0 + r2)) * prev_Layer.imgCols + (c0 + c2);
                                 var val = prev_activation_dt[prev_activation_idx];
                                 if (max_val < val) {
 
@@ -878,8 +877,8 @@ class PoolingLayer extends Layer {
         for (var batch_idx = 0; batch_idx < miniBatchSize; batch_idx++) {
 
             // すべての特徴マップに対し
-            for (var feature_idx = 0; feature_idx < this.featureCount; feature_idx++) {
-                var offset = batch_idx * prev_Layer.unitSize + feature_idx * prev_Layer.imgRows * prev_Layer.imgCols;
+            for (var channel_idx = 0; channel_idx < this.channelSize; channel_idx++) {
+                var offset = batch_idx * prev_Layer.unitSize + channel_idx * prev_Layer.imgRows * prev_Layer.imgCols;
 
                 // 出力の行に対し
                 for (var r1 = 0; r1 < this.imgRows; r1++) {

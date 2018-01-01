@@ -56,8 +56,8 @@ void main() {
 Shaders["ConvolutionalLayer-forward"] = `
 precision highp sampler3D;
 
-uniform float weights[featureCount * nChannel * filterSize * filterSize];
-uniform float biases[featureCount];
+uniform float weights[channelSize * prevChannelSize * filterSize * filterSize];
+uniform float biases[channelSize];
 
 uniform sampler3D prev_activation;
 
@@ -69,22 +69,22 @@ out float activation;
 void main() {
     uint idx = uint(gl_VertexID);
 
-    uint batch_idx = idx / (featureCount * rowCount * colCount);
-    idx     -= batch_idx * (featureCount * rowCount * colCount);
+    uint batch_idx = idx / (channelSize * rowCount * colCount);
+    idx     -= batch_idx * (channelSize * rowCount * colCount);
 
-    uint feature_idx  = idx / (rowCount * colCount);
-    idx      -= feature_idx * (rowCount * colCount);
+    uint channel_idx  = idx / (rowCount * colCount);
+    idx      -= channel_idx * (rowCount * colCount);
 
     uint r1 = idx / colCount;
     uint c1 = idx - r1 * colCount;
 
-    uint batch_channel_idx = batch_idx * nChannel;
+    uint batch_channel_idx = batch_idx * prevChannelSize;
 
-    uint channel_idx, r2, c2;
+    uint prev_channel_idx, r2, c2;
     float sum = 0.0f;
-    uint weight_idx = feature_idx * nChannel * filterSize * filterSize;
+    uint weight_idx = channel_idx * prevChannelSize * filterSize * filterSize;
 
-    for(channel_idx = 0u; channel_idx < nChannel; channel_idx++) {
+    for(prev_channel_idx = 0u; prev_channel_idx < prevChannelSize; prev_channel_idx++) {
 
         for (r2 = 0u; r2 < filterSize; r2++) {
 
@@ -102,7 +102,7 @@ void main() {
         batch_channel_idx++;
     }
 
-    z = sum + biases[feature_idx] + zero;
+    z = sum + biases[channel_idx] + zero;
     activation = 1.0 / (1.0 + exp(-z));
 }`;
 
@@ -120,8 +120,8 @@ out float nablaWeights;
 void main() {
     uint idx = uint(idx_f);
 
-    uint feature_idx  = idx / (filterSize * filterSize);
-    idx -= feature_idx * (filterSize * filterSize);
+    uint channel_idx  = idx / (filterSize * filterSize);
+    idx -= channel_idx * (filterSize * filterSize);
 
     uint r2 = idx / filterSize;
     uint c2 = idx -r2 * filterSize;
@@ -140,7 +140,7 @@ void main() {
             uint batch_vec4_idx;
             for(batch_vec4_idx = 0u; batch_vec4_idx < batchVec4Count; batch_vec4_idx++) {
 
-                vec4  delta  = texelFetch(delta_z, ivec3(batch_vec4_idx + c1 * batchVec4Count, r1, feature_idx), 0);
+                vec4  delta  = texelFetch(delta_z, ivec3(batch_vec4_idx + c1 * batchVec4Count, r1, channel_idx), 0);
                 vec4  prev_a = texelFetch(prev_activation, ivec3(batch_vec4_idx, c3, r3), 0);
 
                 sum += delta * prev_a;
