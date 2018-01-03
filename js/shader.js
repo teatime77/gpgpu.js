@@ -56,9 +56,10 @@ void main() {
 Shaders["ConvolutionalLayer-forward"] = `
 precision highp sampler3D;
 
-uniform float weights[channelSize * prevChannelSize * filterSize * filterSize];
+//uniform float weights[channelSize * prevChannelSize * filterSize * filterSize];
 uniform float biases[channelSize];
 
+uniform sampler3D weights;
 uniform sampler3D prev_activation;
 
 in float zero;
@@ -82,7 +83,8 @@ void main() {
 
     uint prev_channel_idx, r2, c2;
     float sum = 0.0f;
-    uint weight_idx = channel_idx * prevChannelSize * filterSize * filterSize;
+//    uint weight_idx = channel_idx * prevChannelSize * filterSize * filterSize;
+    uint weight_idx = channel_idx * prevChannelSize;
 
     for(prev_channel_idx = 0u; prev_channel_idx < prevChannelSize; prev_channel_idx++) {
 
@@ -95,11 +97,15 @@ void main() {
 
                 vec4  txl = texelFetch(prev_activation, ivec3(c3, r3, batch_channel_idx), 0);
 
-                sum += txl.r * weights[weight_idx];
-                weight_idx++;
+                vec4  w   = texelFetch(weights, ivec3(c2, r2, weight_idx), 0);
+
+                sum += txl.r * w.r;
+//                sum += txl.r * weights[weight_idx];
+//                weight_idx++;
             }
         }
         batch_channel_idx++;
+        weight_idx++;
     }
 
     z = sum + biases[channel_idx] + zero;
@@ -107,48 +113,52 @@ void main() {
 }`;
 
 
-Shaders["ConvolutionalLayer-backward"] = `
+Shaders["ConvolutionalLayer-NablaWeights"] = `
 precision highp sampler3D;
 
-uniform sampler3D prev_activation;
 uniform sampler3D delta_z;
+uniform sampler3D prev_activation;
 
-in float idx_f;
+in float zero;
 
-out float nablaWeights;
+out float nabla_w;
 
 void main() {
-    uint idx = uint(idx_f);
+    uint idx = uint(gl_VertexID);
 
-    uint channel_idx  = idx / (filterSize * filterSize);
-    idx -= channel_idx * (filterSize * filterSize);
+    uint channel_idx = idx / (prevChannelSize * filterSize * filterSize);
+    idx     -= channel_idx * (prevChannelSize * filterSize * filterSize);
+
+    uint prev_channel_idx = idx / (filterSize * filterSize);
+    idx     -= prev_channel_idx * (filterSize * filterSize);
 
     uint r2 = idx / filterSize;
-    uint c2 = idx -r2 * filterSize;
+    uint c2 = idx - r2 * filterSize;
 
-    vec4 sum = vec4(0.0);
+    uint r1, c1, batch_idx;
+    float sum = 0.0f;
 
-    uint r1;
     for (r1 = 0u; r1 < rowCount; r1++) {
+        uint r3 = r1 + r2;
 
-        uint c1;
         for (c1 = 0u; c1 < colCount; c1++) {
-
             uint c3 = c1 + c2;
-            uint r3 = r1 + r2;
 
-            uint batch_vec4_idx;
-            for(batch_vec4_idx = 0u; batch_vec4_idx < batchVec4Count; batch_vec4_idx++) {
+            for(batch_idx = 0u; batch_idx < miniBatchSize; batch_idx++) {
 
-                vec4  delta  = texelFetch(delta_z, ivec3(batch_vec4_idx + c1 * batchVec4Count, r1, channel_idx), 0);
-                vec4  prev_a = texelFetch(prev_activation, ivec3(batch_vec4_idx, c3, r3), 0);
+                uint this_batch_channel = batch_idx *     channelSize +      channel_idx;
+                uint prev_batch_channel = batch_idx * prevChannelSize + prev_channel_idx;
 
-                sum += delta * prev_a;
+                vec4  dz = texelFetch(delta_z, ivec3(c1, r1, this_batch_channel), 0);
+
+                vec4  pa = texelFetch(prev_activation, ivec3(c3, r3, prev_batch_channel), 0);
+
+                sum += dz.r * pa.r;
             }
         }
     }
 
-    nablaWeights = sum.x +sum.y +sum.z +sum.w;
+    nabla_w = sum + zero;
 }`;
 
 

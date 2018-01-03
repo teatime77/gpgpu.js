@@ -427,8 +427,6 @@ class ConvolutionalLayer extends Layer{
     init(prev_layer) {
         super.init(prev_layer);
 
-        Assert(this.prevLayer instanceof InputLayer, "Convolutional-Layer-init");
-
         this.imgRows = this.prevLayer.imgRows - this.filterSize + 1;
         this.imgCols = this.prevLayer.imgCols - this.filterSize + 1;
         this.unitSize = this.channelSize * this.imgRows * this.imgCols;
@@ -453,6 +451,7 @@ class ConvolutionalLayer extends Layer{
         this.z = new ArrayView(miniBatchSize, this.unitSize);
         this.activation = new ArrayView(miniBatchSize, this.unitSize);
         this.zero = new Float32Array(miniBatchSize * this.unitSize);
+        this.deltaX = new ArrayView(miniBatchSize, this.prevLayer.unitSize);
     }
 
     gpuForward() {
@@ -478,7 +477,8 @@ class ConvolutionalLayer extends Layer{
                 args : {
                     "zero": this.zero,
                     "prev_activation": makeTextureInfo(WebGL2, "float", new ArrayView(miniBatchSize * prev_Layer.channelSize, prev_Layer.imgRows, prev_Layer.imgCols)),
-                    "weights": this.weights.dt,
+                    "weights": makeTextureInfo(WebGL2, "float", new ArrayView(this.channelSize * prev_Layer.channelSize, this.filterSize, this.filterSize)),
+//                    "weights": this.weights.dt,
                     "biases": this.biases.dt,
                     "z": this.z.dt,
                     "activation": this.activation.dt
@@ -489,6 +489,7 @@ class ConvolutionalLayer extends Layer{
         var param = this.params[param_id];
 
         param.args["prev_activation"].value = prev_activation.dt;
+        param.args["weights"].value = this.weights.dt;
         WebGL2.compute(param);
     }
 
@@ -518,7 +519,7 @@ class ConvolutionalLayer extends Layer{
                         var weight_idx = channel_idx * prev_Layer.channelSize * this.filterSize * this.filterSize;
                         var prev_activation_base = batch_idx * prev_Layer.channelSize * prev_Layer.imgRows * prev_Layer.imgCols;
 
-                        // すべてのチャネルに対し
+                        // 入力のチャネルに対し
                         for(var prev_channel_idx = 0; prev_channel_idx < prev_Layer.channelSize; prev_channel_idx++){
 
                             // フィルターの行に対し
@@ -590,46 +591,35 @@ class ConvolutionalLayer extends Layer{
     gpuNablaWeights(delta_z) {
         var prev_Layer = this.prevLayer;
 
-        var prev_activation = new ArrayView(prev_Layer.imgRows, prev_Layer.imgCols, miniBatchSize, prev_Layer.activation.dt);
-        var delta_z_3D = new ArrayView(this.channelSize, this.imgRows, this.imgCols * miniBatchSize, delta_z.dt);
-
-        var batch_vec4_count = miniBatchSize / 4;
-        var vs_id = "ConvolutionalLayer-backward";
-        var param_id = vs_id + ":" + this.channelSize + ":" + this.filterSize + ":" + this.imgRows + ":" + this.imgCols + ":" + miniBatchSize;
-        var param;
+        var vs_id = "ConvolutionalLayer-NablaWeights";
+        var param_id = vs_id + ":" + this.filterSize + ":" + prev_Layer.channelSize + ":" + this.channelSize + ":" + this.imgRows + ":" + this.imgCols + ":" + miniBatchSize;
 
         if (this.params[param_id] == undefined) {
 
-            param = {};
-
-            param.id = param_id;
-
-            this.params[param.id] = param;
-
-            param.elementCount = this.channelSize * this.filterSize * this.filterSize;
-
-            param.args = {
-                "idx_f": MakeFloat32Index(param.elementCount),
-                "prev_activation": makeTextureInfo(WebGL2, "vec4", prev_activation),
-                "delta_z": makeTextureInfo(WebGL2, "vec4", delta_z_3D),
-                "nablaWeights": this.nablaWeights,
-            };
-
             var shader_src = Shaders[vs_id]
+                .replace(/miniBatchSize/g, miniBatchSize.toString() + "u")
                 .replace(/channelSize/g, this.channelSize.toString() + "u")
+                .replace(/prevChannelSize/g, prev_Layer.channelSize.toString() + "u")
                 .replace(/rowCount/g, this.imgRows.toString() + "u")
                 .replace(/colCount/g, this.imgCols.toString() + "u")
-                .replace(/batchVec4Count/g, batch_vec4_count.toString() + "u")
                 .replace(/filterSize/g, this.filterSize.toString() + "u");
 
-            console.log(shader_src);
-            param.vertexShader = shader_src;
+            this.params[param_id]  = {
+                id : param_id,
+                vertexShader: shader_src,
+                args : {
+                    "zero": new Float32Array(this.weights.dt.length),
+                    "prev_activation": makeTextureInfo(WebGL2, "float", new ArrayView(miniBatchSize * prev_Layer.channelSize, prev_Layer.imgRows, prev_Layer.imgCols)),
+                    "delta_z": makeTextureInfo(WebGL2, "float", new ArrayView(miniBatchSize * this.channelSize, this.imgRows, this.imgCols)),
+                    "nabla_w": this.nablaWeights.dt
+                }
+            };
         }
-        else {
 
-            param = this.params[param_id];
-        }
+        var param = this.params[param_id];
 
+        param.args["prev_activation"].value = prev_Layer.activation.dt;
+        param.args["delta_z"].value = delta_z.dt;
         WebGL2.compute(param);
     }
 
@@ -638,11 +628,11 @@ class ConvolutionalLayer extends Layer{
         var RC = this.imgRows * this.imgCols;
         var prev_RC = prev_Layer.imgRows * prev_Layer.imgCols;
 
-        // すべての特徴マップに対し
+        // 出力のチャネルに対し
         var weights_idx = 0;
         for (var channel_idx = 0; channel_idx < this.channelSize; channel_idx++) {
 
-            // すべてのチャネルに対し
+            // 入力のチャネルに対し
             for(var prev_channel_idx = 0; prev_channel_idx < prev_Layer.channelSize; prev_channel_idx++){
 
                 // フィルターの行に対し
@@ -715,6 +705,121 @@ class ConvolutionalLayer extends Layer{
         }
     }
 
+
+    cpuDeltaX2(delta_z) {
+        var prev_Layer = this.prevLayer;
+        var delta_x = new Float32Array(miniBatchSize * prev_Layer.unitSize);
+
+        var prev_activation_dt = prev_Layer.activation.dt;
+        var z_dt = this.z.dt;
+        var activation_dt = this.activation.dt;
+
+        // 出力先
+        var output_idx = 0;
+
+        // バッチ内のデータに対し
+        for (var batch_idx = 0; batch_idx < miniBatchSize; batch_idx++) {
+
+            // すべての特徴マップに対し
+            for (var channel_idx = 0; channel_idx < this.channelSize; channel_idx++) {
+
+                // 出力の行に対し
+                for (var r1 = 0; r1 < this.imgRows; r1++) {
+
+                    // 出力の列に対し
+                    for (var c1 = 0; c1 < this.imgCols; c1++) {
+
+                        var sum = 0.0;
+                        var weight_idx = channel_idx * prev_Layer.channelSize * this.filterSize * this.filterSize;
+                        var prev_activation_base = batch_idx * prev_Layer.channelSize * prev_Layer.imgRows * prev_Layer.imgCols;
+
+                        // 入力のチャネルに対し
+                        for(var prev_channel_idx = 0; prev_channel_idx < prev_Layer.channelSize; prev_channel_idx++){
+
+                            // フィルターの行に対し
+                            for (var r2 = 0; r2 < this.filterSize; r2++) {
+
+                                // フィルターの列に対し
+                                for (var c2 = 0; c2 < this.filterSize; c2++) {
+                                    var prev_activation_idx = prev_activation_base + (r1 + r2) * prev_Layer.imgCols + (c1 + c2);
+                                    sum += prev_activation_dt[prev_activation_idx] * this.weights.dt[weight_idx];
+
+                                    delta_x[prev_activation_idx] += delta_z.dt[output_idx] * this.weights.dt[weight_idx]
+                                    weight_idx++;
+                                }
+                            }
+                            prev_activation_base += prev_Layer.imgRows * prev_Layer.imgCols;
+                        }
+
+                        output_idx++;
+                    }
+                }
+            }
+        }
+
+        return delta_x;
+    }
+
+    cpuDeltaX(delta_z) {
+        var prev_Layer = this.prevLayer;
+        var RC = this.imgRows * this.imgCols;
+
+        var prev_activation_idx = 0;
+
+        // バッチ内のデータに対し
+        for (var batch_idx = 0; batch_idx < miniBatchSize; batch_idx++) {
+
+            // 入力のチャネルに対し
+            for(var prev_channel_idx = 0; prev_channel_idx < prev_Layer.channelSize; prev_channel_idx++){
+
+                // 入力の行に対し
+                for (var r3 = 0; r3 < prev_Layer.imgRows; r3++) {
+
+                    // 入力の列に対し
+                    for (var c3 = 0; c3 < prev_Layer.imgCols; c3++) {
+
+                        var sum = 0.0;
+
+                        // 出力のチャネルに対し
+                        for(var channel_idx = 0; channel_idx < this.channelSize; channel_idx++){
+                            var delta_z_base = batch_idx * this.unitSize + channel_idx * RC;
+                            var weight_base = (channel_idx * prev_Layer.channelSize + prev_channel_idx) * this.filterSize * this.filterSize;
+
+                            // フィルターの行に対し
+                            for (var r2 = 0; r2 < this.filterSize; r2++) {
+
+                                // 出力の行
+                                var r1 = r3 - r2;
+
+                                if(0 <= r1 && r1 < this.imgRows){
+
+                                    // フィルターの列に対し
+                                    for (var c2 = 0; c2 < this.filterSize; c2++) {
+
+                                        // 出力の列
+                                        var c1 = c3 - c2;
+
+                                        if(0 <= c1 && c1 < this.imgCols){
+
+                                            var delta_z_idx = delta_z_base + r1 * this.imgCols + c1;
+                                            var weight_idx = weight_base + r2 * this.filterSize + c2;
+                                            sum += delta_z.dt[delta_z_idx] * this.weights.dt[weight_idx];
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        this.deltaX.dt[prev_activation_idx] = sum;
+                        prev_activation_idx++;
+                    }
+                }
+            }
+        }
+        Assert(prev_activation_idx == miniBatchSize * prev_Layer.unitSize);
+    }
+
+
     backward() {
         var lap = new Lap(this.bwTime);
 
@@ -733,29 +838,61 @@ class ConvolutionalLayer extends Layer{
         //var gpu_nabla_weights = new Float32Array(this.nablaWeights.dt);
         //lap.Time();
 
-        this.cpuNablaWeights(delta_z);
+        this.gpuNablaWeights(delta_z);
+
+        if(miniBatchIdx == 0 || Math.random() < 0.01){
+
+            var delta_w = new Float32Array(this.nablaWeights.dt);
+            this.cpuNablaWeights(delta_z);
+
+            var diff = this.nablaWeights.diff(delta_w);
+            if(0.00001 < diff){
+                console.log("CNN delta-W diff:%f", diff);
+            }
+        }
+
 //        AssertEq(gpu_nabla_weights, this.nablaWeights.dt);
+        lap.Time();
+
+        if(!(this.prevLayer instanceof InputLayer)){
+
+            this.cpuDeltaX(delta_z);
+            if(Math.random() < 0.01){
+
+                var delta_x = this.cpuDeltaX2(delta_z);
+                var diff = this.deltaX.diff(delta_x);
+                if(0.00001 < diff){
+                    console.log("CNN delta-X diff:%f", diff);
+                }
+            }
+        }
         lap.Time();
     }
 
     updateParameter() {
         var lap = new Lap(this.udTime);
 
+        var prev_Layer = this.prevLayer;
         var eta = learningRate / miniBatchSize;
 
-        // すべての特徴マップに対し
         var weights_idx = 0;
+
+        // 出力のチャネルに対し
         for (var channel_idx = 0; channel_idx < this.channelSize; channel_idx++) {
 
             this.biases.dt[channel_idx] -= eta * this.nablaBiases.dt[channel_idx];
 
-            // フィルターの行に対し
-            for (var r2 = 0; r2 < this.filterSize; r2++) {
+            // 入力のチャネルに対し
+            for(var prev_channel_idx = 0; prev_channel_idx < prev_Layer.channelSize; prev_channel_idx++){
 
-                // フィルターの列に対し
-                for (var c2 = 0; c2 < this.filterSize; c2++) {
-                    this.weights.dt[weights_idx] -= eta * this.nablaWeights.dt[weights_idx];
-                    weights_idx++;
+                // フィルターの行に対し
+                for (var r2 = 0; r2 < this.filterSize; r2++) {
+
+                    // フィルターの列に対し
+                    for (var c2 = 0; c2 < this.filterSize; c2++) {
+                        this.weights.dt[weights_idx] -= eta * this.nablaWeights.dt[weights_idx];
+                        weights_idx++;
+                    }
                 }
             }
         }
@@ -1090,7 +1227,7 @@ class NeuralNetwork {
                 else{
 
                     data = test_data;
-                    miniBatchSize = 100 * mini_batch_size;
+                    miniBatchSize = 10 * mini_batch_size;
                 }
 
                 this.layers.forEach(x => x.miniBatchSizeChanged());
@@ -1144,7 +1281,7 @@ class NeuralNetwork {
                         for(let layer of this.layers.slice(1)) {
                             s += " (" + Stats(layer.fwTime, idx) + " " + Stats(layer.bwTime, idx) + " " + Stats(layer.udTime, idx) + ")";
                         }
-//                        console.log("update mini batch: %.2f %d  %s", ok_cnt / (idx * miniBatchSize), idx * miniBatchSize, s);
+                        console.log("update mini batch: %.2f %d  %s", ok_cnt / (idx * miniBatchSize), idx * miniBatchSize, s);
                         yield 1;
 
                         show_time = new Date();
