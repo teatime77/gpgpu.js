@@ -575,8 +575,8 @@ class ConvolutionalLayer extends Layer{
                     for (var c1 = 0; c1 < this.imgCols; c1++) {
                         var diff = Math.max(Math.abs(z_gpu_dt[output_idx] - this.z.dt[output_idx]), Math.abs(activation_gpu_dt[output_idx] - this.activation.dt[output_idx]));
                         if (max_diff < diff) {
-                            if(0.0001 < diff){
-                                console.log("");
+                            if(0.001 < diff){
+                                console.log("CNN forward : %dx%d %d %d %d %d %f", this.imgRows, this.imgCols, batch_idx, channel_idx, r1, c1, diff)
                             }
                             max_diff = diff;
                         }
@@ -585,7 +585,6 @@ class ConvolutionalLayer extends Layer{
                 }
             }
         }
-        Assert(max_diff < 0.0001, "Convolutional-Layer-forward-diff");
     }
 
     gpuNablaWeights(delta_z) {
@@ -619,6 +618,44 @@ class ConvolutionalLayer extends Layer{
         var param = this.params[param_id];
 
         param.args["prev_activation"].value = prev_Layer.activation.dt;
+        param.args["delta_z"].value = delta_z.dt;
+        WebGL2.compute(param);
+    }
+
+
+    gpuDeltaX(delta_z) {
+        var prev_Layer = this.prevLayer;
+
+        var vs_id = "ConvolutionalLayer-delta-X";
+        var param_id = vs_id + ":" + this.filterSize + ":" + prev_Layer.channelSize + ":" + this.channelSize + ":" + this.imgRows + ":" + this.imgCols + ":" + miniBatchSize;
+
+        if (this.params[param_id] == undefined) {
+
+            var shader_src = Shaders[vs_id]
+                .replace(/miniBatchSize/g, miniBatchSize.toString() + "u")
+                .replace(/channelSize/g, this.channelSize.toString() + "u")
+                .replace(/prevChannelSize/g, prev_Layer.channelSize.toString() + "u")
+                .replace(/prevRowCount/g, prev_Layer.imgRows.toString() + "u")
+                .replace(/prevColCount/g, prev_Layer.imgCols.toString() + "u")
+                .replace(/rowCount/g, this.imgRows.toString() + "u")
+                .replace(/colCount/g, this.imgCols.toString() + "u")
+                .replace(/filterSize/g, this.filterSize.toString() + "u");
+
+            this.params[param_id]  = {
+                id : param_id,
+                vertexShader: shader_src,
+                args : {
+                    "zero": new Float32Array(this.deltaX.dt.length),
+                    "weights": makeTextureInfo(WebGL2, "float", new ArrayView(this.channelSize * prev_Layer.channelSize, this.filterSize, this.filterSize)),
+                    "delta_z": makeTextureInfo(WebGL2, "float", new ArrayView(miniBatchSize * this.channelSize, this.imgRows, this.imgCols)),
+                    "delta_x": this.deltaX.dt
+                }
+            };
+        }
+
+        var param = this.params[param_id];
+
+        param.args["weights"].value = this.weights.dt;
         param.args["delta_z"].value = delta_z.dt;
         WebGL2.compute(param);
     }
@@ -854,18 +891,27 @@ class ConvolutionalLayer extends Layer{
 //        AssertEq(gpu_nabla_weights, this.nablaWeights.dt);
         lap.Time();
 
-        if(!(this.prevLayer instanceof InputLayer)){
+        if(this.prevLayer instanceof InputLayer){
+
+            return;
+        }
+
+        this.gpuDeltaX(delta_z);
+
+        if(miniBatchIdx == 0 || Math.random() < 0.01){
+
+            var delta_x1 = new Float32Array(this.deltaX.dt);
 
             this.cpuDeltaX(delta_z);
-            if(Math.random() < 0.01){
 
-                var delta_x = this.cpuDeltaX2(delta_z);
-                var diff = this.deltaX.diff(delta_x);
-                if(0.00001 < diff){
-                    console.log("CNN delta-X diff:%f", diff);
-                }
+            var delta_x2 = this.cpuDeltaX2(delta_z);
+            var diff1 = this.deltaX.diff(delta_x1);
+            var diff2 = this.deltaX.diff(delta_x2);
+            if(0.00001 < diff1 || 0.00001 < diff2){
+                console.log("CNN delta-X diff:%f %f", diff1, diff2);
             }
         }
+
         lap.Time();
     }
 

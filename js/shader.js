@@ -161,6 +161,73 @@ void main() {
     nabla_w = sum + zero;
 }`;
 
+Shaders["ConvolutionalLayer-delta-X"] = `
+precision highp sampler3D;
+
+uniform sampler3D delta_z;
+uniform sampler3D weights;
+
+in float zero;
+
+out float delta_x;
+
+void main() {
+    uint idx = uint(gl_VertexID);
+
+    uint batch_idx = idx / (prevChannelSize * prevRowCount * prevColCount);
+    idx     -= batch_idx * (prevChannelSize * prevRowCount * prevColCount);
+
+    uint prev_channel_idx = idx / (prevRowCount * prevColCount);
+    idx     -= prev_channel_idx * (prevRowCount * prevColCount);
+
+    uint r3 = idx / prevColCount;
+    uint c3 = idx - r3 * prevColCount;
+
+    uint channel_idx, r2, c2;
+    float sum = 0.0f;
+
+    // 出力のチャネルに対し
+    for(channel_idx = 0u; channel_idx < channelSize; channel_idx++) {
+
+        uint this_batch_channel = batch_idx * channelSize + channel_idx;
+        uint weight_idx = channel_idx * prevChannelSize + prev_channel_idx;
+
+        // フィルターの行に対し
+        for (r2 = 0u; r2 < filterSize; r2++) {
+
+            // 出力の行
+            uint r1 = r3 - r2;
+
+            if(0u <= r1 && r1 < rowCount) {
+
+                // フィルターの列に対し
+                for (c2 = 0u; c2 < filterSize; c2++) {
+
+                    // 出力の列
+                    uint c1 = c3 -c2;
+
+                    if(0u <= c1 && c1 < colCount) {
+
+                        vec4  dz = texelFetch(delta_z, ivec3(c1, r1, this_batch_channel), 0);
+
+                        vec4  w   = texelFetch(weights, ivec3(c2, r2, weight_idx), 0);
+
+                        sum += dz.r * w.r;
+                    }
+                }
+            }
+        }
+    }
+
+    delta_x = sum +zero;
+}`;
+
+
+
+
+
+
+
 
 Shaders["vs-Texture"] = `
 uniform int B_Cols;
