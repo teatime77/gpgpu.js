@@ -1218,8 +1218,9 @@ class NeuralNetwork {
     損失関数の微分
     */
     SoftMax(cost_derivative, last_y, batch_Y, exp_work, range_len) {
-        var cost_sum = 0;
+        var costs = new Float32Array(miniBatchSize);
         for (var batch_idx = 0; batch_idx < miniBatchSize; batch_idx++){
+            var cost_sum = 0;
 
             var max_val = -10000;
             for (var i = 0; i < range_len; i++) {
@@ -1247,9 +1248,37 @@ class NeuralNetwork {
 
                 cost_sum += (batch_Y[k] * Math.log(y));
             }
+
+            costs[batch_idx] = - cost_sum;
         }
 
-        return - cost_sum / miniBatchSize;
+        return costs
+    }
+
+    TestSoftMax(cost_derivative, last_y, batch_Y, exp_work, range_len){
+        var costs = this.SoftMax(cost_derivative, last_y, batch_Y, exp_work, range_len);
+
+        var cost_derivative_work = new Float32Array(cost_derivative.length);
+
+        for (var batch_idx = 0; batch_idx < miniBatchSize; batch_idx++){
+            for (var i = 0; i < range_len; i++) {
+                var k = batch_idx * range_len + i;
+
+                var y = last_y[k];
+                var eps = y * 0.01;
+
+                last_y[k] = y - eps;
+                var costs1 = this.SoftMax(cost_derivative_work, last_y, batch_Y, exp_work, range_len);
+
+                last_y[k] = y + eps;
+                var costs2 = this.SoftMax(cost_derivative_work, last_y, batch_Y, exp_work, range_len);
+
+                var diff = cost_derivative[k] * 2 * eps - (costs2[batch_idx] - costs1[batch_idx]);
+                console.log("diff:%f dC:%f eps:%f cost1,2:%f,%f", diff, cost_derivative[k], eps, costs2[batch_idx], costs1[batch_idx]);
+            }
+
+        }
+
     }
 
     * SGD(training_data, test_data, epochs, mini_batch_size, learning_rate) {
@@ -1302,7 +1331,8 @@ class NeuralNetwork {
 
                         if(useSoftMax){
 
-                            var cost = this.SoftMax(last_layer.costDerivative.dt, last_layer.activation.dt, Y.dt, exp_work, last_layer.unitSize);
+                            var costs = this.SoftMax(last_layer.costDerivative.dt, last_layer.activation.dt, Y.dt, exp_work, last_layer.unitSize);
+//                            this.TestSoftMax(last_layer.costDerivative.dt, last_layer.activation.dt, Y.dt, exp_work, last_layer.unitSize);
                         }
                         else{
 
