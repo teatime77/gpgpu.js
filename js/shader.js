@@ -222,13 +222,6 @@ void main() {
     delta_x = sum +zero;
 }`;
 
-
-
-
-
-
-
-
 Shaders["vs-Texture"] = `
 uniform int B_Cols;
 
