@@ -11,6 +11,11 @@ var Momentum = 0.9;
 var useGradientCheck = false;
 var inGradientCheck = false;
 
+var ActivationFunction = {
+    none : 0,
+    sigmoid: 1
+};
+
 function Stats(tm, idx){
     switch(tm.length){
     case 0:
@@ -172,9 +177,14 @@ class FullyConnectedLayer extends Layer{
         }
     }
 
-    gpuForwardSigmoid(){
+    gpuForward(){
         var vertex_shader =
             `in float zero;
+
+        const int ActivationFunction_none       = 0;
+        const int ActivationFunction_sigmoid    = 1;
+
+        uniform int activationFunction;
 
         // 2次元配列のテクスチャ
         uniform sampler2D W;
@@ -212,98 +222,47 @@ class FullyConnectedLayer extends Layer{
             // zeroの値は0なので計算結果には影響しません。
             z = sum + zero;
 
-            activation = sigmoid(z);
+            if(activationFunction == ActivationFunction_sigmoid){
+
+                activation = sigmoid(z);
+            }
+            else{
+
+                activation = z;
+            }
         }`;
+
+        var activation_function;
+        if(useSoftMax && ! this.nextLayer){
+
+            activation_function = ActivationFunction.none;
+        }
+        else{
+
+            activation_function = ActivationFunction.sigmoid;
+        }
 
         this.param = {
             id : "Fully-Connected-Layer-forward," + miniBatchSize + "," + this.prevLayer.unitSize + "," + this.unitSize,
-                    vertexShader: vertex_shader,
-                args : {
+            vertexShader: vertex_shader,
+            args : {
+                "activationFunction": activation_function,
                 "zero": this.outZero,
                 "X": WebGL2.makeTextureInfo("float", [ miniBatchSize, this.prevLayer.unitSize], this.prevLayer.activation.dt),
                 "W": WebGL2.makeTextureInfo("float", this.weight.shape, this.weight.dt),
                 "Bias": WebGL2.makeTextureInfo("float", [ 1, this.bias.dt.length ], this.bias.dt),
                 "z": this.z.dt,
                 "activation" : this.activation.dt
-                }
-                };
+            }
+        };
 
         WebGL2.compute(this.param);
 
     }
 
-
-    gpuForwardSoftMax(){
-        var vertex_shader =
-            `in float zero;
-
-        // 2次元配列のテクスチャ
-        uniform sampler2D W;
-        uniform sampler2D X;
-        uniform sampler2D Bias;
-
-        out float activation;
-
-        float sigmoid(float x){
-            return 1.0 / (1.0 + exp(-x));
-        }
-
-        void main() {
-            ivec2 X_sz = textureSize(X, 0);
-            ivec2 Bias_sz = textureSize(Bias, 0);
-
-            int batch_idx = gl_VertexID / Bias_sz.x;
-            int out_idx   = gl_VertexID % Bias_sz.x;
-
-            float sum = 0.0f;
-            for(int i = 0; i < X_sz.x; i++) {
-
-                vec4 w = texelFetch(W, ivec2(i, out_idx), 0);
-
-                vec4 x = texelFetch(X, ivec2(i, batch_idx), 0);
-
-                sum += w.r * x.r;
-            }
-
-            vec4 bias = texelFetch(Bias, ivec2(out_idx, 0), 0);
-            sum += bias.r;
-
-            activation = sum + zero;
-        }`;
-
-        var param_id = "Fully-Connected-Layer-forward-soft-max," + miniBatchSize + "," + this.prevLayer.unitSize + "," + this.unitSize;
-        if (this.params[param_id] == undefined){
-
-            this.params[param_id] = {
-                id : param_id,
-                vertexShader: vertex_shader,
-                args : {
-                    "zero": this.outZero,
-                    "X": WebGL2.makeTextureInfo("float", [ miniBatchSize, this.prevLayer.unitSize], this.prevLayer.activation.dt),
-                    "W": WebGL2.makeTextureInfo("float", this.weight.shape, this.weight.dt),
-                    "Bias": WebGL2.makeTextureInfo("float", [ 1, this.bias.dt.length ], this.bias.dt),
-                    "activation" : this.activation.dt
-                }
-            };
-        }
-
-        var param = this.params[param_id];
-        param.args["X"].value = this.prevLayer.activation.dt;
-
-        WebGL2.compute(param);
-    }
-
-
     forward() {
         var lap = new Lap(this.fwTime);
-        if(useSoftMax && ! this.nextLayer){
-
-            this.gpuForwardSoftMax();
-        }
-        else{
-
-            this.gpuForwardSigmoid();
-        }
+        this.gpuForward();
 
         lap.Time();
     }
