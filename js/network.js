@@ -187,9 +187,6 @@ class FullyConnectedLayer extends FullyConnectedConvolutionalLayer {
                 this.weight.dt[i] /= sd;
             }
         }
-/*
-        this.weightV = new ArrayView(this.unitSize, this.prevLayer.unitSize);
-*/
     }
 
     miniBatchSizeChanged(){

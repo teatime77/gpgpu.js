@@ -123,14 +123,15 @@ Chromeの場合Ctrl+Shift+Iでデベロッパーツールのコンソールを�
 
                         var type, cnt, h, w;
 
-                        if (fname == "train-images.idx3-ubyte" || fname == "t10k-images.idx3-ubyte") {
+                        if (fname.indexOf("-images.") != -1) {
 
                             type = BytesToInt(v, 0);
                             cnt = BytesToInt(v, 4);
                             h = BytesToInt(v, 8);
                             w = BytesToInt(v, 12);
+                            Assert(16 + cnt * h * w == v.length);
 
-                            if (fname == "train-images.idx3-ubyte") {
+                            if (fname.startsWith("train-images.")) {
                                 TrainingDataImage = v.slice(16);
                                 TrainingImgCnt    = cnt;
 
@@ -146,13 +147,14 @@ Chromeの場合Ctrl+Shift+Iでデベロッパーツールのコンソールを�
 
                             console.log("画像 name:%s len:%d type:%d cnt:%d H:%d W:%d", fname, v.length, type, cnt, h, w);
                         }
-                        else if (fname == "train-labels.idx1-ubyte" || fname == "t10k-labels.idx1-ubyte") {
+                        else if (fname.indexOf("-labels.") != -1) {
 
                             type = BytesToInt(v, 0);
                             cnt = BytesToInt(v, 4);
+                            Assert(8 + cnt == v.length);
                             console.log("ラベル name:%s len:%d type:%d cnt:%d", fname, v.length, type, cnt);
 
-                            if (fname == "train-labels.idx1-ubyte") {
+                            if (fname.startsWith("train-labels.")) {
                                 TrainingDataLabel = v.slice(8);
                             }
                             else {
