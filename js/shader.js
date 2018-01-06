@@ -56,6 +56,12 @@ void main() {
 Shaders["ConvolutionalLayer-forward"] = `
 precision highp sampler3D;
 
+const int ActivationFunction_none       = 0;
+const int ActivationFunction_sigmoid    = 1;
+const int ActivationFunction_ReLU       = 2;
+
+uniform int activationFunction;
+
 //uniform float weights[channelSize * prevChannelSize * filterSize * filterSize];
 uniform float biases[channelSize];
 
@@ -66,6 +72,10 @@ in float zero;
 
 out float z;
 out float activation;
+
+float sigmoid(float x){
+    return 1.0 / (1.0 + exp(-x));
+}
 
 void main() {
     uint idx = uint(gl_VertexID);
@@ -109,7 +119,20 @@ void main() {
     }
 
     z = sum + biases[channel_idx] + zero;
-    activation = 1.0 / (1.0 + exp(-z));
+
+    switch(activationFunction) {
+    case ActivationFunction_none:
+        activation = z;
+        break;
+
+    case ActivationFunction_sigmoid:
+        activation = sigmoid(z);
+        break;
+
+    case ActivationFunction_ReLU:
+        activation = (0.0f < z ? z: 0.0f);
+        break;
+    }
 }`;
 
 

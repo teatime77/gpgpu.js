@@ -57,13 +57,13 @@ Chromeの場合Ctrl+Shift+Iでデベロッパーツールのコンソールを�
 
             var net = new NeuralNetwork(gpgpu, [
                 new InputLayer(1, 28, 28),
-                new ConvolutionalLayer(5, 20),
+                new ConvolutionalLayer(5, 20, ActivationFunction.ReLU),
                 new PoolingLayer(2),
-                new ConvolutionalLayer(5, 40),
+                new ConvolutionalLayer(5, 40, ActivationFunction.ReLU),
                 new PoolingLayer(2),
-                new FullyConnectedLayer(100),
+                new FullyConnectedLayer(100, ActivationFunction.ReLU),
 //                new DropoutLayer(0.5),
-                new FullyConnectedLayer(10)
+                new FullyConnectedLayer(10, ActivationFunction.none)
             ]);
 
             var epochs = 60;
@@ -75,7 +75,7 @@ Chromeの場合Ctrl+Shift+Iでデベロッパーツールのコンソールを�
             }
             else {
 
-                learning_rate = 0.1;// 0.01;// 0.1;// 0.12;// 0.16;// 0.2;// 0.04 * RunIdx;// 0.05;// 0.1;
+                learning_rate = 0.03;// 0.1;// 0.01;// 0.1;// 0.12;// 0.16;// 0.2;// 0.04 * RunIdx;// 0.05;// 0.1;
             }
 
             var sgd_generator = net.SGD(training_data, test_data, epochs, mini_batch_size, learning_rate);
