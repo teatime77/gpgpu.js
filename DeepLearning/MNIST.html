@@ -10,7 +10,8 @@
     <script type="text/javascript" src="../js/network.js"></script>
     <script type="text/javascript" src="../js/plot.js"></script>
     <script type="text/javascript">
-        function draw() {
+
+        function plotGraph() {
             /* canvas要素のノードオブジェクト */
             var canvas = document.getElementById('plot-canvas');
             /* canvas要素の存在チェックとCanvas未対応ブラウザの対処 */
@@ -19,25 +20,23 @@
             }
 
             var plot = CreatePlot(canvas);
-            var X = [];
             var Y1 = [];
             var Y2 = [];
             for (var i = 0; i < 20; i++) {
                 var x = 2 * Math.PI * i / 20;
-                X.push(x);
                 Y1.push(Math.sin(x) + 0.3 * Math.random())
                 Y2.push(Math.cos(x) + 0.3 * Math.random())
             }
 
-            plot.plot(X, Y1, "red");
-            plot.plot(X, Y2, "blue");
+            plot.plot(Y1, "red");
+            plot.plot(Y2, "blue");
             plot.show();
         }
     </script>
     <!--
     -->
 </head>
-<body onload="draw()">
+<body>
 
     <h1>MNISTのディープラーニング</h1>
 
@@ -56,7 +55,13 @@ Chromeの場合Ctrl+Shift+Iでデベロッパーツールのコンソールを�
 <br />
 
 <div id="drop_zone" style="width:100px; height:100px; background-color:darkgray">Drop files here</div>
-<canvas id="plot-canvas" width="400" height="400"></canvas><br />
+<canvas id="training-costs-canvas" width="400" height="400"></canvas>
+<canvas id="test-costs-canvas" width="400" height="400"></canvas>
+<canvas id="training-accuracy-canvas" width="400" height="400"></canvas>
+<canvas id="test-accuracy-canvas" width="400" height="400"></canvas>
+<canvas id="plot-canvas" width="400" height="400"></canvas>
+    
+<br />
 <canvas id="digit-canvas" width="28" height="28" style="width:28px; height:28px; background-color:aqua"/>
 <output id="list"></output>
 <!--
@@ -84,8 +89,19 @@ Chromeの場合Ctrl+Shift+Iでデベロッパーツールのコンソールを�
         var Ctx = null;
         var imageData;
         var RunIdx = 6;
+        var trainingCostsPlot, testCostsPlot, trainingAccuracyPlot, testAccuracyPlot;
+        var lastPlotTime;
 
         function RunNeuralNetwork(training_data, test_data) {
+            trainingCostsPlot = CreatePlot(document.getElementById('training-costs-canvas'));
+            testCostsPlot = CreatePlot(document.getElementById('test-costs-canvas'));
+            trainingAccuracyPlot = CreatePlot(document.getElementById('training-accuracy-canvas'));
+            testAccuracyPlot = CreatePlot(document.getElementById('test-accuracy-canvas'));
+
+            lastPlotTime = new Date();
+
+            plotGraph();
+
             var gpgpu = CreateGPGPU();
 
             var net = CreateNeuralNetwork(gpgpu);
@@ -119,6 +135,19 @@ Chromeの場合Ctrl+Shift+Iでデベロッパーツールのコンソールを�
 
                     RunIdx++;
                     RunNeuralNetwork(training_data, test_data);
+                }
+
+                if (10 * 1000 < new Date() - lastPlotTime) {
+
+                    trainingCostsPlot.show(net.trainingCost, "red");
+
+                    testCostsPlot.show(net.testCost, "blue");
+
+                    trainingAccuracyPlot.show(net.trainingAccuracy, "blue");
+
+                    testAccuracyPlot.show(net.testAccuracy, "blue");
+
+                    lastPlotTime = new Date();
                 }
             }, 1)
         }

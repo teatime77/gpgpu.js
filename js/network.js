@@ -1216,6 +1216,10 @@ function CreateNeuralNetwork(gpgpu){
     class NeuralNetwork {
         constructor(gpgpu) {
             WebGL2 = gpgpu;
+            this.trainingCost = [];
+            this.testCost = [];
+            this.trainingAccuracy = [];
+            this.testAccuracy = [];
         }
 
         setLayers(layers){
@@ -1307,6 +1311,9 @@ function CreateNeuralNetwork(gpgpu){
                 var k = batch_idx * range_len + i;
 
                 var d = Math.exp(last_y[k] - max_val);
+                if(! isFinite (d) || d <= 0){
+                    d = 0.0000001;
+                }
                 sum += d;
                 exp_work[i] = d;
             }
@@ -1317,7 +1324,16 @@ function CreateNeuralNetwork(gpgpu){
                 var y = exp_work[i] / sum;
                 cost_derivative[k] = y - batch_Y[k];
 
-                cost_sum += (batch_Y[k] * Math.log(y));
+                var log_y = Math.log(y);
+                if(! isFinite (log_y)){
+                    continue;
+                }
+
+                cost_sum += (batch_Y[k] * log_y);
+
+                if(! isFinite(cost_sum)){
+                    Assert(false);
+                }
             }
 
             return - cost_sum;
@@ -1418,6 +1434,8 @@ function CreateNeuralNetwork(gpgpu){
             var exp_work = new Float32Array(last_layer.unitSize);
 
             for (let epoch_idx of xrange(epochs)) {
+                this.trainingAccuracy.push(0);
+                this.testAccuracy.push(0);
 
                 for(var mode = 0; mode < 2; mode++){
                     var data;
@@ -1458,19 +1476,29 @@ function CreateNeuralNetwork(gpgpu){
                         this.layers.forEach(x => x.forward());
                         lap.Time();
 
-                        if(mode == 0){
+                        if(useSoftMax){
 
-                            if(useSoftMax){
+                            for (var batch_idx = 0; batch_idx < miniBatchSize; batch_idx++){
 
-                                for (var batch_idx = 0; batch_idx < miniBatchSize; batch_idx++){
+                                costs[batch_idx] = this.SoftMax(last_layer.costDerivative.dt, last_layer.activation.dt, Y.dt, exp_work, last_layer.unitSize, batch_idx);
+                            }
 
-                                    costs[batch_idx] = this.SoftMax(last_layer.costDerivative.dt, last_layer.activation.dt, Y.dt, exp_work, last_layer.unitSize, batch_idx);
-                                }
+                            var avg_costs = costs.reduce((x,y) => x + y) / miniBatchSize;
+                            if(mode == 0){
+
+                                this.trainingCost.push( avg_costs );
                             }
                             else{
 
-                                last_layer.costDerivative = cost_derivative(last_layer.activation, Y);                    
+                                this.testCost.push( avg_costs );
                             }
+                        }
+                        else{
+
+                            last_layer.costDerivative = cost_derivative(last_layer.activation, Y);                    
+                        }
+
+                        if(mode == 0){
                             lap.Time();
 
                             if(useGradientCheck){
@@ -1498,10 +1526,21 @@ function CreateNeuralNetwork(gpgpu){
                             for(let layer of this.layers.slice(1)) {
                                 s += " (" + Stats(layer.fwTime, idx) + " " + Stats(layer.bwTime, idx) + " " + Stats(layer.udTime, idx) + ")";
                             }
-                            console.log("update mini batch: %.2f %d  %s", ok_cnt / (idx * miniBatchSize), idx * miniBatchSize, s);
+                            var accuracy = ok_cnt / (idx * miniBatchSize);
+                            console.log("update mini batch: %.2f %d  %s", accuracy, idx * miniBatchSize, s);
                             yield 1;
 
                             show_time = new Date();
+
+                            if(mode == 0){
+
+                                this.trainingAccuracy[epoch_idx] = accuracy;
+                            }
+                            else{
+
+                                this.testAccuracy[epoch_idx] = accuracy;
+                            }
+
                         }
                     }
 
