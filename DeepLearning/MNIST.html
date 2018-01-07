@@ -9,6 +9,7 @@
     <script type="text/javascript" src="../js/numpy.js"></script>
     <script type="text/javascript" src="../js/network.js"></script>
     <script type="text/javascript" src="../js/plot.js"></script>
+    <script type="text/javascript" src="../js/MNIST.js"></script>
     <script type="text/javascript">
 
         function plotGraph() {
@@ -55,42 +56,41 @@ Chromeの場合Ctrl+Shift+Iでデベロッパーツールのコンソールを�
 <br />
 
 <div id="drop_zone" style="width:100px; height:100px; background-color:darkgray">Drop files here</div>
-<canvas id="training-costs-canvas" width="400" height="400"></canvas>
-<canvas id="test-costs-canvas" width="400" height="400"></canvas>
-<canvas id="training-accuracy-canvas" width="400" height="400"></canvas>
-<canvas id="test-accuracy-canvas" width="400" height="400"></canvas>
+    <table border="1">
+        <tr>
+            <td>
+                <b>トレーニング コスト</b><br />
+                <canvas id="training-costs-canvas" width="300" height="200"></canvas>
+            </td>
+            <td>
+                <b>テスト コスト</b><br />
+                <canvas id="test-costs-canvas" width="300" height="200"></canvas>
+            </td>
+        </tr>
+        <tr>
+            <td>
+                <b>トレーニング 正解率</b><br />
+                <canvas id="training-accuracy-canvas" width="300" height="200"></canvas>
+            </td>
+            <td>
+                <b>テスト 正解率</b><br />
+                <canvas id="test-accuracy-canvas" width="300" height="200"></canvas>
+            </td>
+        </tr>
+    </table>
 <canvas id="plot-canvas" width="400" height="400"></canvas>
     
 <br />
 <canvas id="digit-canvas" width="28" height="28" style="width:28px; height:28px; background-color:aqua"/>
-<output id="list"></output>
 <!--
     
 -->
 
     <script type="text/javascript">
-        var TrainingImgCnt, TrainingDataImage, TrainingDataLabel, TrainingData;
-        var TestImgCnt, TestDataImage, TestDataLabel, TestData;
-
-        var ret = np.random.RandomSampling(6, 6);
-        for(let i of ret) {
-            console.log(i);
-        }
-        var v = xrange(9);
-        np.random.shuffle(v);
-        console.log(v);
-
-
         //----------------------------------------------------------------------
-        var ImgH;
-        var ImgW;
-        var ImgIdx = 0;
-        var DigitCanvas;
-        var Ctx = null;
-        var imageData;
-        var RunIdx = 6;
         var trainingCostsPlot, testCostsPlot, trainingAccuracyPlot, testAccuracyPlot;
         var lastPlotTime;
+        var mnist = new MNIST(document.getElementById('digit-canvas'));
 
         function RunNeuralNetwork(training_data, test_data) {
             trainingCostsPlot = CreatePlot(document.getElementById('training-costs-canvas'));
@@ -119,7 +119,7 @@ Chromeの場合Ctrl+Shift+Iでデベロッパーツールのコンソールを�
 
             var epochs = 60;
             var mini_batch_size = 10;
-            var learning_rate = 0.03;// 0.1;// 0.01;// 0.1;// 0.12;// 0.16;// 0.2;// 0.04 * RunIdx;// 0.05;// 0.1;
+            var learning_rate = 0.03;// 0.1;// 0.01;// 0.1;// 0.12;// 0.16;// 0.2;// 0.05;// 0.1;
 //            learning_rate = 3.0;
 
             var sgd_generator = net.SGD(training_data, test_data, epochs, mini_batch_size, learning_rate);
@@ -133,7 +133,6 @@ Chromeの場合Ctrl+Shift+Iでデベロッパーツールのコンソールを�
                     gpgpu.clearAll();
                     console.log("学習が終わりました。");
 
-                    RunIdx++;
                     RunNeuralNetwork(training_data, test_data);
                 }
 
@@ -163,95 +162,29 @@ Chromeの場合Ctrl+Shift+Iでデベロッパーツールのコンソールを�
             var files = evt.dataTransfer.files; // FileList object.
 
             // files is a FileList of File objects. List some properties.
-            var output = [];
             for (var i = 0, f; f = files[i]; i++) {
-                output.push('<li><strong>', escape(f.name), '</strong> (', f.type || 'n/a', ') - ',
-                            f.size, ' bytes, last modified: ',
-                            f.lastModifiedDate.toLocaleDateString(), '</li>');
 
                 var reader = new FileReader();
-
+                
                 // Closure to capture the file information.
-                reader.onload = (function (theFile) {
+                reader.onload = (function (file_inf) {
                     return function (e) {
                         // Render thumbnail.
-                        var v = new Uint8Array(e.target.result);
-                        var fname = escape(theFile.name);
+                        var data = new Uint8Array(e.target.result);
+                        var file_name = escape(file_inf.name);
 
-                        var type, cnt, h, w;
+                        mnist.onLoadFile(file_name, data);
 
-                        if (fname.indexOf("-images.") != -1) {
+                        if (mnist.trainingData && mnist.testData) {
 
-                            type = BytesToInt(v, 0);
-                            cnt = BytesToInt(v, 4);
-                            h = BytesToInt(v, 8);
-                            w = BytesToInt(v, 12);
-                            Assert(16 + cnt * h * w == v.length);
-
-                            if (fname.startsWith("train-images.")) {
-                                TrainingDataImage = v.slice(16);
-                                TrainingImgCnt    = cnt;
-
-                                ImgH = h;
-                                ImgW = w;
-
-                                setTimeout(DrawImage, 100);
-                            }
-                            else {
-                                TestDataImage = v.slice(16);
-                                TestImgCnt    = cnt;
-                            }
-
-                            console.log("画像 name:%s len:%d type:%d cnt:%d H:%d W:%d", fname, v.length, type, cnt, h, w);
-                        }
-                        else if (fname.indexOf("-labels.") != -1) {
-
-                            type = BytesToInt(v, 0);
-                            cnt = BytesToInt(v, 4);
-                            Assert(8 + cnt == v.length);
-                            console.log("ラベル name:%s len:%d type:%d cnt:%d", fname, v.length, type, cnt);
-
-                            if (fname.startsWith("train-labels.")) {
-                                TrainingDataLabel = v.slice(8);
-                            }
-                            else {
-                                TestDataLabel = v.slice(8);
-                            }
-                        }
-
-                        if (TrainingDataImage && TrainingDataLabel && TestDataImage && TestDataLabel) {
-
-                            function make_data(data_cnt, data_image, data_label) {
-                                // [0,255] -> [0,1) に変換
-                                var X = new ArrayView(data_cnt, ImgH, ImgW, new Float32Array(data_image).map(a => a / 256.0));
-
-                                var Y = new ArrayView(data_cnt, 10);
-
-                                // すべてのトレーニングデータに対し
-                                for (var i = 0; i < data_cnt; i++) {
-                                    // 正解のラベル
-                                    var n = data_label[i];
-
-                                    // one-hotベクトルの値をセットする。
-                                    Y.dt[i * 10 + n] = 1;
-                                }
-
-                                return { "X": X, "Y": Y };
-
-                            }
-
-                            TrainingData = make_data(TrainingImgCnt, TrainingDataImage, TrainingDataLabel);
-                            TestData     = make_data(TestImgCnt    , TestDataImage    , TestDataLabel);
-
-                            RunNeuralNetwork(TrainingData, TestData);
+                            RunNeuralNetwork(mnist.trainingData, mnist.testData);
                         }
                     };
                 })(f);
-
+                
                 // Read in the image file as a data URL.
                 reader.readAsArrayBuffer(f);
             }
-            document.getElementById('list').innerHTML = '<ul>' + output.join('') + '</ul>';
         }
 
         function handleDragOver(evt) {
@@ -265,49 +198,6 @@ Chromeの場合Ctrl+Shift+Iでデベロッパーツールのコンソールを�
         dropZone.addEventListener('dragover', handleDragOver, false);
         dropZone.addEventListener('drop', handleFileSelect, false);
 
-
-        function BytesToInt(v, offset) {
-            return v[offset] * 0x1000000 + v[offset + 1] * 0x10000 + v[offset + 2] * 0x100 + v[offset + 3];
-        }
-
-        function DrawImage() {
-            if (Ctx == null) {
-
-                DigitCanvas = document.getElementById('digit-canvas');
-                Ctx = DigitCanvas.getContext('2d');
-            }
-            imageData = Ctx.getImageData(0, 0, DigitCanvas.width, DigitCanvas.height);
-            var data = imageData.data;
-            var length = data.length;
-
-            if (length != 4 * ImgW * ImgH) {
-                console.log("length(%d) != 4 * ImgW(%d) * ImgH(%d) : %dx%d", length, ImgW, ImgH, DigitCanvas.width, DigitCanvas.height);
-                return;
-            }
-            if (ImgIdx % 1000 == 0) {
-//                console.log("Draw Image %d/%d", ImgIdx, TrainingImgCnt);
-            }
-
-            var wh = ImgW * ImgH;
-
-            for (var i = 0; i < wh; i++) {
-                var k = 4 * i;
-                var c = 255 - TrainingDataImage[wh * ImgIdx + i];
-
-                data[k] = c;
-                data[k + 1] = c;
-                data[k + 2] = c;
-                data[k + 3] = 255;
-            }
-
-            Ctx.putImageData(imageData, 0, 0);
-
-            ImgIdx += Math.floor( Math.random() * 200 );
-            if (ImgIdx < TrainingImgCnt) {
-
-                setTimeout(DrawImage, 1);
-            }
-        }
     </script>
 </body>
 </html>
