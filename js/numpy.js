@@ -61,33 +61,6 @@ function xrange() {
     return list;
 }
 
-function zip() {
-    var list = new Array();
-
-    for (var i = 0; ; i++) {
-        var tpl = new Array();
-        for (var k = 0; k < arguments.length; k++) {
-            var arg = arguments[k];
-            if (arg.length <= i) {
-                return list;
-            }
-            tpl.push(arg[i]);
-        }
-        list.push(tpl);
-    }
-}
-
-function zip2(u, v, f) {
-    Assert(u instanceof Array && v instanceof Array && u.length == v.length, "zip2");
-
-    var ret = new Array();
-    for (var i = 0; i < u.length; i++) {
-        ret.push(f(u[i], v[i]));
-    }
-
-    return ret;
-}
-
 function makeTextureInfo(gpgpu, texel_type, array_view) {
     var col_size;
 

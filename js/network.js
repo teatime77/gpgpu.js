@@ -187,6 +187,8 @@ function CreateNeuralNetwork(gpgpu){
                     this.weight.dt[i] /= sd;
                 }
             }
+
+            this.deltaWeight = new ArrayView(this.unitSize, this.prevLayer.unitSize);
         }
 
         miniBatchSizeChanged(){
@@ -283,7 +285,6 @@ function CreateNeuralNetwork(gpgpu){
             };
 
             WebGL2.compute(this.param);
-
         }
 
         forward() {
@@ -369,6 +370,64 @@ function CreateNeuralNetwork(gpgpu){
             }
         }
 
+        gpuDeltaWeight(){
+            var vertex_shader =
+                `in float zero;
+
+            // 2次元配列のテクスチャ
+            uniform sampler2D prev_activation;
+            uniform sampler2D deltaZ;
+
+            out float deltaWeight;
+
+            void main() {
+                int row = gl_VertexID / WeightColSize;
+                int col = gl_VertexID % WeightColSize;
+
+                float sum = 0.0f;
+                int batch_idx;
+                for(batch_idx = 0; batch_idx < miniBatchSize; batch_idx++){
+
+                    vec4 pa = texelFetch(prev_activation, ivec2(col, batch_idx), 0);
+
+                    vec4 dz = texelFetch(deltaZ, ivec2(row, batch_idx), 0);
+
+                    sum += pa.r * dz.r;
+                }
+
+                deltaWeight = sum + zero;
+            }`;
+
+            var prev_Layer = this.prevLayer;
+
+            var vertex_shader = vertex_shader
+                .replace(/miniBatchSize/g, miniBatchSize.toString())
+                .replace(/WeightColSize/g, prev_Layer.unitSize.toString());
+
+            var param_id = "Fully-Connected-Layer-delta-weight," + miniBatchSize + "," + prev_Layer.unitSize + "," + this.unitSize;
+            if (this.params[param_id] == undefined){
+
+                this.params[param_id] = {
+                    id : param_id,
+                    vertexShader: vertex_shader,
+                    args : {
+                        "zero": new Float32Array(this.deltaWeight.dt.length),
+                        "prev_activation": makeTextureInfo(WebGL2, "float", new ArrayView(miniBatchSize, prev_Layer.unitSize)),
+                        "deltaZ": makeTextureInfo(WebGL2, "float", this.deltaZ),
+                        "deltaWeight" : this.deltaWeight.dt
+                    }
+                };
+            }
+
+            var param = this.params[param_id];
+
+            param.args["prev_activation"].value = prev_Layer.activation.dt;;
+            param.args["deltaZ"].value = this.deltaZ.dt;
+            param.args["deltaWeight"].value = this.deltaWeight.dt;
+
+            WebGL2.compute(param);
+        }
+
         Backpropagation() {
             var lap = new Lap(this.bwTime);
 
@@ -385,10 +444,16 @@ function CreateNeuralNetwork(gpgpu){
             this.deltaBias = this.deltaZ.Reduce((x, y) => x + y);
             lap.Time();
 
-            this.prevLayerActivation.dt = this.prevLayer.activation.dt;
-            this.deltaWeight = this.deltaZ.T().Dot2(WebGL2, this.prevLayerActivation);
-            lap.Time();
+            this.gpuDeltaWeight();
+            if(Math.random() < 0.01){
 
+                var delta_weight = new Float32Array(this.deltaWeight.dt);
+                this.prevLayerActivation.dt = this.prevLayer.activation.dt;
+                var delta_weight2 = this.deltaZ.T().Dot2(WebGL2, this.prevLayerActivation);
+                var diff = delta_weight2.diff(delta_weight);
+                Assert(diff < 0.0001, "delta-weight");
+            }
+            lap.Time();
 
             if(this.prevLayer instanceof InputLayer){
 
@@ -1270,10 +1335,6 @@ function CreateNeuralNetwork(gpgpu){
             }
 
             return X;
-        }
-
-        costAvg(cost) {
-            return xrange(cost.ncol).map(c => cost.Col(c).dt.map(x => Math.abs(x)).reduce((x, y) => x + y) / cost.nrow);
         }
 
         CorrectCount(Y){
