@@ -16,6 +16,7 @@ function CreateNeuralNetwork(gpgpu){
     var Momentum = 0.9;
     var useGradientCheck = false;
     var inGradientCheck = false;
+    var Shaders = CreateNeuralNetworkShaders();
 
     function Stats(tm, idx){
         switch(tm.length){
@@ -210,65 +211,7 @@ function CreateNeuralNetwork(gpgpu){
         }
 
         gpuForward(){
-            var vertex_shader =
-                `in float zero;
-
-            const int ActivationFunction_none       = 0;
-            const int ActivationFunction_sigmoid    = 1;
-            const int ActivationFunction_ReLU       = 2;
-
-            uniform int activationFunction;
-
-            // 2次元配列のテクスチャ
-            uniform sampler2D W;
-            uniform sampler2D X;
-            uniform sampler2D Bias;
-
-            out float z;
-            out float activation;
-
-            float sigmoid(float x){
-                return 1.0 / (1.0 + exp(-x));
-            }
-
-            void main() {
-                ivec2 X_sz = textureSize(X, 0);
-                ivec2 Bias_sz = textureSize(Bias, 0);
-
-                int batch_idx = gl_VertexID / Bias_sz.x;
-                int out_idx   = gl_VertexID % Bias_sz.x;
-
-                float sum = 0.0f;
-                for(int i = 0; i < X_sz.x; i++) {
-
-                    vec4 w = texelFetch(W, ivec2(i, out_idx), 0);
-
-                    vec4 x = texelFetch(X, ivec2(i, batch_idx), 0);
-
-                    sum += w.r * x.r;
-                }
-
-                vec4 bias = texelFetch(Bias, ivec2(out_idx, 0), 0);
-                sum += bias.r;
-
-                // 入力変数zeroの値は必要ないですが、使用しない変数はコンパイラが除去してしまいエラーになるので形の上だけ使用します。
-                // zeroの値は0なので計算結果には影響しません。
-                z = sum + zero;
-
-                switch(activationFunction){
-                case ActivationFunction_none:
-                    activation = z;
-                    break;
-
-                case ActivationFunction_sigmoid:
-                    activation = sigmoid(z);
-                    break;
-
-                case ActivationFunction_ReLU:
-                    activation = (0.0f < z ? z : 0.0f);
-                    break;
-                }
-            }`;
+            var vertex_shader = Shaders.FullyConnectedLayer_Forward;
 
             this.param = {
                 id : "Fully-Connected-Layer-forward," + miniBatchSize + "," + this.prevLayer.unitSize + "," + this.unitSize,
@@ -295,33 +238,7 @@ function CreateNeuralNetwork(gpgpu){
         }
 
         gpuDeltaX(){
-            var vertex_shader =
-                `in float zero;
-
-            // 2次元配列のテクスチャ
-            uniform sampler2D W;
-            uniform sampler2D deltaZ;
-
-            out float deltaX;
-
-            void main() {
-                ivec2 W_sz = textureSize(W, 0);
-
-                int batch_idx = gl_VertexID / W_sz.x;
-                int delta_x_idx   = gl_VertexID % W_sz.x;
-
-                float sum = 0.0f;
-                for(int i = 0; i < W_sz.y; i++) {
-
-                    vec4 w = texelFetch(W, ivec2(delta_x_idx, i), 0);
-
-                    vec4 z = texelFetch(deltaZ, ivec2(i, batch_idx), 0);
-
-                    sum += w.r * z.r;
-                }
-
-                deltaX = sum + zero;
-            }`;
+            var vertex_shader = Shaders.FullyConnectedLayer_DeltaX;
 
             var param_id = "Fully-Connected-Layer-gpu-delta-X," + miniBatchSize + "," + this.prevLayer.unitSize + "," + this.unitSize;
             if (this.params[param_id] == undefined){
@@ -371,32 +288,7 @@ function CreateNeuralNetwork(gpgpu){
         }
 
         gpuDeltaWeight(){
-            var vertex_shader =
-                `in float zero;
-
-            // 2次元配列のテクスチャ
-            uniform sampler2D prev_activation;
-            uniform sampler2D deltaZ;
-
-            out float deltaWeight;
-
-            void main() {
-                int row = gl_VertexID / WeightColSize;
-                int col = gl_VertexID % WeightColSize;
-
-                float sum = 0.0f;
-                int batch_idx;
-                for(batch_idx = 0; batch_idx < miniBatchSize; batch_idx++){
-
-                    vec4 pa = texelFetch(prev_activation, ivec2(col, batch_idx), 0);
-
-                    vec4 dz = texelFetch(deltaZ, ivec2(row, batch_idx), 0);
-
-                    sum += pa.r * dz.r;
-                }
-
-                deltaWeight = sum + zero;
-            }`;
+            var vertex_shader = Shaders.FullyConnectedLayer_DeltaWeight;
 
             var prev_Layer = this.prevLayer;
 
@@ -560,12 +452,11 @@ function CreateNeuralNetwork(gpgpu){
 
             var prev_activation = new ArrayView(miniBatchSize, prev_Layer.unitSize, prev_Layer.activation.dt);
 
-            var vs_id = "ConvolutionalLayer-forward";
-            var param_id = vs_id + ":" + this.filterSize + ":" + prev_Layer.channelSize + ":" + this.channelSize + ":" + this.imgRows + ":" + this.imgCols + ":" + miniBatchSize;
+            var param_id = "ConvolutionalLayer-forward:" + this.filterSize + ":" + prev_Layer.channelSize + ":" + this.channelSize + ":" + this.imgRows + ":" + this.imgCols + ":" + miniBatchSize;
 
             if (this.params[param_id] == undefined) {
 
-                var shader_src = Shaders[vs_id]
+                var shader_src = Shaders.ConvolutionalLayer_Forward
                     .replace(/channelSize/g, this.channelSize.toString() + "u")
                     .replace(/prevChannelSize/g, prev_Layer.channelSize.toString() + "u")
                     .replace(/rowCount/g, this.imgRows.toString() + "u")
@@ -703,15 +594,14 @@ function CreateNeuralNetwork(gpgpu){
             }
         }
 
-        gpuNablaWeights() {
+        gpuDeltaWeights() {
             var prev_Layer = this.prevLayer;
 
-            var vs_id = "ConvolutionalLayer-NablaWeights";
-            var param_id = vs_id + ":" + this.filterSize + ":" + prev_Layer.channelSize + ":" + this.channelSize + ":" + this.imgRows + ":" + this.imgCols + ":" + miniBatchSize;
+            var param_id = "ConvolutionalLayer-dabla-weights:" + this.filterSize + ":" + prev_Layer.channelSize + ":" + this.channelSize + ":" + this.imgRows + ":" + this.imgCols + ":" + miniBatchSize;
 
             if (this.params[param_id] == undefined) {
 
-                var shader_src = Shaders[vs_id]
+                var shader_src = Shaders.ConvolutionalLayer_DeltaWeights
                     .replace(/miniBatchSize/g, miniBatchSize.toString() + "u")
                     .replace(/channelSize/g, this.channelSize.toString() + "u")
                     .replace(/prevChannelSize/g, prev_Layer.channelSize.toString() + "u")
@@ -742,12 +632,11 @@ function CreateNeuralNetwork(gpgpu){
         gpuDeltaX() {
             var prev_Layer = this.prevLayer;
 
-            var vs_id = "ConvolutionalLayer-delta-X";
-            var param_id = vs_id + ":" + this.filterSize + ":" + prev_Layer.channelSize + ":" + this.channelSize + ":" + this.imgRows + ":" + this.imgCols + ":" + miniBatchSize;
+            var param_id = "ConvolutionalLayer-delta-X:" + this.filterSize + ":" + prev_Layer.channelSize + ":" + this.channelSize + ":" + this.imgRows + ":" + this.imgCols + ":" + miniBatchSize;
 
             if (this.params[param_id] == undefined) {
 
-                var shader_src = Shaders[vs_id]
+                var shader_src = Shaders.ConvolutionalLayer_DeltaX
                     .replace(/miniBatchSize/g, miniBatchSize.toString() + "u")
                     .replace(/channelSize/g, this.channelSize.toString() + "u")
                     .replace(/prevChannelSize/g, prev_Layer.channelSize.toString() + "u")
@@ -776,7 +665,7 @@ function CreateNeuralNetwork(gpgpu){
             WebGL2.compute(param);
         }
 
-        cpuNablaWeights() {
+        cpuDeltaWeights() {
             var prev_Layer = this.prevLayer;
             var RC = this.imgRows * this.imgCols;
             var prev_RC = prev_Layer.imgRows * prev_Layer.imgCols;
@@ -829,7 +718,7 @@ function CreateNeuralNetwork(gpgpu){
             Assert(weights_idx == this.deltaWeight.dt.length);
         }
 
-        cpuNablaBiases(){
+        cpuDeltaBiases(){
             var RC = this.imgRows * this.imgCols;
 
             // すべての特徴マップに対し
@@ -988,15 +877,15 @@ function CreateNeuralNetwork(gpgpu){
             this.cpuDeltaZ();
             lap.Time();
 
-            this.cpuNablaBiases();
+            this.cpuDeltaBiases();
             lap.Time();
 
-            this.gpuNablaWeights();
+            this.gpuDeltaWeights();
 
             if(miniBatchIdx == 0 || Math.random() < 0.01){
 
                 var delta_w = new Float32Array(this.deltaWeight.dt);
-                this.cpuNablaWeights();
+                this.cpuDeltaWeights();
 
                 var diff = this.deltaWeight.diff(delta_w);
                 if(0.00001 < diff){
@@ -1581,7 +1470,7 @@ function CreateNeuralNetwork(gpgpu){
 
                         ok_cnt += this.CorrectCount(Y);
 
-                        if (60 * 1000 < new Date() - show_time) {
+                        if (60 * 1000 < new Date() - show_time || idx == mini_batch_cnt - 1) {
 
                             var s = Stats(mini_batch_time, idx);
                             for(let layer of this.layers.slice(1)) {
@@ -1589,7 +1478,6 @@ function CreateNeuralNetwork(gpgpu){
                             }
                             var accuracy = ok_cnt / (idx * miniBatchSize);
                             console.log("update mini batch: %.2f %d  %s", accuracy, idx * miniBatchSize, s);
-                            yield 1;
 
                             show_time = new Date();
 
@@ -1602,6 +1490,7 @@ function CreateNeuralNetwork(gpgpu){
                                 this.testAccuracy[epoch_idx] = accuracy;
                             }
 
+                            yield 1;
                         }
                     }
 

@@ -1,59 +1,126 @@
-﻿var Shaders = {};
+﻿
+function CreateNeuralNetworkShaders() {
 
-Shaders["AttribTest"] = `
-precision highp sampler3D;
+    return {
+FullyConnectedLayer_Forward: 
+                `in float zero;
 
-in    float    w;
-in vec4      x;
-in vec4 y;
+            const int ActivationFunction_none       = 0;
+            const int ActivationFunction_sigmoid    = 1;
+            const int ActivationFunction_ReLU       = 2;
 
-uniform float biases[4];
-uniform float f;
-uniform vec4 ff;
-uniform sampler3D tt;
+            uniform int activationFunction;
 
-out vec4 z;
+            // 2次元配列のテクスチャ
+            uniform sampler2D W;
+            uniform sampler2D X;
+            uniform sampler2D Bias;
 
-void main() {
-    uint idx = uint(w) % 4u;
+            out float z;
+            out float activation;
 
-    vec4  txl = texelFetch(tt, ivec3(2, 3, 1), 0);
-    z = (x +y +ff +txl) +biases[idx]+f;
-}`;
+            float sigmoid(float x){
+                return 1.0 / (1.0 + exp(-x));
+            }
 
+            void main() {
+                ivec2 X_sz = textureSize(X, 0);
+                ivec2 Bias_sz = textureSize(Bias, 0);
 
-Shaders["Test"] = `
-precision highp sampler3D;
+                int batch_idx = gl_VertexID / Bias_sz.x;
+                int out_idx   = gl_VertexID % Bias_sz.x;
 
-in float idx_f;
+                float sum = 0.0f;
+                for(int i = 0; i < X_sz.x; i++) {
 
-uniform float biases[4];
+                    vec4 w = texelFetch(W, ivec2(i, out_idx), 0);
 
-uniform sampler3D prev_activation;
+                    vec4 x = texelFetch(X, ivec2(i, batch_idx), 0);
 
-out float z;
-out float activation;
+                    sum += w.r * x.r;
+                }
 
-void main() {
-    uint idx = uint(idx_f);
+                vec4 bias = texelFetch(Bias, ivec2(out_idx, 0), 0);
+                sum += bias.r;
 
-    uint Z = idx / uint(4 * 3 * 28);
-    idx %= uint(4 * 3 * 28);
+                // 入力変数zeroの値は必要ないですが、使用しない変数はコンパイラが除去してしまいエラーになるので形の上だけ使用します。
+                // zeroの値は0なので計算結果には影響しません。
+                z = sum + zero;
 
-    uint y = idx / uint(4 * 3);
-    idx %= uint(4 * 3);
+                switch(activationFunction){
+                case ActivationFunction_none:
+                    activation = z;
+                    break;
 
-    uint x = idx / uint(4);
-    idx %= uint(4);
+                case ActivationFunction_sigmoid:
+                    activation = sigmoid(z);
+                    break;
 
-    vec4  txl = texelFetch(prev_activation, ivec3(x, y, Z), 0);
+                case ActivationFunction_ReLU:
+                    activation = (0.0f < z ? z : 0.0f);
+                    break;
+                }
+            }`
+,
 
-    z = idx_f;
-    activation = txl[idx] + biases[idx];
-}`;
+FullyConnectedLayer_DeltaWeight:
+                `in float zero;
 
+            // 2次元配列のテクスチャ
+            uniform sampler2D prev_activation;
+            uniform sampler2D deltaZ;
 
-Shaders["ConvolutionalLayer-forward"] = `
+            out float deltaWeight;
+
+            void main() {
+                int row = gl_VertexID / WeightColSize;
+                int col = gl_VertexID % WeightColSize;
+
+                float sum = 0.0f;
+                int batch_idx;
+                for(batch_idx = 0; batch_idx < miniBatchSize; batch_idx++){
+
+                    vec4 pa = texelFetch(prev_activation, ivec2(col, batch_idx), 0);
+
+                    vec4 dz = texelFetch(deltaZ, ivec2(row, batch_idx), 0);
+
+                    sum += pa.r * dz.r;
+                }
+
+                deltaWeight = sum + zero;
+            }`
+,
+
+FullyConnectedLayer_DeltaX:
+                `in float zero;
+
+            // 2次元配列のテクスチャ
+            uniform sampler2D W;
+            uniform sampler2D deltaZ;
+
+            out float deltaX;
+
+            void main() {
+                ivec2 W_sz = textureSize(W, 0);
+
+                int batch_idx = gl_VertexID / W_sz.x;
+                int delta_x_idx   = gl_VertexID % W_sz.x;
+
+                float sum = 0.0f;
+                for(int i = 0; i < W_sz.y; i++) {
+
+                    vec4 w = texelFetch(W, ivec2(delta_x_idx, i), 0);
+
+                    vec4 z = texelFetch(deltaZ, ivec2(i, batch_idx), 0);
+
+                    sum += w.r * z.r;
+                }
+
+                deltaX = sum + zero;
+            }`
+,
+
+ConvolutionalLayer_Forward : `
 precision highp sampler3D;
 
 const int ActivationFunction_none       = 0;
@@ -133,10 +200,10 @@ void main() {
         activation = (0.0f < z ? z: 0.0f);
         break;
     }
-}`;
+}`
+,
 
-
-Shaders["ConvolutionalLayer-NablaWeights"] = `
+ConvolutionalLayer_DeltaWeights: `
 precision highp sampler3D;
 
 uniform sampler3D delta_z;
@@ -182,9 +249,10 @@ void main() {
     }
 
     nabla_w = sum + zero;
-}`;
+}`
+,
 
-Shaders["ConvolutionalLayer-delta-X"] = `
+ConvolutionalLayer_DeltaX : `
 precision highp sampler3D;
 
 uniform sampler3D delta_z;
@@ -242,57 +310,8 @@ void main() {
         }
     }
 
-    delta_x = sum +zero;
-}`;
+    delta_x = sum + zero;
+}`
 
-Shaders["vs-Texture"] = `
-uniform int B_Cols;
-
-uniform sampler2D A_Tex;
-uniform sampler2D B_Tex;
-
-in float idx_f;
-
-out float dot_val;
-
-void main() {
-    uint idx = uint(idx_f);
-    int i   = int(idx / uint(B_Cols));
-    int j   = int(idx % uint(B_Cols));
-
-    int k;
-    float sum = 0.0;
-    for(k = 0; k < _repeat_; k++) {
-        vec4  A_txl, B_txl;
-
-        A_txl = texelFetch(A_Tex, ivec2(k, i), 0);
-        B_txl = texelFetch(B_Tex, ivec2(k, j), 0);
-        sum   += dot(A_txl, B_txl);
-    }
-
-    dot_val = sum;
-}`;
-
-Shaders["vs-Uniform"] =
-`
-uniform int B_Cols;
-
-uniform vec4 A[_A_len_];
-uniform vec4 B[_B_len_];
-
-in float idx_f;
-
-out float dot_val;
-
-void main() {
-    uint idx = uint(idx_f);
-    int i   = int(idx / uint(B_Cols));
-    int j   = int(idx % uint(B_Cols));
-
-    int k;
-    float sum = 0.0;
-    for(k = 0; k < _repeat_; k++) {
-        sum += dot(A[_repeat_*i +k], B[_repeat_*j +k]);
-    }
-    dot_val = sum;
-}`;
+};
+}

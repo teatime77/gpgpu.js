@@ -1,5 +1,67 @@
 // JavaScript source code
 
+var TestShader = `
+precision highp sampler3D;
+
+in float idx_f;
+
+uniform float biases[4];
+
+uniform sampler3D prev_activation;
+
+out float z;
+out float activation;
+
+void main() {
+    uint idx = uint(idx_f);
+
+    uint Z = idx / uint(4 * 3 * 28);
+    idx %= uint(4 * 3 * 28);
+
+    uint y = idx / uint(4 * 3);
+    idx %= uint(4 * 3);
+
+    uint x = idx / uint(4);
+    idx %= uint(4);
+
+    vec4  txl = texelFetch(prev_activation, ivec3(x, y, Z), 0);
+
+    z = idx_f;
+    activation = txl[idx] + biases[idx];
+}`;
+
+var AttribTestShader = `
+precision highp sampler3D;
+
+in    float    w;
+in vec4      x;
+in vec4 y;
+
+uniform float biases[4];
+uniform float f;
+uniform vec4 ff;
+uniform sampler3D tt;
+
+out vec4 z;
+
+void main() {
+    uint idx = uint(w) % 4u;
+
+    vec4  txl = texelFetch(tt, ivec3(2, 3, 1), 0);
+    z = (x +y +ff +txl) +biases[idx]+f;
+}`;
+
+
+
+
+
+
+
+
+
+
+
+
 class FullyConnectedLayerTest extends FullyConnectedLayer {
     backward(Y, eta2) {
         this.nablaBiases = this.Delta;
@@ -84,7 +146,7 @@ class NetworkTest extends NeuralNetwork {
             "activation": activation,
         };
 
-        param.vertexShader = Shaders[vs_id];
+        param.vertexShader = TestShader;
         param.id = vs_id;
 
         WebGL2.compute(param);
@@ -486,7 +548,7 @@ function AttribTest(n) {
         "z": z
     };
 
-    param.vertexShader = Shaders[vs_id];
+    param.vertexShader = AttribTestShader;
     param.id = vs_id;
 
     WebGL2.compute(param);

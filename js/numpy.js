@@ -1,5 +1,63 @@
 ﻿// JavaScript source code
 
+var vsTextureShader = `
+uniform int B_Cols;
+
+uniform sampler2D A_Tex;
+uniform sampler2D B_Tex;
+
+in float idx_f;
+
+out float dot_val;
+
+void main() {
+    uint idx = uint(idx_f);
+    int i   = int(idx / uint(B_Cols));
+    int j   = int(idx % uint(B_Cols));
+
+    int k;
+    float sum = 0.0;
+    for(k = 0; k < _repeat_; k++) {
+        vec4  A_txl, B_txl;
+
+        A_txl = texelFetch(A_Tex, ivec2(k, i), 0);
+        B_txl = texelFetch(B_Tex, ivec2(k, j), 0);
+        sum   += dot(A_txl, B_txl);
+    }
+
+    dot_val = sum;
+}`;
+
+var vsUniformShader =
+`
+uniform int B_Cols;
+
+uniform vec4 A[_A_len_];
+uniform vec4 B[_B_len_];
+
+in float idx_f;
+
+out float dot_val;
+
+void main() {
+    uint idx = uint(idx_f);
+    int i   = int(idx / uint(B_Cols));
+    int j   = int(idx % uint(B_Cols));
+
+    int k;
+    float sum = 0.0;
+    for(k = 0; k < _repeat_; k++) {
+        sum += dot(A[_repeat_*i +k], B[_repeat_*j +k]);
+    }
+    dot_val = sum;
+}`;
+
+
+
+
+
+
+
 var vDot = {};
 
 function Assert(condition, message) {
@@ -455,9 +513,11 @@ class TNumpy {
             param.elementCount = A.nrow * B.ncol;
 
             var vs_id;
+            var vertex_shader;
             if (use_tex) {
 
                 vs_id = "vs-Texture";
+                vertex_shader = vsTextureShader;
                 param.args = {
                     "idx_f": MakeFloat32Index(param.elementCount),
                     "A_Tex": makeTextureInfo(WebGL2, "vec4", A),
@@ -468,7 +528,7 @@ class TNumpy {
             }
             else {
                 vs_id = "vs-Uniform";
-
+                vertex_shader = vsUniformShader;
                 param.args = {
                     "idx_f": MakeFloat32Index(param.elementCount),
                     "B_Cols": B.ncol,
@@ -483,7 +543,7 @@ class TNumpy {
             var repeat = (A.ncol / 4).toString();
             //        console.log("A_len:[" + A_len + "] B_len:[" + B_len + "] repeat:[" + repeat + "]");
 
-            param.vertexShader = Shaders[vs_id].replace(/_repeat_/g, repeat).replace(/_A_len_/g, A_len).replace(/_B_len_/g, B_len);
+            param.vertexShader = vertex_shader.replace(/_repeat_/g, repeat).replace(/_A_len_/g, A_len).replace(/_B_len_/g, B_len);
             param.id = vs_id + ":" + A.nrow + "," + A.ncol + "," + B.nrow + "," + B.ncol;
 
             var startTime = new Date();
@@ -589,14 +649,6 @@ class TNumpyRandom {
         //}
 
         return ret;
-    }
-
-    shuffle(v) {
-        var v2 = v.slice(0);
-        var idx = this.RandomSampling(v.length, v.length);
-        for (var i = 0; i < v.length; i++) {
-            v[i] = v2[idx[i]];
-        }
     }
 }
 
