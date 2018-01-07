@@ -388,7 +388,7 @@ class ArrayView {
         return new ArrayView(this.nrow, m.ncol, v);
     }
 
-    Dot2(m) {
+    Dot2(gpgpu, m) {
         var vertex_shader =
            `in float zero;
 
@@ -437,13 +437,13 @@ class ArrayView {
             vertexShader: vertex_shader,
             args: {
                 "zero": new Float32Array(this.nrow * m.ncol),
-                "A": WebGL2.makeTextureInfo("float", [this.nrow, this.ncol], this.dt),
-                "B": WebGL2.makeTextureInfo("float", [   m.nrow,    m.ncol], m.dt),
+                "A": gpgpu.makeTextureInfo("float", [this.nrow, this.ncol], this.dt),
+                "B": gpgpu.makeTextureInfo("float", [   m.nrow,    m.ncol], m.dt),
                 "C": C.dt,
             }
         };
 
-        WebGL2.compute(param);
+        gpgpu.compute(param);
 
         return C;
     }
