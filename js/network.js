@@ -1434,14 +1434,14 @@ function CreateNeuralNetwork(gpgpu){
                             }
 
                             var avg_costs = costs.reduce((x,y) => x + y) / miniBatchSize;
-                            if(mode == 0){
+                            //if(mode == 0){
 
-                                this.trainingCost.push( avg_costs );
-                            }
-                            else{
+                            //    this.trainingCost.push( avg_costs );
+                            //}
+                            //else{
 
-                                this.testCost.push( avg_costs );
-                            }
+                            //    this.testCost.push( avg_costs );
+                            //}
                         }
                         else{
 
@@ -1479,8 +1479,6 @@ function CreateNeuralNetwork(gpgpu){
                             var accuracy = ok_cnt / (idx * miniBatchSize);
                             console.log("update mini batch: %.2f %d  %s", accuracy, idx * miniBatchSize, s);
 
-                            show_time = new Date();
-
                             if(mode == 0){
 
                                 this.trainingAccuracy[epoch_idx] = accuracy;
@@ -1489,6 +1487,8 @@ function CreateNeuralNetwork(gpgpu){
 
                                 this.testAccuracy[epoch_idx] = accuracy;
                             }
+
+                            show_time = new Date();
 
                             yield 1;
                         }

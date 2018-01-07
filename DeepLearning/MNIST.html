@@ -105,7 +105,7 @@ Chromeの場合Ctrl+Shift+Iでデベロッパーツールのコンソールを�
             var gpgpu = CreateGPGPU();
 
             var net = CreateNeuralNetwork(gpgpu);
-
+/*
             net.setLayers([
                 net.InputLayer(1, 28, 28),
                 net.ConvolutionalLayer(5, 20, ActivationFunction.ReLU),
@@ -114,6 +114,19 @@ Chromeの場合Ctrl+Shift+Iでデベロッパーツールのコンソールを�
                 net.MaxPoolingLayer(2),
                 net.FullyConnectedLayer(100, ActivationFunction.ReLU),
 //                net.DropoutLayer(0.5),
+                net.FullyConnectedLayer(10, ActivationFunction.none)
+            ]);
+*/
+            net.setLayers([
+                net.InputLayer(1, 28, 28),
+                net.ConvolutionalLayer(5, 20, ActivationFunction.ReLU),
+                net.MaxPoolingLayer(2),
+                net.ConvolutionalLayer(5, 40, ActivationFunction.ReLU),
+                net.MaxPoolingLayer(2),
+                net.FullyConnectedLayer(1000, ActivationFunction.ReLU),
+                net.DropoutLayer(0.5),
+                net.FullyConnectedLayer(1000, ActivationFunction.ReLU),
+                net.DropoutLayer(0.5),
                 net.FullyConnectedLayer(10, ActivationFunction.none)
             ]);
 
@@ -136,18 +149,18 @@ Chromeの場合Ctrl+Shift+Iでデベロッパーツールのコンソールを�
                     RunNeuralNetwork(training_data, test_data);
                 }
 
+                /*
                 if (10 * 1000 < new Date() - lastPlotTime) {
 
+
                     trainingCostsPlot.show(net.trainingCost, "red");
-
                     testCostsPlot.show(net.testCost, "blue");
-
                     trainingAccuracyPlot.show(net.trainingAccuracy, "blue");
-
                     testAccuracyPlot.show(net.testAccuracy, "blue");
 
                     lastPlotTime = new Date();
                 }
+                */
             }, 1)
         }
 
