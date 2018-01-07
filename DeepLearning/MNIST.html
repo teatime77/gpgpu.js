@@ -3,13 +3,41 @@
 <html lang="en" xmlns="http://www.w3.org/1999/xhtml">
 <head>
     <meta charset="utf-8" />
-    <title></title>
-    <script type="text/javascript" src="js/shader.js"></script>
-    <script type="text/javascript" src="js/gpgpu.js"></script>
-    <script type="text/javascript" src="js/numpy.js"></script>
-    <script type="text/javascript" src="js/network.js"></script>
+    <title>MNISTのディープラーニング</title>
+    <script type="text/javascript" src="../js/shader.js"></script>
+    <script type="text/javascript" src="../js/gpgpu.js"></script>
+    <script type="text/javascript" src="../js/numpy.js"></script>
+    <script type="text/javascript" src="../js/network.js"></script>
+    <script type="text/javascript" src="../js/plot.js"></script>
+    <script type="text/javascript">
+        function draw() {
+            /* canvas要素のノードオブジェクト */
+            var canvas = document.getElementById('plot-canvas');
+            /* canvas要素の存在チェックとCanvas未対応ブラウザの対処 */
+            if (!canvas || !canvas.getContext) {
+                return false;
+            }
+
+            var plot = CreatePlot(canvas);
+            var X = [];
+            var Y1 = [];
+            var Y2 = [];
+            for (var i = 0; i < 20; i++) {
+                var x = 2 * Math.PI * i / 20;
+                X.push(x);
+                Y1.push(Math.sin(x) + 0.3 * Math.random())
+                Y2.push(Math.cos(x) + 0.3 * Math.random())
+            }
+
+            plot.plot(X, Y1, "red");
+            plot.plot(X, Y2, "blue");
+            plot.show();
+        }
+    </script>
+    <!--
+    -->
 </head>
-<body>
+<body onload="draw()">
 
     <h1>MNISTのディープラーニング</h1>
 
@@ -26,9 +54,14 @@
 
 Chromeの場合Ctrl+Shift+Iでデベロッパーツールのコンソールを表示すると学習の進行状況が見れます。<br />
 <br />
+
 <div id="drop_zone" style="width:100px; height:100px; background-color:darkgray">Drop files here</div>
+<canvas id="plot-canvas" width="400" height="400"></canvas><br />
 <canvas id="digit-canvas" width="28" height="28" style="width:28px; height:28px; background-color:aqua"/>
 <output id="list"></output>
+<!--
+    
+-->
 
     <script type="text/javascript">
         var TrainingImgCnt, TrainingDataImage, TrainingDataLabel, TrainingData;
