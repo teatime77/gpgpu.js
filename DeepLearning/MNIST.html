@@ -4,9 +4,9 @@
 <head>
     <meta charset="utf-8" />
     <title>MNISTのディープラーニング</title>
-    <script type="text/javascript" src="../js/shader.js"></script>
+    <script type="text/javascript" src="../js/util.js"></script>
     <script type="text/javascript" src="../js/gpgpu.js"></script>
-    <script type="text/javascript" src="../js/numpy.js"></script>
+    <script type="text/javascript" src="../js/shader.js"></script>
     <script type="text/javascript" src="../js/network.js"></script>
     <script type="text/javascript" src="../js/plot.js"></script>
     <script type="text/javascript" src="../js/MNIST.js"></script>
@@ -105,30 +105,34 @@ Chromeの場合Ctrl+Shift+Iでデベロッパーツールのコンソールを�
             var gpgpu = CreateGPGPU();
 
             var net = CreateNeuralNetwork(gpgpu);
-/*
-            net.setLayers([
-                net.InputLayer(1, 28, 28),
-                net.ConvolutionalLayer(5, 20, ActivationFunction.ReLU),
-                net.MaxPoolingLayer(2),
-                net.ConvolutionalLayer(5, 40, ActivationFunction.ReLU),
-                net.MaxPoolingLayer(2),
-                net.FullyConnectedLayer(100, ActivationFunction.ReLU),
-//                net.DropoutLayer(0.5),
-                net.FullyConnectedLayer(10, ActivationFunction.none)
-            ]);
-*/
-            net.setLayers([
-                net.InputLayer(1, 28, 28),
-                net.ConvolutionalLayer(5, 20, ActivationFunction.ReLU),
-                net.MaxPoolingLayer(2),
-                net.ConvolutionalLayer(5, 40, ActivationFunction.ReLU),
-                net.MaxPoolingLayer(2),
-                net.FullyConnectedLayer(1000, ActivationFunction.ReLU),
-                net.DropoutLayer(0.5),
-                net.FullyConnectedLayer(1000, ActivationFunction.ReLU),
-                net.DropoutLayer(0.5),
-                net.FullyConnectedLayer(10, ActivationFunction.none)
-            ]);
+            if (true) {
+
+                net.setLayers([
+                    net.InputLayer(1, 28, 28),
+                    net.ConvolutionalLayer(5, 20, ActivationFunction.ReLU),
+                    net.MaxPoolingLayer(2),
+                    net.ConvolutionalLayer(5, 40, ActivationFunction.ReLU),
+                    net.MaxPoolingLayer(2),
+                    net.FullyConnectedLayer(100, ActivationFunction.ReLU),
+    //                net.DropoutLayer(0.5),
+                    net.FullyConnectedLayer(10, ActivationFunction.none)
+                ]);
+            }
+            else {
+
+                net.setLayers([
+                    net.InputLayer(1, 28, 28),
+                    net.ConvolutionalLayer(5, 20, ActivationFunction.ReLU),
+                    net.MaxPoolingLayer(2),
+                    net.ConvolutionalLayer(5, 40, ActivationFunction.ReLU),
+                    net.MaxPoolingLayer(2),
+                    net.FullyConnectedLayer(1000, ActivationFunction.ReLU),
+                    net.DropoutLayer(0.5),
+                    net.FullyConnectedLayer(1000, ActivationFunction.ReLU),
+                    net.DropoutLayer(0.5),
+                    net.FullyConnectedLayer(10, ActivationFunction.none)
+                ]);
+            }
 
             var epochs = 60;
             var mini_batch_size = 10;
