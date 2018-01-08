@@ -10,211 +10,262 @@
     <script type="text/javascript" src="../js/network.js"></script>
     <script type="text/javascript" src="../js/plot.js"></script>
     <script type="text/javascript" src="../js/MNIST.js"></script>
-    <script type="text/javascript">
-
-        function plotGraph() {
-            /* canvas要素のノードオブジェクト */
-            var canvas = document.getElementById('plot-canvas');
-            /* canvas要素の存在チェックとCanvas未対応ブラウザの対処 */
-            if (!canvas || !canvas.getContext) {
-                return false;
-            }
-
-            var plot = CreatePlot(canvas);
-            var Y1 = [];
-            var Y2 = [];
-            for (var i = 0; i < 20; i++) {
-                var x = 2 * Math.PI * i / 20;
-                Y1.push(Math.sin(x) + 0.3 * Math.random())
-                Y2.push(Math.cos(x) + 0.3 * Math.random())
-            }
-
-            plot.plot(Y1, "red");
-            plot.plot(Y2, "blue");
-            plot.show();
-        }
-    </script>
-    <!--
-    -->
 </head>
-<body>
+<body onload="BodyOnLoad()">
+    <h3>MNISTのディープラーニング</h3>
 
-    <h1>MNISTのディープラーニング</h1>
-
-
-以下のサイトから4つのファイルをダウンロードして<b>Drop files here</b>と書かれているところにドロップしてください。<br />
+以下のサイトから4つのファイルをダウンロード後に解凍して、このページにドロップしてください。<br />
 <br />
-    <a href="http://yann.lecun.com/exdb/mnist/">http://yann.lecun.com/exdb/mnist/</a>
-<ul>
-    <li>t10k-images.idx3-ubyte</li>
-    <li>t10k-labels.idx1-ubyte</li>
-    <li>train-images.idx3-ubyte</li>
-    <li>train-labels.idx1-ubyte</li>
-</ul>
-
-Chromeの場合Ctrl+Shift+Iでデベロッパーツールのコンソールを表示すると学習の進行状況が見れます。<br />
+&nbsp;&nbsp;&nbsp;&nbsp;<a href="http://yann.lecun.com/exdb/mnist/">http://yann.lecun.com/exdb/mnist/</a><br />
+&nbsp;&nbsp;&nbsp;&nbsp;t10k-images.idx3-ubyte , t10k-labels.idx1-ubyte , train-images.idx3-ubyte , train-labels.idx1-ubyte<br />
 <br />
-
-<div id="drop_zone" style="width:100px; height:100px; background-color:darkgray">Drop files here</div>
-    <table border="1">
+<table border="1">
+    <thead>
         <tr>
+            <th ></th>
+            <th >トレーニング</th>
+            <th >テスト</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><b>コスト</b></td>
             <td>
-                <b>トレーニング コスト</b><br />
-                <canvas id="training-costs-canvas" width="300" height="200"></canvas>
+                <canvas id="training-costs-canvas" width="300" height="200"></canvas><br />
+                <b id="training-cost"></b>
             </td>
             <td>
-                <b>テスト コスト</b><br />
-                <canvas id="test-costs-canvas" width="300" height="200"></canvas>
+                <canvas id="test-costs-canvas" width="300" height="200"></canvas><br />
+                <b id="test-cost"></b>
             </td>
         </tr>
         <tr>
+            <td><b>正解率</b></td>
             <td>
-                <b>トレーニング 正解率</b><br />
-                <canvas id="training-accuracy-canvas" width="300" height="200"></canvas>
+                <canvas id="training-accuracy-canvas" width="300" height="200"></canvas><br />
+                <b id="training-accuracy"></b>
             </td>
             <td>
-                <b>テスト 正解率</b><br />
-                <canvas id="test-accuracy-canvas" width="300" height="200"></canvas>
+                <canvas id="test-accuracy-canvas" width="300" height="200"></canvas><br />
+                <b id="test-accuracy"></b>
             </td>
         </tr>
-    </table>
-<canvas id="plot-canvas" width="400" height="400"></canvas>
+    </tbody>
+</table>
     
 <br />
-<canvas id="digit-canvas" width="28" height="28" style="width:28px; height:28px; background-color:aqua"/>
-<!--
-    
--->
+現在のエポック = <span id="epoch-idx"></span>&nbsp;&nbsp;&nbsp;&nbsp;処理済みデータ数 = <span id="processed-data-cnt"></span><br />
+データ数 = ミニバッチの個数(<span id="mini-batch-cnt"></span>) × ミニバッチの大きさ(<span id="mini-batch-size"></span>) = <span id="total-data-cnt"></span><br />
+ミニバッチごとの処理時間 ( 単位:ミリ秒 )<br />
+&nbsp;&nbsp;&nbsp;&nbsp;全体 ( データ準備, 順伝播, コスト計算, 誤差逆伝播, パラメータ更新 )  <br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span id="processed-time-all"></span><br />
+&nbsp;&nbsp;&nbsp;&nbsp;レイヤー別 ( 順伝播, 誤差逆伝播, パラメータ更新 )  <br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span id="processed-time-layer"></span><br />
+<br />
+    <input type="button" value="停止" id="stop-resume" onclick="StopResumeClick()" disabled="true"  />
+<!-- 画像データの表示 ( デバック用 ) -->
+<canvas id="digit-canvas" width="28" height="28" style="width:28px; height:28px; background-color:gainsboro"/>
 
-    <script type="text/javascript">
-        //----------------------------------------------------------------------
-        var trainingCostsPlot, testCostsPlot, trainingAccuracyPlot, testAccuracyPlot;
-        var lastPlotTime;
-        var mnist = new MNIST(document.getElementById('digit-canvas'));
+<script type="text/javascript">
 
-        function RunNeuralNetwork(training_data, test_data) {
-            trainingCostsPlot = CreatePlot(document.getElementById('training-costs-canvas'));
-            testCostsPlot = CreatePlot(document.getElementById('test-costs-canvas'));
-            trainingAccuracyPlot = CreatePlot(document.getElementById('training-accuracy-canvas'));
-            testAccuracyPlot = CreatePlot(document.getElementById('test-accuracy-canvas'));
+    var trainingCostsPlot, testCostsPlot, trainingAccuracyPlot, testAccuracyPlot;
+    var theGPGPU;
+    var NeuralNetworkTimer;
+    var StopResumeButton;
 
-            lastPlotTime = new Date();
+    // 前回のプロット表示の時刻
+    var lastPlotTime;
 
-            plotGraph();
+    // MNISTのデータ読み込みのヘルパー オブジェクト
+    var mnist;
 
-            var gpgpu = CreateGPGPU();
+    /*
+        ページロード時の初期処理
+    */
+    function BodyOnLoad() {
+        trainingCostsPlot    = CreatePlot(document.getElementById('training-costs-canvas'));
+        testCostsPlot        = CreatePlot(document.getElementById('test-costs-canvas'));
+        trainingAccuracyPlot = CreatePlot(document.getElementById('training-accuracy-canvas'));
+        testAccuracyPlot     = CreatePlot(document.getElementById('test-accuracy-canvas'));
 
-            var net = CreateNeuralNetwork(gpgpu);
-            if (true) {
+        // 停止/再開ボタン
+        StopResumeButton = document.getElementById('stop-resume');
 
-                net.setLayers([
-                    net.InputLayer(1, 28, 28),
-                    net.ConvolutionalLayer(5, 20, ActivationFunction.ReLU),
-                    net.MaxPoolingLayer(2),
-                    net.ConvolutionalLayer(5, 40, ActivationFunction.ReLU),
-                    net.MaxPoolingLayer(2),
-                    net.FullyConnectedLayer(100, ActivationFunction.ReLU),
-    //                net.DropoutLayer(0.5),
-                    net.FullyConnectedLayer(10, ActivationFunction.none)
-                ]);
-            }
-            else {
+        theGPGPU = CreateGPGPU();
 
-                net.setLayers([
-                    net.InputLayer(1, 28, 28),
-                    net.ConvolutionalLayer(5, 20, ActivationFunction.ReLU),
-                    net.MaxPoolingLayer(2),
-                    net.ConvolutionalLayer(5, 40, ActivationFunction.ReLU),
-                    net.MaxPoolingLayer(2),
-                    net.FullyConnectedLayer(1000, ActivationFunction.ReLU),
-                    net.DropoutLayer(0.5),
-                    net.FullyConnectedLayer(1000, ActivationFunction.ReLU),
-                    net.DropoutLayer(0.5),
-                    net.FullyConnectedLayer(10, ActivationFunction.none)
-                ]);
-            }
+        // MNISTのデータ読み込みのヘルパー オブジェクト
+        mnist = new MNIST(document.getElementById('digit-canvas'));
+    }
 
-            var epochs = 60;
-            var mini_batch_size = 10;
-            var learning_rate = 0.03;// 0.1;// 0.01;// 0.1;// 0.12;// 0.16;// 0.2;// 0.05;// 0.1;
+    /*
+        停止/再開ボタン クリック
+    */
+    function StopResumeClick() {
+        if (NeuralNetworkTimer) {
+            // 実行中の場合
+
+            clearInterval(NeuralNetworkTimer);
+            NeuralNetworkTimer = undefined;
+
+            theGPGPU.clearAll();
+
+            StopResumeButton.value = "再開";
+        }
+        else {
+            // 停止中の場合
+
+            StopResumeButton.value = "停止";
+            RunNeuralNetwork();
+        }
+    }
+
+    function RunNeuralNetwork() {
+
+        lastPlotTime = new Date();
+
+        var net = CreateNeuralNetwork(theGPGPU);
+        if (false) {
+
+            net.setLayers([
+                net.InputLayer(1, 28, 28),
+                net.ConvolutionalLayer(5, 20, ActivationFunction.ReLU),
+                net.MaxPoolingLayer(2),
+                net.ConvolutionalLayer(5, 40, ActivationFunction.ReLU),
+                net.MaxPoolingLayer(2),
+                net.FullyConnectedLayer(100, ActivationFunction.ReLU),
+                net.FullyConnectedLayer(10, ActivationFunction.none)
+            ]);
+        }
+        else {
+
+            net.setLayers([
+                net.InputLayer(1, 28, 28),
+                net.ConvolutionalLayer(5, 20, ActivationFunction.ReLU),
+                net.MaxPoolingLayer(2),
+                net.ConvolutionalLayer(5, 40, ActivationFunction.ReLU),
+                net.MaxPoolingLayer(2),
+                net.FullyConnectedLayer(1000, ActivationFunction.ReLU),
+                net.DropoutLayer(0.5),
+                net.FullyConnectedLayer(1000, ActivationFunction.ReLU),
+                net.DropoutLayer(0.5),
+                net.FullyConnectedLayer(10, ActivationFunction.none)
+            ]);
+        }
+
+        var epochs = 60;
+        var mini_batch_size = 10;
+        var learning_rate = 0.03;// 0.1;// 0.01;// 0.1;// 0.12;// 0.16;// 0.2;// 0.05;// 0.1;
 //            learning_rate = 3.0;
 
-            var sgd_generator = net.SGD(training_data, test_data, epochs, mini_batch_size, learning_rate);
+        var sgd_generator = net.SGD(mnist.trainingData, mnist.testData, epochs, mini_batch_size, learning_rate);
 
-            var timer_fnc = setInterval(function () {
-                var ret = sgd_generator.next().value;
-                if (ret == 0) {
+        NeuralNetworkTimer = setInterval(function () {
+            var ret = sgd_generator.next().value;
+            if (ret == 0) {
 
-                    clearInterval(timer_fnc);
+                clearInterval(NeuralNetworkTimer);
+                NeuralNetworkTimer = undefined;
 
-                    gpgpu.clearAll();
-                    console.log("学習が終わりました。");
+                theGPGPU.clearAll();
+                console.log("学習が終わりました。");
 
-                    RunNeuralNetwork(training_data, test_data);
-                }
-
-                /*
-                if (10 * 1000 < new Date() - lastPlotTime) {
-
-
-                    trainingCostsPlot.show(net.trainingCost, "red");
-                    testCostsPlot.show(net.testCost, "blue");
-                    trainingAccuracyPlot.show(net.trainingAccuracy, "blue");
-                    testAccuracyPlot.show(net.testAccuracy, "blue");
-
-                    lastPlotTime = new Date();
-                }
-                */
-            }, 1)
-        }
-
-        // MNIST http://yann.lecun.com/exdb/mnist/
-
-        // JavaScript で File API を使用してファイルを読み取る
-        // https://www.html5rocks.com/ja/tutorials/file/dndfiles/
-        function handleFileSelect(evt) {
-            evt.stopPropagation();
-            evt.preventDefault();
-
-            var files = evt.dataTransfer.files; // FileList object.
-
-            // files is a FileList of File objects. List some properties.
-            for (var i = 0, f; f = files[i]; i++) {
-
-                var reader = new FileReader();
-                
-                // Closure to capture the file information.
-                reader.onload = (function (file_inf) {
-                    return function (e) {
-                        // Render thumbnail.
-                        var data = new Uint8Array(e.target.result);
-                        var file_name = escape(file_inf.name);
-
-                        mnist.onLoadFile(file_name, data);
-
-                        if (mnist.trainingData && mnist.testData) {
-
-                            RunNeuralNetwork(mnist.trainingData, mnist.testData);
-                        }
-                    };
-                })(f);
-                
-                // Read in the image file as a data URL.
-                reader.readAsArrayBuffer(f);
+                RunNeuralNetwork();
             }
+
+            
+            if (10 * 1000 < new Date() - lastPlotTime) {
+                // 前回のプロット表示から10秒が経過した場合
+
+                lastPlotTime = new Date();
+
+                trainingCostsPlot.show(net.trainingCost, "red");
+                testCostsPlot.show(net.testCost, "blue");
+                trainingAccuracyPlot.show(net.trainingAccuracy, "blue");
+                testAccuracyPlot.show(net.testAccuracy, "blue");
+
+                showText("training-cost", net.trainingCost[net.trainingCost.length - 1].toFixed(3));
+                showText("training-accuracy", net.trainingAccuracy[net.trainingAccuracy.length - 1].toFixed(3));
+
+                if (net.testCost.length != 0) {
+
+                    showText("test-cost", net.testCost[net.testCost.length - 1].toFixed(3));
+                    showText("test-accuracy", net.testAccuracy[net.testAccuracy.length - 1].toFixed(3));
+                }
+
+                showText("processed-data-cnt", net.processedDataCnt);
+                showText("epoch-idx", net.EpochIdx);
+
+                showText("mini-batch-cnt", net.miniBatchCnt);
+                showText("mini-batch-size", net.miniBatchSize);
+                showText("total-data-cnt", net.miniBatchCnt * net.miniBatchSize);
+
+                showText("processed-time-all", net.processedTimeAll);
+                showText("processed-time-layer", net.processedTimeLayer);
+            }
+            
+        }, 1)
+    }
+
+    /*
+        テキストを表示する。
+    */
+    function showText(id, text) {
+        document.getElementById(id).innerText = text;
+    }
+
+    /*
+        DragOverのイベント処理
+    */
+    function DragOverHandler(evt) {
+        evt.stopPropagation();
+        evt.preventDefault();
+        evt.dataTransfer.dropEffect = 'copy'; // Explicitly show this is a copy.
+    }
+
+
+    /*
+        Dropのイベント処理
+
+        JavaScript で File API を使用してファイルを読み取る。
+        https://www.html5rocks.com/ja/tutorials/file/dndfiles/
+    */
+    function DropHandler(evt) {
+        evt.stopPropagation();
+        evt.preventDefault();
+
+        var files = evt.dataTransfer.files; // FileList object.
+
+        // files is a FileList of File objects. List some properties.
+        for (var i = 0, f; f = files[i]; i++) {
+
+            var reader = new FileReader();
+                
+            // Closure to capture the file information.
+            reader.onload = (function (file_inf) {
+                return function (e) {
+                    // Render thumbnail.
+                    var data = new Uint8Array(e.target.result);
+                    var file_name = escape(file_inf.name);
+
+                    mnist.onLoadFile(file_name, data);
+
+                    if (mnist.trainingData && mnist.testData) {
+                        // トレーニング データとテスト データを読み込んだ場合
+
+                        StopResumeButton.disabled = false;
+                        RunNeuralNetwork();
+                    }
+                };
+            })(f);
+                
+            // Read in the image file as a data URL.
+            reader.readAsArrayBuffer(f);
         }
+    }
 
-        function handleDragOver(evt) {
-            evt.stopPropagation();
-            evt.preventDefault();
-            evt.dataTransfer.dropEffect = 'copy'; // Explicitly show this is a copy.
-        }
-
-        // Setup the dnd listeners.
-        var dropZone = document.getElementById('drop_zone');
-        dropZone.addEventListener('dragover', handleDragOver, false);
-        dropZone.addEventListener('drop', handleFileSelect, false);
-
-    </script>
+    // DragOverとDropのイベントを登録する。
+    document.body.addEventListener('dragover', DragOverHandler, false);
+    document.body.addEventListener('drop', DropHandler, false);
+</script>
 </body>
 </html>

@@ -7,10 +7,8 @@
 function CreateNeuralNetwork(gpgpu){
     var miniBatchSize;
     var miniBatchIdx;
-    var learningRate;
     var useSoftMax = true;
     var WebGL2;
-    var isTest = false;
     var TrainingDataCnt;
     var WeightDecay = 5.0;
     var Momentum = 0.9;
@@ -18,15 +16,16 @@ function CreateNeuralNetwork(gpgpu){
     var inGradientCheck = false;
     var Shaders = CreateNeuralNetworkShaders();
     var random = new RandomHelper();
+    var net;
 
     function Stats(tm, idx){
         switch(tm.length){
         case 0:
             return "-"
         case 1:
-            return "" + Math.floor(tm[0] / idx)
+            return "" + Math.round(tm[0] / idx)
         default:
-            return "[" + tm.map(x => Math.floor(x / idx)).reduce((x,y) => x + "," + y) + "]";
+            return "[" + tm.map(x => Math.round(x / idx)).reduce((x,y) => x + "," + y) + "]";
         }
     }
 
@@ -85,7 +84,7 @@ function CreateNeuralNetwork(gpgpu){
             }
         }
 
-        GradientCheck(net, batch_Y, exp_work, cost, batch_idx, layer_idx){
+        GradientCheck(batch_Y, exp_work, cost, batch_idx, layer_idx){
             if(! this.prevLayer){
                 return;
             }
@@ -340,28 +339,26 @@ function CreateNeuralNetwork(gpgpu){
             this.gpuDeltaWeight();
             lap.Time();
 
-            if(this.prevLayer instanceof InputLayer){
+            if(! (this.prevLayer instanceof InputLayer)){
 
-                return;
-            }
+                this.gpuDeltaX();
+                if(Math.random() < 0.01){
 
-            this.gpuDeltaX();
-            if(Math.random() < 0.01){
+                    var gpu_delta_x = new Float32Array(this.deltaX.dt);
+                    this.cpuDeltaX();
 
-                var gpu_delta_x = new Float32Array(this.deltaX.dt);
-                this.cpuDeltaX();
-
-                var diff = this.deltaX.diff(gpu_delta_x);
-                Assert(diff < 0.01, "delta-X");
+                    var diff = this.deltaX.diff(gpu_delta_x);
+                    Assert(diff < 0.01, "delta-X");
+                }
             }
             lap.Time();
         }
 
         updateParameter() {
-            var eta = learningRate / miniBatchSize;
-            var c = 1.0 - learningRate * WeightDecay / TrainingDataCnt;
-
             var lap = new Lap(this.udTime);
+            var eta = net.learningRate / miniBatchSize;
+            var c = 1.0 - net.learningRate * WeightDecay / TrainingDataCnt;
+
 
             for(var i = 0; i < this.weight.dt.length; i++){
                 this.weight.dt[i] -= eta * this.deltaWeight.dt[i];
@@ -555,36 +552,35 @@ function CreateNeuralNetwork(gpgpu){
 
             lap.Time();
 
-            if(miniBatchIdx != 0 && 0.1 < Math.random()){
+            if(miniBatchIdx == 0 || Math.random() < 0.01){
 
-                return;
-            }
+                var z_gpu_dt          = new Float32Array(this.z.dt);
+                var activation_gpu_dt = new Float32Array(this.activation.dt);
 
-            var z_gpu_dt          = new Float32Array(this.z.dt);
-            var activation_gpu_dt = new Float32Array(this.activation.dt);
+                this.cpuForward();
 
-            this.cpuForward();
+                var max_diff = 0;
 
-            var max_diff = 0;
-
-            // 出力先
-            var output_idx = 0;
-            for (var batch_idx = 0; batch_idx < miniBatchSize; batch_idx++) {
-                for (var channel_idx = 0; channel_idx < this.channelSize; channel_idx++) {
-                    for (var r1 = 0; r1 < this.imgRows; r1++) {
-                        for (var c1 = 0; c1 < this.imgCols; c1++) {
-                            var diff = Math.max(Math.abs(z_gpu_dt[output_idx] - this.z.dt[output_idx]), Math.abs(activation_gpu_dt[output_idx] - this.activation.dt[output_idx]));
-                            if (max_diff < diff) {
-                                if(0.001 < diff){
-                                    console.log("CNN forward : %dx%d %d %d %d %d %f", this.imgRows, this.imgCols, batch_idx, channel_idx, r1, c1, diff)
+                // 出力先
+                var output_idx = 0;
+                for (var batch_idx = 0; batch_idx < miniBatchSize; batch_idx++) {
+                    for (var channel_idx = 0; channel_idx < this.channelSize; channel_idx++) {
+                        for (var r1 = 0; r1 < this.imgRows; r1++) {
+                            for (var c1 = 0; c1 < this.imgCols; c1++) {
+                                var diff = Math.max(Math.abs(z_gpu_dt[output_idx] - this.z.dt[output_idx]), Math.abs(activation_gpu_dt[output_idx] - this.activation.dt[output_idx]));
+                                if (max_diff < diff) {
+                                    if(0.001 < diff){
+                                        console.log("CNN forward : %dx%d %d %d %d %d %f", this.imgRows, this.imgCols, batch_idx, channel_idx, r1, c1, diff)
+                                    }
+                                    max_diff = diff;
                                 }
-                                max_diff = diff;
+                                output_idx++;
                             }
-                            output_idx++;
                         }
                     }
                 }
             }
+            lap.Time();
         }
 
         gpuDeltaWeights() {
@@ -889,27 +885,24 @@ function CreateNeuralNetwork(gpgpu){
     //        AssertEq(gpu_nabla_weights, this.deltaWeight.dt);
             lap.Time();
 
-            if(this.prevLayer instanceof InputLayer){
+            if(! (this.prevLayer instanceof InputLayer)){
 
-                return;
-            }
+                this.gpuDeltaX();
 
-            this.gpuDeltaX();
+                if(miniBatchIdx == 0 || Math.random() < 0.01){
 
-            if(miniBatchIdx == 0 || Math.random() < 0.01){
+                    var delta_x1 = new Float32Array(this.deltaX.dt);
 
-                var delta_x1 = new Float32Array(this.deltaX.dt);
+                    this.cpuDeltaX();
 
-                this.cpuDeltaX();
-
-                var delta_x2 = this.cpuDeltaX2();
-                var diff1 = this.deltaX.diff(delta_x1);
-                var diff2 = this.deltaX.diff(delta_x2);
-                if(0.00001 < diff1 || 0.00001 < diff2){
-                    console.log("CNN delta-X diff:%f %f", diff1, diff2);
+                    var delta_x2 = this.cpuDeltaX2();
+                    var diff1 = this.deltaX.diff(delta_x1);
+                    var diff2 = this.deltaX.diff(delta_x2);
+                    if(0.00001 < diff1 || 0.00001 < diff2){
+                        console.log("CNN delta-X diff:%f %f", diff1, diff2);
+                    }
                 }
             }
-
             lap.Time();
         }
 
@@ -917,7 +910,7 @@ function CreateNeuralNetwork(gpgpu){
             var lap = new Lap(this.udTime);
 
             var prev_Layer = this.prevLayer;
-            var eta = learningRate / miniBatchSize;
+            var eta = net.learningRate / miniBatchSize;
 
             var weights_idx = 0;
 
@@ -1123,7 +1116,7 @@ function CreateNeuralNetwork(gpgpu){
         forward() {
             var lap = new Lap(this.fwTime);
             for(var i = 0; i < this.activation.dt.length; i++){
-                if(! isTest){
+                if(net.isTraining){
 
                     if(this.ratio <= Math.random()){
 
@@ -1162,6 +1155,7 @@ function CreateNeuralNetwork(gpgpu){
 
     class NeuralNetwork {
         constructor(gpgpu) {
+            net = this;
             WebGL2 = gpgpu;
             this.trainingCost = [];
             this.testCost = [];
@@ -1371,7 +1365,7 @@ function CreateNeuralNetwork(gpgpu){
                 for(var layer_idx = 0; layer_idx < this.layers.length; layer_idx++){
 
                     console.log("勾配確認 %s", this.layers[layer_idx].constructor.name);
-                    this.layers[layer_idx].GradientCheck(this, batch_Y, exp_work, costs[batch_idx], batch_idx, layer_idx);
+                    this.layers[layer_idx].GradientCheck(batch_Y, exp_work, costs[batch_idx], batch_idx, layer_idx);
                 }
             }
 
@@ -1380,21 +1374,20 @@ function CreateNeuralNetwork(gpgpu){
 
 
         * SGD(training_data, test_data, epochs, mini_batch_size, learning_rate) {
-            learningRate = learning_rate;
+            this.learningRate = learning_rate;
             var last_layer = this.layers[this.layers.length - 1];
             last_layer.costDerivative = new ArrayView(mini_batch_size, last_layer.unitSize);
             var exp_work = new Float32Array(last_layer.unitSize);
 
-            for (var epoch_idx = 0; epoch_idx < epochs; epoch_idx++) {
-                this.trainingAccuracy.push(0);
-                this.testAccuracy.push(0);
+            for (this.EpochIdx = 0; this.EpochIdx < epochs; this.EpochIdx++) {
 
                 for(var mode = 0; mode < 2; mode++){
                     var data;
                     var ok_cnt = 0;
+                    var cost_sum = 0;
 
-                    isTest = (mode == 1);
-                    if(mode == 0){
+                    this.isTraining = (mode == 0);
+                    if(this.isTraining){
 
                         data = training_data;
                         miniBatchSize = mini_batch_size;
@@ -1404,6 +1397,8 @@ function CreateNeuralNetwork(gpgpu){
                         data = test_data;
                         miniBatchSize = 10 * mini_batch_size;
                     }
+                    this.miniBatchSize = miniBatchSize;
+
                     var costs = new Float32Array(miniBatchSize);
 
                     this.layers.forEach(x => x.miniBatchSizeChanged());
@@ -1414,13 +1409,14 @@ function CreateNeuralNetwork(gpgpu){
 
                     var data_cnt = data.X.shape[0];
                     TrainingDataCnt = data_cnt;
-                    var mini_batch_cnt = Math.floor(data_cnt / miniBatchSize);
+                    this.miniBatchCnt = Math.floor(data_cnt / miniBatchSize);
                     var mini_batch_time = [];
-                    for (var idx = 0; idx < mini_batch_cnt; idx++) {
+
+                    for (var idx = 0; idx < this.miniBatchCnt; idx++) {
                         miniBatchIdx = idx;
+
                         var lap = new Lap(mini_batch_time);
                         var X = this.Laminate(data.X, idx_list, idx * miniBatchSize, miniBatchSize);
-                        lap.Time();
                         var Y = this.Laminate(data.Y, idx_list, idx * miniBatchSize, miniBatchSize);
                         lap.Time();
 
@@ -1435,23 +1431,15 @@ function CreateNeuralNetwork(gpgpu){
                                 costs[batch_idx] = this.SoftMax(last_layer.costDerivative.dt, last_layer.activation.dt, Y.dt, exp_work, last_layer.unitSize, batch_idx);
                             }
 
-                            var avg_costs = costs.reduce((x,y) => x + y) / miniBatchSize;
-                            //if(mode == 0){
-
-                            //    this.trainingCost.push( avg_costs );
-                            //}
-                            //else{
-
-                            //    this.testCost.push( avg_costs );
-                            //}
+                            cost_sum += costs.reduce((x,y) => x + y) / miniBatchSize;
                         }
                         else{
 
                             this.LeastSquaresDelta(last_layer.costDerivative.dt, last_layer.activation.dt, Y.dt);
                         }
+                        lap.Time();
 
-                        if(mode == 0){
-                            lap.Time();
+                        if(this.isTraining){
 
                             if(useGradientCheck){
 
@@ -1470,25 +1458,38 @@ function CreateNeuralNetwork(gpgpu){
                             lap.Time();
                         }
 
+                        // 処理データ数
+                        this.processedDataCnt = (idx + 1) * miniBatchSize;
+
+                        // 正解数
                         ok_cnt += this.CorrectCount(Y);
 
-                        if (60 * 1000 < new Date() - show_time || idx == mini_batch_cnt - 1) {
+                        // 正解率
+                        var accuracy = ok_cnt / this.processedDataCnt;
 
-                            var s = Stats(mini_batch_time, idx);
-                            for(let layer of this.layers.slice(1)) {
-                                s += " (" + Stats(layer.fwTime, idx) + " " + Stats(layer.bwTime, idx) + " " + Stats(layer.udTime, idx) + ")";
-                            }
-                            var accuracy = ok_cnt / (idx * miniBatchSize);
-                            console.log("update mini batch: %.2f %d  %s", accuracy, idx * miniBatchSize, s);
+                        // コスト
+                        var avg_cost = cost_sum / this.processedDataCnt;
 
-                            if(mode == 0){
+                        if(this.isTraining){
 
-                                this.trainingAccuracy[epoch_idx] = accuracy;
-                            }
-                            else{
+                            this.trainingCost[this.EpochIdx] = avg_cost;
+                            this.trainingAccuracy[this.EpochIdx] = accuracy;
+                        }
+                        else{
 
-                                this.testAccuracy[epoch_idx] = accuracy;
-                            }
+                            this.testCost[this.EpochIdx] = avg_cost;
+                            this.testAccuracy[this.EpochIdx] = accuracy;
+                        }
+
+                        if (10 * 1000 < new Date() - show_time) {
+
+                            // ミニバッチごとの処理時間 (全体)
+                            this.processedTimeAll = Stats(mini_batch_time, idx);
+
+                            // ミニバッチごとの処理時間 (レイヤー別)
+                            this.processedTimeLayer = this.layers.slice(1).map(layer => 
+                                "(" + Stats(layer.fwTime, idx) + " " + Stats(layer.bwTime, idx) + " " + Stats(layer.udTime, idx) + ")")
+                                .join("  ");
 
                             show_time = new Date();
 
@@ -1498,9 +1499,9 @@ function CreateNeuralNetwork(gpgpu){
 
                     this.layers.forEach(x => x.clear());
 
-                    if(mode == 1){
+                    if(! this.isTraining){
 
-                        console.log("Epoch %d  %d / %d eta:%.02f", epoch_idx, ok_cnt, mini_batch_cnt * miniBatchSize, learningRate);
+                        console.log("Epoch %d  %d / %d eta:%.02f", this.EpochIdx, ok_cnt, this.miniBatchCnt * miniBatchSize, this.learningRate);
                     }
                 }
 

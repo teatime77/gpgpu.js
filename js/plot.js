@@ -138,10 +138,11 @@ function CreatePlot(canvas_arg) {
             for (var i = 1; i * sc1 < this.maxY; i++) {
 
                 var y = i * sc1;
-                var txt = (pr1 < 0 ? y.toFixed(-pr1) : y.toFixed(0));
-                this.rightText(ctx, 0, y, txt);
 
                 this.drawLinePix(ctx, org_x - 3, this.pixY(y), org_x + 3, this.pixY(y));
+
+                var txt = (pr1 < 0 ? y.toFixed(-pr1) : y.toFixed(0));
+                this.rightText(ctx, 0, y, txt);
             }
         }
 
@@ -159,7 +160,9 @@ function CreatePlot(canvas_arg) {
         rightText(ctx, x, y, txt) {
             var tm = ctx.measureText(txt);
 
-            ctx.strokeText(txt, this.pixX(x) - this.margin - tm.width, this.pixY(y) + 8);
+            ctx.strokeStyle = "rgba(0,0,0,255)";
+            ctx.fillStyle = "rgba(0,0,0,255)";
+            ctx.strokeText(txt, Math.max(0, this.pixX(x) - this.margin - tm.width), this.pixY(y) + 8);
         }
     }
 

@@ -367,19 +367,3 @@ class TNumpy {
         return A.Dot(B);
     }
 }
-
-/*
-正規乱数のテスト
-var v = new Int32Array(200);
-for (var i = 0; i < 10000000; i++) {
-    var k = Math.floor(random.randn() * 25 + v.length / 2);
-    if (0 <= k && k < v.length) {
-        v[k]++;
-    }
-}
-for (var k = 0; k < v.length; k++) {
-    console.log("%d", v[k]);
-}
-*/
-
-
