@@ -17,7 +17,7 @@ FullyConnectedLayer_Forward:
             uniform sampler2D Bias;
 
             out float z;
-            out float activation;
+            out float y;
 
             float sigmoid(float x){
                 return 1.0 / (1.0 + exp(-x));
@@ -49,15 +49,15 @@ FullyConnectedLayer_Forward:
 
                 switch(activationFunction){
                 case ActivationFunction_none:
-                    activation = z;
+                    y = z;
                     break;
 
                 case ActivationFunction_sigmoid:
-                    activation = sigmoid(z);
+                    y = sigmoid(z);
                     break;
 
                 case ActivationFunction_ReLU:
-                    activation = (0.0f < z ? z : 0.0f);
+                    y = (0.0f < z ? z : 0.0f);
                     break;
                 }
             }`
@@ -67,7 +67,7 @@ FullyConnectedLayer_DeltaWeight:
                 `in float zero;
 
             // 2次元配列のテクスチャ
-            uniform sampler2D prev_activation;
+            uniform sampler2D prev_y;
             uniform sampler2D deltaZ;
 
             out float deltaWeight;
@@ -80,7 +80,7 @@ FullyConnectedLayer_DeltaWeight:
                 int batch_idx;
                 for(batch_idx = 0; batch_idx < miniBatchSize; batch_idx++){
 
-                    vec4 pa = texelFetch(prev_activation, ivec2(col, batch_idx), 0);
+                    vec4 pa = texelFetch(prev_y, ivec2(col, batch_idx), 0);
 
                     vec4 dz = texelFetch(deltaZ, ivec2(row, batch_idx), 0);
 
@@ -132,12 +132,12 @@ uniform int activationFunction;
 uniform float bias[numChannels];
 
 uniform sampler3D weight;
-uniform sampler3D prev_activation;
+uniform sampler3D prev_y;
 
 in float zero;
 
 out float z;
-out float activation;
+out float y;
 
 float sigmoid(float x){
     return 1.0 / (1.0 + exp(-x));
@@ -170,7 +170,7 @@ void main() {
                 uint c3 = c1 + c2;
                 uint r3 = r1 + r2;
 
-                vec4  txl = texelFetch(prev_activation, ivec3(c3, r3, batch_channel_idx), 0);
+                vec4  txl = texelFetch(prev_y, ivec3(c3, r3, batch_channel_idx), 0);
 
                 vec4  w   = texelFetch(weight, ivec3(c2, r2, weight_idx), 0);
 
@@ -185,15 +185,15 @@ void main() {
 
     switch(activationFunction) {
     case ActivationFunction_none:
-        activation = z;
+        y = z;
         break;
 
     case ActivationFunction_sigmoid:
-        activation = sigmoid(z);
+        y = sigmoid(z);
         break;
 
     case ActivationFunction_ReLU:
-        activation = (0.0f < z ? z: 0.0f);
+        y = (0.0f < z ? z: 0.0f);
         break;
     }
 }`
@@ -203,7 +203,7 @@ ConvolutionalLayer_DeltaWeights: `
 precision highp sampler3D;
 
 uniform sampler3D delta_z;
-uniform sampler3D prev_activation;
+uniform sampler3D prev_y;
 
 in float zero;
 
@@ -237,7 +237,7 @@ void main() {
 
                 vec4  dz = texelFetch(delta_z, ivec3(c1, r1, this_batch_channel), 0);
 
-                vec4  pa = texelFetch(prev_activation, ivec3(c3, r3, prev_batch_channel), 0);
+                vec4  pa = texelFetch(prev_y, ivec3(c3, r3, prev_batch_channel), 0);
 
                 sum += dz.r * pa.r;
             }

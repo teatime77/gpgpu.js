@@ -124,6 +124,8 @@
         lastPlotTime = new Date();
 
         var net = CreateNeuralNetwork(theGPGPU);
+        var learning_rate;          // 0.01;// 0.1;// 0.12;// 0.16;// 0.2;// 0.05;// 0.1;
+
         if (false) {
 
             net.setLayers([
@@ -135,6 +137,8 @@
                 net.FullyConnectedLayer(100, ActivationFunction.ReLU),
                 net.FullyConnectedLayer(10, ActivationFunction.none)
             ]);
+
+            learning_rate = 0.1;
         }
         else {
 
@@ -150,17 +154,12 @@
                 net.DropoutLayer(0.5),
                 net.FullyConnectedLayer(10, ActivationFunction.none)
             ]);
+
+            learning_rate = 0.03;
         }
 
         var epochs = 60;
         var mini_batch_size = 10;
-        var learning_rate;          // 0.01;// 0.1;// 0.12;// 0.16;// 0.2;// 0.05;// 0.1;
-        if (net.layers.length == 7) {
-            learning_rate = 0.1;
-        }
-        else {
-            learning_rate = 0.03;
-        }
 
         var sgd_generator = net.SGD(mnist.trainingData, mnist.testData, epochs, mini_batch_size, learning_rate);
 
