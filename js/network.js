@@ -68,7 +68,7 @@ function CreateNeuralNetwork(gpgpu){
         forward() {
         }
 
-        Backpropagation() {
+        backpropagation() {
         }
 
         updateParameter() {
@@ -92,29 +92,28 @@ function CreateNeuralNetwork(gpgpu){
             var last_layer = net.layers[net.layers.length - 1];
             var cost_derivative_work = new Float32Array(last_layer.costDerivative.dt.length);
 
-            // deltaX
             if(this.deltaX){
 
-                var prev_Layer = this.prevLayer;
+                var prev_layer = this.prevLayer;
 
-                var idx_list = random.RandomSampling(prev_Layer.unitSize, 3);
+                var idx_list = random.RandomSampling(prev_layer.unitSize, 3);
 
                 for(let i of idx_list){
-                    var k = batch_idx * prev_Layer.unitSize + i;
-                    var x = prev_Layer.activation.dt[k];
+                    var k = batch_idx * prev_layer.unitSize + i;
+                    var x = prev_layer.activation.dt[k];
                     var dx = this.deltaX.dt[k];
                     var eps = x * 0.01;
 
-                    prev_Layer.activation.dt[k] = x - eps;
+                    prev_layer.activation.dt[k] = x - eps;
                     var cost1 = net.forwardCost(batch_Y, exp_work, batch_idx, layer_idx, cost_derivative_work);
 
-                    prev_Layer.activation.dt[k] = x + eps;
+                    prev_layer.activation.dt[k] = x + eps;
                     var cost2 = net.forwardCost(batch_Y, exp_work, batch_idx, layer_idx, cost_derivative_work);
 
                     var diff = dx * 2 * eps - (cost2 - cost1);
                     console.log("delta-X : %f dC:%f eps:%f cost:%f,%f,%f", diff, dx, eps, cost1, cost - cost1, cost2 - cost);
 
-                    prev_Layer.activation.dt[k] = x;
+                    prev_layer.activation.dt[k] = x;
                 }
             }
 
@@ -134,9 +133,9 @@ function CreateNeuralNetwork(gpgpu){
         constructor(channel_size, rows, cols) {
             super();
 
-            this.channelSize = channel_size;
-            this.imgRows = rows;
-            this.imgCols = cols;
+            this.numChannels = channel_size;
+            this.numRows = rows;
+            this.numCols = cols;
             this.unitSize = rows * cols;
         }
     }
@@ -154,7 +153,7 @@ function CreateNeuralNetwork(gpgpu){
 
             case ActivationFunction.sigmoid:
                 for (var i = 0; i < this.deltaZ.dt.length; i++) {
-                    this.deltaZ.dt[i] = this.costDerivative.dt[i] * sigmoid_primeF(this.z.dt[i]);
+                    this.deltaZ.dt[i] = this.costDerivative.dt[i] * sigmoid_prime(this.z.dt[i]);
                 }
                 break;
 
@@ -199,7 +198,6 @@ function CreateNeuralNetwork(gpgpu){
             this.z          = new ArrayView(miniBatchSize,  this.unitSize);
             this.activation = new ArrayView(miniBatchSize,  this.unitSize);
             this.deltaX     = new ArrayView(miniBatchSize,  this.prevLayer.unitSize);
-            this.prevLayerActivation = new ArrayView(miniBatchSize,  this.prevLayer.unitSize);
 
             this.deltaZ     = new ArrayView(miniBatchSize,  this.unitSize);
 
@@ -290,13 +288,13 @@ function CreateNeuralNetwork(gpgpu){
         gpuDeltaWeight(){
             var vertex_shader = Shaders.FullyConnectedLayer_DeltaWeight;
 
-            var prev_Layer = this.prevLayer;
+            var prev_layer = this.prevLayer;
 
             var vertex_shader = vertex_shader
                 .replace(/miniBatchSize/g, miniBatchSize.toString())
-                .replace(/WeightColSize/g, prev_Layer.unitSize.toString());
+                .replace(/WeightColSize/g, prev_layer.unitSize.toString());
 
-            var param_id = "Fully-Connected-Layer-delta-weight," + miniBatchSize + "," + prev_Layer.unitSize + "," + this.unitSize;
+            var param_id = "Fully-Connected-Layer-delta-weight," + miniBatchSize + "," + prev_layer.unitSize + "," + this.unitSize;
             if (this.params[param_id] == undefined){
 
                 this.params[param_id] = {
@@ -304,7 +302,7 @@ function CreateNeuralNetwork(gpgpu){
                     vertexShader: vertex_shader,
                     args : {
                         "zero": new Float32Array(this.deltaWeight.dt.length),
-                        "prev_activation": makeTextureInfo(WebGL2, "float", new ArrayView(miniBatchSize, prev_Layer.unitSize)),
+                        "prev_activation": makeTextureInfo(WebGL2, "float", new ArrayView(miniBatchSize, prev_layer.unitSize)),
                         "deltaZ": makeTextureInfo(WebGL2, "float", this.deltaZ),
                         "deltaWeight" : this.deltaWeight.dt
                     }
@@ -313,14 +311,14 @@ function CreateNeuralNetwork(gpgpu){
 
             var param = this.params[param_id];
 
-            param.args["prev_activation"].value = prev_Layer.activation.dt;;
+            param.args["prev_activation"].value = prev_layer.activation.dt;;
             param.args["deltaZ"].value = this.deltaZ.dt;
             param.args["deltaWeight"].value = this.deltaWeight.dt;
 
             WebGL2.compute(param);
         }
 
-        Backpropagation() {
+        backpropagation() {
             var lap = new Lap(this.bwTime);
 
             if (this.nextLayer) {
@@ -383,7 +381,7 @@ function CreateNeuralNetwork(gpgpu){
             super();
 
             this.filterSize = filter_size;
-            this.channelSize = channel_size;
+            this.numChannels = channel_size;
             this.activationFunction = activation_function;
 
             this.params = {};
@@ -392,16 +390,16 @@ function CreateNeuralNetwork(gpgpu){
         init(prev_layer) {
             super.init(prev_layer);
 
-            this.imgRows = this.prevLayer.imgRows - this.filterSize + 1;
-            this.imgCols = this.prevLayer.imgCols - this.filterSize + 1;
-            this.unitSize = this.channelSize * this.imgRows * this.imgCols;
+            this.numRows = this.prevLayer.numRows - this.filterSize + 1;
+            this.numCols = this.prevLayer.numCols - this.filterSize + 1;
+            this.unitSize = this.numChannels * this.numRows * this.numCols;
 
-            this.bias = new ArrayView(this.channelSize);
+            this.bias = new ArrayView(this.numChannels);
             for (var i = 0; i < this.bias.dt.length; i++) {
                 this.bias.dt[i] = random.randn();
             }
 
-            this.weight = new ArrayView(this.channelSize, prev_layer.channelSize, this.filterSize, this.filterSize);
+            this.weight = new ArrayView(this.numChannels, prev_layer.numChannels, this.filterSize, this.filterSize);
             for (var i = 0; i < this.weight.dt.length; i++) {
                 this.weight.dt[i] = random.randn();
             }
@@ -413,8 +411,8 @@ function CreateNeuralNetwork(gpgpu){
                 }
             }
 
-            this.deltaBias    = new ArrayView(this.channelSize);
-            this.deltaWeight   = new ArrayView(this.channelSize, prev_layer.channelSize, this.filterSize, this.filterSize);
+            this.deltaBias    = new ArrayView(this.numChannels);
+            this.deltaWeight   = new ArrayView(this.numChannels, prev_layer.numChannels, this.filterSize, this.filterSize);
         }
 
         miniBatchSizeChanged(){
@@ -438,19 +436,19 @@ function CreateNeuralNetwork(gpgpu){
         }
 
         gpuForward() {
-            var prev_Layer = this.prevLayer;
+            var prev_layer = this.prevLayer;
 
-            var prev_activation = new ArrayView(miniBatchSize, prev_Layer.unitSize, prev_Layer.activation.dt);
+            var prev_activation = new ArrayView(miniBatchSize, prev_layer.unitSize, prev_layer.activation.dt);
 
-            var param_id = "ConvolutionalLayer-forward:" + this.filterSize + ":" + prev_Layer.channelSize + ":" + this.channelSize + ":" + this.imgRows + ":" + this.imgCols + ":" + miniBatchSize;
+            var param_id = "ConvolutionalLayer-forward:" + this.filterSize + ":" + prev_layer.numChannels + ":" + this.numChannels + ":" + this.numRows + ":" + this.numCols + ":" + miniBatchSize;
 
             if (this.params[param_id] == undefined) {
 
                 var shader_src = Shaders.ConvolutionalLayer_Forward
-                    .replace(/channelSize/g, this.channelSize.toString() + "u")
-                    .replace(/prevChannelSize/g, prev_Layer.channelSize.toString() + "u")
-                    .replace(/rowCount/g, this.imgRows.toString() + "u")
-                    .replace(/colCount/g, this.imgCols.toString() + "u")
+                    .replace(/numChannels/g, this.numChannels.toString() + "u")
+                    .replace(/prevChannelSize/g, prev_layer.numChannels.toString() + "u")
+                    .replace(/numRows/g, this.numRows.toString() + "u")
+                    .replace(/numCols/g, this.numCols.toString() + "u")
                     .replace(/filterSize/g, this.filterSize.toString() + "u");
 
                 this.params[param_id]  = {
@@ -459,10 +457,9 @@ function CreateNeuralNetwork(gpgpu){
                     args : {
                         "activationFunction": this.activationFunction,
                         "zero": this.zero,
-                        "prev_activation": makeTextureInfo(WebGL2, "float", new ArrayView(miniBatchSize * prev_Layer.channelSize, prev_Layer.imgRows, prev_Layer.imgCols)),
-                        "weights": makeTextureInfo(WebGL2, "float", new ArrayView(this.channelSize * prev_Layer.channelSize, this.filterSize, this.filterSize)),
-    //                    "weights": this.weight.dt,
-                        "biases": this.bias.dt,
+                        "prev_activation": makeTextureInfo(WebGL2, "float", new ArrayView(miniBatchSize * prev_layer.numChannels, prev_layer.numRows, prev_layer.numCols)),
+                        "weight": makeTextureInfo(WebGL2, "float", new ArrayView(this.numChannels * prev_layer.numChannels, this.filterSize, this.filterSize)),
+                        "bias": this.bias.dt,
                         "z": this.z.dt,
                         "activation": this.activation.dt
                     }
@@ -472,14 +469,14 @@ function CreateNeuralNetwork(gpgpu){
             var param = this.params[param_id];
 
             param.args["prev_activation"].value = prev_activation.dt;
-            param.args["weights"].value = this.weight.dt;
+            param.args["weight"].value = this.weight.dt;
             WebGL2.compute(param);
         }
 
         cpuForward() {
-            var prev_Layer = this.prevLayer;
+            var prev_layer = this.prevLayer;
 
-            var prev_activation_dt = prev_Layer.activation.dt;
+            var prev_activation_dt = prev_layer.activation.dt;
             var z_dt = this.z.dt;
             var activation_dt = this.activation.dt;
 
@@ -490,32 +487,32 @@ function CreateNeuralNetwork(gpgpu){
             for (var batch_idx = 0; batch_idx < miniBatchSize; batch_idx++) {
 
                 // すべての特徴マップに対し
-                for (var channel_idx = 0; channel_idx < this.channelSize; channel_idx++) {
+                for (var channel_idx = 0; channel_idx < this.numChannels; channel_idx++) {
 
                     // 出力の行に対し
-                    for (var r1 = 0; r1 < this.imgRows; r1++) {
+                    for (var r1 = 0; r1 < this.numRows; r1++) {
 
                         // 出力の列に対し
-                        for (var c1 = 0; c1 < this.imgCols; c1++) {
+                        for (var c1 = 0; c1 < this.numCols; c1++) {
 
                             var sum = 0.0;
-                            var weight_idx = channel_idx * prev_Layer.channelSize * this.filterSize * this.filterSize;
-                            var prev_activation_base = batch_idx * prev_Layer.channelSize * prev_Layer.imgRows * prev_Layer.imgCols;
+                            var weight_idx = channel_idx * prev_layer.numChannels * this.filterSize * this.filterSize;
+                            var prev_activation_base = batch_idx * prev_layer.numChannels * prev_layer.numRows * prev_layer.numCols;
 
                             // 入力のチャネルに対し
-                            for(var prev_channel_idx = 0; prev_channel_idx < prev_Layer.channelSize; prev_channel_idx++){
+                            for(var prev_channel_idx = 0; prev_channel_idx < prev_layer.numChannels; prev_channel_idx++){
 
                                 // フィルターの行に対し
                                 for (var r2 = 0; r2 < this.filterSize; r2++) {
 
                                     // フィルターの列に対し
                                     for (var c2 = 0; c2 < this.filterSize; c2++) {
-                                        var prev_activation_idx = prev_activation_base + (r1 + r2) * prev_Layer.imgCols + (c1 + c2);
+                                        var prev_activation_idx = prev_activation_base + (r1 + r2) * prev_layer.numCols + (c1 + c2);
                                         sum += prev_activation_dt[prev_activation_idx] * this.weight.dt[weight_idx];
                                         weight_idx++;
                                     }
                                 }
-                                prev_activation_base += prev_Layer.imgRows * prev_Layer.imgCols;
+                                prev_activation_base += prev_layer.numRows * prev_layer.numCols;
                             }
 
                             var z_val = sum + this.bias.dt[channel_idx];
@@ -529,7 +526,7 @@ function CreateNeuralNetwork(gpgpu){
                                 break;
 
                             case ActivationFunction.sigmoid:
-                                activation_dt[output_idx] =  sigmoidF(z_val);
+                                activation_dt[output_idx] =  sigmoid(z_val);
                                 break;
 
                             case ActivationFunction.ReLU:
@@ -564,13 +561,13 @@ function CreateNeuralNetwork(gpgpu){
                 // 出力先
                 var output_idx = 0;
                 for (var batch_idx = 0; batch_idx < miniBatchSize; batch_idx++) {
-                    for (var channel_idx = 0; channel_idx < this.channelSize; channel_idx++) {
-                        for (var r1 = 0; r1 < this.imgRows; r1++) {
-                            for (var c1 = 0; c1 < this.imgCols; c1++) {
+                    for (var channel_idx = 0; channel_idx < this.numChannels; channel_idx++) {
+                        for (var r1 = 0; r1 < this.numRows; r1++) {
+                            for (var c1 = 0; c1 < this.numCols; c1++) {
                                 var diff = Math.max(Math.abs(z_gpu_dt[output_idx] - this.z.dt[output_idx]), Math.abs(activation_gpu_dt[output_idx] - this.activation.dt[output_idx]));
                                 if (max_diff < diff) {
                                     if(0.001 < diff){
-                                        console.log("CNN forward : %dx%d %d %d %d %d %f", this.imgRows, this.imgCols, batch_idx, channel_idx, r1, c1, diff)
+                                        console.log("CNN forward : %dx%d %d %d %d %d %f", this.numRows, this.numCols, batch_idx, channel_idx, r1, c1, diff)
                                     }
                                     max_diff = diff;
                                 }
@@ -584,18 +581,18 @@ function CreateNeuralNetwork(gpgpu){
         }
 
         gpuDeltaWeights() {
-            var prev_Layer = this.prevLayer;
+            var prev_layer = this.prevLayer;
 
-            var param_id = "ConvolutionalLayer-dabla-weights:" + this.filterSize + ":" + prev_Layer.channelSize + ":" + this.channelSize + ":" + this.imgRows + ":" + this.imgCols + ":" + miniBatchSize;
+            var param_id = "ConvolutionalLayer-dabla-weight:" + this.filterSize + ":" + prev_layer.numChannels + ":" + this.numChannels + ":" + this.numRows + ":" + this.numCols + ":" + miniBatchSize;
 
             if (this.params[param_id] == undefined) {
 
                 var shader_src = Shaders.ConvolutionalLayer_DeltaWeights
                     .replace(/miniBatchSize/g, miniBatchSize.toString() + "u")
-                    .replace(/channelSize/g, this.channelSize.toString() + "u")
-                    .replace(/prevChannelSize/g, prev_Layer.channelSize.toString() + "u")
-                    .replace(/rowCount/g, this.imgRows.toString() + "u")
-                    .replace(/colCount/g, this.imgCols.toString() + "u")
+                    .replace(/numChannels/g, this.numChannels.toString() + "u")
+                    .replace(/prevChannelSize/g, prev_layer.numChannels.toString() + "u")
+                    .replace(/numRows/g, this.numRows.toString() + "u")
+                    .replace(/numCols/g, this.numCols.toString() + "u")
                     .replace(/filterSize/g, this.filterSize.toString() + "u");
 
                 this.params[param_id]  = {
@@ -603,8 +600,8 @@ function CreateNeuralNetwork(gpgpu){
                     vertexShader: shader_src,
                     args : {
                         "zero": new Float32Array(this.weight.dt.length),
-                        "prev_activation": makeTextureInfo(WebGL2, "float", new ArrayView(miniBatchSize * prev_Layer.channelSize, prev_Layer.imgRows, prev_Layer.imgCols)),
-                        "delta_z": makeTextureInfo(WebGL2, "float", new ArrayView(miniBatchSize * this.channelSize, this.imgRows, this.imgCols)),
+                        "prev_activation": makeTextureInfo(WebGL2, "float", new ArrayView(miniBatchSize * prev_layer.numChannels, prev_layer.numRows, prev_layer.numCols)),
+                        "delta_z": makeTextureInfo(WebGL2, "float", new ArrayView(miniBatchSize * this.numChannels, this.numRows, this.numCols)),
                         "nabla_w": this.deltaWeight.dt
                     }
                 };
@@ -612,27 +609,27 @@ function CreateNeuralNetwork(gpgpu){
 
             var param = this.params[param_id];
 
-            param.args["prev_activation"].value = prev_Layer.activation.dt;
+            param.args["prev_activation"].value = prev_layer.activation.dt;
             param.args["delta_z"].value = this.deltaZ.dt;
             WebGL2.compute(param);
         }
 
 
         gpuDeltaX() {
-            var prev_Layer = this.prevLayer;
+            var prev_layer = this.prevLayer;
 
-            var param_id = "ConvolutionalLayer-delta-X:" + this.filterSize + ":" + prev_Layer.channelSize + ":" + this.channelSize + ":" + this.imgRows + ":" + this.imgCols + ":" + miniBatchSize;
+            var param_id = "ConvolutionalLayer-delta-X:" + this.filterSize + ":" + prev_layer.numChannels + ":" + this.numChannels + ":" + this.numRows + ":" + this.numCols + ":" + miniBatchSize;
 
             if (this.params[param_id] == undefined) {
 
                 var shader_src = Shaders.ConvolutionalLayer_DeltaX
                     .replace(/miniBatchSize/g, miniBatchSize.toString() + "u")
-                    .replace(/channelSize/g, this.channelSize.toString() + "u")
-                    .replace(/prevChannelSize/g, prev_Layer.channelSize.toString() + "u")
-                    .replace(/prevRowCount/g, prev_Layer.imgRows.toString() + "u")
-                    .replace(/prevColCount/g, prev_Layer.imgCols.toString() + "u")
-                    .replace(/rowCount/g, this.imgRows.toString() + "u")
-                    .replace(/colCount/g, this.imgCols.toString() + "u")
+                    .replace(/numChannels/g, this.numChannels.toString() + "u")
+                    .replace(/prevChannelSize/g, prev_layer.numChannels.toString() + "u")
+                    .replace(/prevRowCount/g, prev_layer.numRows.toString() + "u")
+                    .replace(/prevColCount/g, prev_layer.numCols.toString() + "u")
+                    .replace(/numRows/g, this.numRows.toString() + "u")
+                    .replace(/numCols/g, this.numCols.toString() + "u")
                     .replace(/filterSize/g, this.filterSize.toString() + "u");
 
                 this.params[param_id]  = {
@@ -640,8 +637,8 @@ function CreateNeuralNetwork(gpgpu){
                     vertexShader: shader_src,
                     args : {
                         "zero": new Float32Array(this.deltaX.dt.length),
-                        "weights": makeTextureInfo(WebGL2, "float", new ArrayView(this.channelSize * prev_Layer.channelSize, this.filterSize, this.filterSize)),
-                        "delta_z": makeTextureInfo(WebGL2, "float", new ArrayView(miniBatchSize * this.channelSize, this.imgRows, this.imgCols)),
+                        "weight": makeTextureInfo(WebGL2, "float", new ArrayView(this.numChannels * prev_layer.numChannels, this.filterSize, this.filterSize)),
+                        "delta_z": makeTextureInfo(WebGL2, "float", new ArrayView(miniBatchSize * this.numChannels, this.numRows, this.numCols)),
                         "delta_x": this.deltaX.dt
                     }
                 };
@@ -649,22 +646,22 @@ function CreateNeuralNetwork(gpgpu){
 
             var param = this.params[param_id];
 
-            param.args["weights"].value = this.weight.dt;
+            param.args["weight"].value = this.weight.dt;
             param.args["delta_z"].value = this.deltaZ.dt;
             WebGL2.compute(param);
         }
 
-        cpuDeltaWeights() {
-            var prev_Layer = this.prevLayer;
-            var RC = this.imgRows * this.imgCols;
-            var prev_RC = prev_Layer.imgRows * prev_Layer.imgCols;
+        cpuDeltaWeight() {
+            var prev_layer = this.prevLayer;
+            var num_rows_cols = this.numRows * this.numCols;
+            var prev_RC = prev_layer.numRows * prev_layer.numCols;
 
             // 出力のチャネルに対し
             var weights_idx = 0;
-            for (var channel_idx = 0; channel_idx < this.channelSize; channel_idx++) {
+            for (var channel_idx = 0; channel_idx < this.numChannels; channel_idx++) {
 
                 // 入力のチャネルに対し
-                for(var prev_channel_idx = 0; prev_channel_idx < prev_Layer.channelSize; prev_channel_idx++){
+                for(var prev_channel_idx = 0; prev_channel_idx < prev_layer.numChannels; prev_channel_idx++){
 
                     // フィルターの行に対し
                     for (var r2 = 0; r2 < this.filterSize; r2++) {
@@ -675,13 +672,13 @@ function CreateNeuralNetwork(gpgpu){
                             var nabla_w = 0.0;
 
                             // 出力の行に対し
-                            for (var r1 = 0; r1 < this.imgRows; r1++) {
+                            for (var r1 = 0; r1 < this.numRows; r1++) {
 
                                 // 出力の列に対し
-                                for (var c1 = 0; c1 < this.imgCols; c1++) {
+                                for (var c1 = 0; c1 < this.numCols; c1++) {
 
-                                    var delta_z_idx = channel_idx * RC + r1 * (this.imgCols | 0) + c1;
-                                    var prev_activation_idx = prev_channel_idx * prev_RC + (r1 + r2) * (prev_Layer.imgCols | 0) + (c1 + c2);
+                                    var delta_z_idx = channel_idx * num_rows_cols + r1 * (this.numCols | 0) + c1;
+                                    var prev_activation_idx = prev_channel_idx * prev_RC + (r1 + r2) * (prev_layer.numCols | 0) + (c1 + c2);
 
                                     // バッチ内のデータに対し
                                     for (var batch_idx = 0; batch_idx < miniBatchSize; batch_idx++) {
@@ -689,11 +686,11 @@ function CreateNeuralNetwork(gpgpu){
                                         var delta = this.deltaZ.dt[delta_z_idx];
                                         if (delta != 0) {
 
-                                            nabla_w += delta * prev_Layer.activation.dt[prev_activation_idx];
+                                            nabla_w += delta * prev_layer.activation.dt[prev_activation_idx];
                                         }
 
                                         delta_z_idx += this.unitSize;
-                                        prev_activation_idx += (prev_Layer.unitSize | 0);
+                                        prev_activation_idx += (prev_layer.unitSize | 0);
                                     }
                                 }
                             }
@@ -707,30 +704,26 @@ function CreateNeuralNetwork(gpgpu){
             Assert(weights_idx == this.deltaWeight.dt.length);
         }
 
-        cpuDeltaBiases(){
-            var RC = this.imgRows * this.imgCols;
+        cpuDeltaBias(){
+            var num_rows_cols = this.numRows * this.numCols;
 
             // すべての特徴マップに対し
-            for (var channel_idx = 0; channel_idx < this.channelSize; channel_idx++) {
+            for (var channel_idx = 0; channel_idx < this.numChannels; channel_idx++) {
 
                 var nabla_b = 0.0;
 
                 // 出力の行に対し
-                for (var r1 = 0; r1 < this.imgRows; r1++) {
+                for (var r1 = 0; r1 < this.numRows; r1++) {
 
                     // 出力の列に対し
-                    for (var c1 = 0; c1 < this.imgCols; c1++) {
+                    for (var c1 = 0; c1 < this.numCols; c1++) {
 
                         // バッチ内のデータに対し
-    //                    var delta_z_idx = channel_idx * (r1 * c1) + r1 * this.imgCols;
-                        var delta_z_idx = channel_idx * RC + r1 * (this.imgCols | 0) + c1;
+                        var delta_z_idx = channel_idx * num_rows_cols + r1 * (this.numCols | 0) + c1;
                         for (var batch_idx = 0; batch_idx < miniBatchSize; batch_idx++) {
 
                             nabla_b += this.deltaZ.dt[delta_z_idx];
                             delta_z_idx += this.unitSize;
-
-                            //!!!!!! 直前が入力層なら必要なし !!!!!
-                            // this.costDerivative.dt[output_idx] = this.nextLayer.DeltaT[output_idx];
                         }
                     }
                 }
@@ -741,10 +734,10 @@ function CreateNeuralNetwork(gpgpu){
 
 
         cpuDeltaX2() {
-            var prev_Layer = this.prevLayer;
-            var delta_x = new Float32Array(miniBatchSize * prev_Layer.unitSize);
+            var prev_layer = this.prevLayer;
+            var delta_x = new Float32Array(miniBatchSize * prev_layer.unitSize);
 
-            var prev_activation_dt = prev_Layer.activation.dt;
+            var prev_activation_dt = prev_layer.activation.dt;
             var z_dt = this.z.dt;
             var activation_dt = this.activation.dt;
 
@@ -755,34 +748,34 @@ function CreateNeuralNetwork(gpgpu){
             for (var batch_idx = 0; batch_idx < miniBatchSize; batch_idx++) {
 
                 // すべての特徴マップに対し
-                for (var channel_idx = 0; channel_idx < this.channelSize; channel_idx++) {
+                for (var channel_idx = 0; channel_idx < this.numChannels; channel_idx++) {
 
                     // 出力の行に対し
-                    for (var r1 = 0; r1 < this.imgRows; r1++) {
+                    for (var r1 = 0; r1 < this.numRows; r1++) {
 
                         // 出力の列に対し
-                        for (var c1 = 0; c1 < this.imgCols; c1++) {
+                        for (var c1 = 0; c1 < this.numCols; c1++) {
 
                             var sum = 0.0;
-                            var weight_idx = channel_idx * prev_Layer.channelSize * this.filterSize * this.filterSize;
-                            var prev_activation_base = batch_idx * prev_Layer.channelSize * prev_Layer.imgRows * prev_Layer.imgCols;
+                            var weight_idx = channel_idx * prev_layer.numChannels * this.filterSize * this.filterSize;
+                            var prev_activation_base = batch_idx * prev_layer.numChannels * prev_layer.numRows * prev_layer.numCols;
 
                             // 入力のチャネルに対し
-                            for(var prev_channel_idx = 0; prev_channel_idx < prev_Layer.channelSize; prev_channel_idx++){
+                            for(var prev_channel_idx = 0; prev_channel_idx < prev_layer.numChannels; prev_channel_idx++){
 
                                 // フィルターの行に対し
                                 for (var r2 = 0; r2 < this.filterSize; r2++) {
 
                                     // フィルターの列に対し
                                     for (var c2 = 0; c2 < this.filterSize; c2++) {
-                                        var prev_activation_idx = prev_activation_base + (r1 + r2) * prev_Layer.imgCols + (c1 + c2);
+                                        var prev_activation_idx = prev_activation_base + (r1 + r2) * prev_layer.numCols + (c1 + c2);
                                         sum += prev_activation_dt[prev_activation_idx] * this.weight.dt[weight_idx];
 
                                         delta_x[prev_activation_idx] += this.deltaZ.dt[output_idx] * this.weight.dt[weight_idx]
                                         weight_idx++;
                                     }
                                 }
-                                prev_activation_base += prev_Layer.imgRows * prev_Layer.imgCols;
+                                prev_activation_base += prev_layer.numRows * prev_layer.numCols;
                             }
 
                             output_idx++;
@@ -795,8 +788,8 @@ function CreateNeuralNetwork(gpgpu){
         }
 
         cpuDeltaX() {
-            var prev_Layer = this.prevLayer;
-            var RC = this.imgRows * this.imgCols;
+            var prev_layer = this.prevLayer;
+            var num_rows_cols = this.numRows * this.numCols;
 
             var prev_activation_idx = 0;
 
@@ -804,20 +797,20 @@ function CreateNeuralNetwork(gpgpu){
             for (var batch_idx = 0; batch_idx < miniBatchSize; batch_idx++) {
 
                 // 入力のチャネルに対し
-                for(var prev_channel_idx = 0; prev_channel_idx < prev_Layer.channelSize; prev_channel_idx++){
+                for(var prev_channel_idx = 0; prev_channel_idx < prev_layer.numChannels; prev_channel_idx++){
 
                     // 入力の行に対し
-                    for (var r3 = 0; r3 < prev_Layer.imgRows; r3++) {
+                    for (var r3 = 0; r3 < prev_layer.numRows; r3++) {
 
                         // 入力の列に対し
-                        for (var c3 = 0; c3 < prev_Layer.imgCols; c3++) {
+                        for (var c3 = 0; c3 < prev_layer.numCols; c3++) {
 
                             var sum = 0.0;
 
                             // 出力のチャネルに対し
-                            for(var channel_idx = 0; channel_idx < this.channelSize; channel_idx++){
-                                var delta_z_base = batch_idx * this.unitSize + channel_idx * RC;
-                                var weight_base = (channel_idx * prev_Layer.channelSize + prev_channel_idx) * this.filterSize * this.filterSize;
+                            for(var channel_idx = 0; channel_idx < this.numChannels; channel_idx++){
+                                var delta_z_base = batch_idx * this.unitSize + channel_idx * num_rows_cols;
+                                var weight_base = (channel_idx * prev_layer.numChannels + prev_channel_idx) * this.filterSize * this.filterSize;
 
                                 // フィルターの行に対し
                                 for (var r2 = 0; r2 < this.filterSize; r2++) {
@@ -825,7 +818,7 @@ function CreateNeuralNetwork(gpgpu){
                                     // 出力の行
                                     var r1 = r3 - r2;
 
-                                    if(0 <= r1 && r1 < this.imgRows){
+                                    if(0 <= r1 && r1 < this.numRows){
 
                                         // フィルターの列に対し
                                         for (var c2 = 0; c2 < this.filterSize; c2++) {
@@ -833,9 +826,9 @@ function CreateNeuralNetwork(gpgpu){
                                             // 出力の列
                                             var c1 = c3 - c2;
 
-                                            if(0 <= c1 && c1 < this.imgCols){
+                                            if(0 <= c1 && c1 < this.numCols){
 
-                                                var delta_z_idx = delta_z_base + r1 * this.imgCols + c1;
+                                                var delta_z_idx = delta_z_base + r1 * this.numCols + c1;
                                                 var weight_idx = weight_base + r2 * this.filterSize + c2;
                                                 sum += this.deltaZ.dt[delta_z_idx] * this.weight.dt[weight_idx];
                                             }
@@ -850,11 +843,11 @@ function CreateNeuralNetwork(gpgpu){
                     }
                 }
             }
-            Assert(prev_activation_idx == miniBatchSize * prev_Layer.unitSize);
+            Assert(prev_activation_idx == miniBatchSize * prev_layer.unitSize);
         }
 
 
-        Backpropagation() {
+        backpropagation() {
             var lap = new Lap(this.bwTime);
 
             if (this.nextLayer) {
@@ -866,7 +859,7 @@ function CreateNeuralNetwork(gpgpu){
             this.cpuDeltaZ();
             lap.Time();
 
-            this.cpuDeltaBiases();
+            this.cpuDeltaBias();
             lap.Time();
 
             this.gpuDeltaWeights();
@@ -874,7 +867,7 @@ function CreateNeuralNetwork(gpgpu){
             if(miniBatchIdx == 0 || Math.random() < 0.01){
 
                 var delta_w = new Float32Array(this.deltaWeight.dt);
-                this.cpuDeltaWeights();
+                this.cpuDeltaWeight();
 
                 var diff = this.deltaWeight.diff(delta_w);
                 if(0.00001 < diff){
@@ -882,7 +875,6 @@ function CreateNeuralNetwork(gpgpu){
                 }
             }
 
-    //        AssertEq(gpu_nabla_weights, this.deltaWeight.dt);
             lap.Time();
 
             if(! (this.prevLayer instanceof InputLayer)){
@@ -909,18 +901,18 @@ function CreateNeuralNetwork(gpgpu){
         updateParameter() {
             var lap = new Lap(this.udTime);
 
-            var prev_Layer = this.prevLayer;
+            var prev_layer = this.prevLayer;
             var eta = net.learningRate / miniBatchSize;
 
             var weights_idx = 0;
 
             // 出力のチャネルに対し
-            for (var channel_idx = 0; channel_idx < this.channelSize; channel_idx++) {
+            for (var channel_idx = 0; channel_idx < this.numChannels; channel_idx++) {
 
                 this.bias.dt[channel_idx] -= eta * this.deltaBias.dt[channel_idx];
 
                 // 入力のチャネルに対し
-                for(var prev_channel_idx = 0; prev_channel_idx < prev_Layer.channelSize; prev_channel_idx++){
+                for(var prev_channel_idx = 0; prev_channel_idx < prev_layer.numChannels; prev_channel_idx++){
 
                     // フィルターの行に対し
                     for (var r2 = 0; r2 < this.filterSize; r2++) {
@@ -956,13 +948,13 @@ function CreateNeuralNetwork(gpgpu){
 
             Assert(this.prevLayer instanceof ConvolutionalLayer, "Pooling-Layer-init");
 
-            this.channelSize = this.prevLayer.channelSize;
-            this.imgRows = this.prevLayer.imgRows / this.filterSize;
-            this.imgCols = this.prevLayer.imgCols / this.filterSize;
+            this.numChannels = this.prevLayer.numChannels;
+            this.numRows = this.prevLayer.numRows / this.filterSize;
+            this.numCols = this.prevLayer.numCols / this.filterSize;
 
-            Assert(Math.ceil(this.imgRows) == this.imgRows && Math.ceil(this.imgCols) == this.imgCols);
+            Assert(Math.ceil(this.numRows) == this.numRows && Math.ceil(this.numCols) == this.numCols);
 
-            this.unitSize = this.channelSize * this.imgRows * this.imgCols;
+            this.unitSize = this.numChannels * this.numRows * this.numCols;
         }
 
         miniBatchSizeChanged(){
@@ -977,9 +969,9 @@ function CreateNeuralNetwork(gpgpu){
         forward() {
             var lap = new Lap(this.fwTime);
 
-            var prev_Layer = this.prevLayer;
+            var prev_layer = this.prevLayer;
 
-            var prev_activation_dt = prev_Layer.activation.dt;
+            var prev_activation_dt = prev_layer.activation.dt;
 
             // 出力先
             var output_idx = 0;
@@ -988,21 +980,21 @@ function CreateNeuralNetwork(gpgpu){
             for (var batch_idx = 0; batch_idx < miniBatchSize; batch_idx++) {
 
                 // すべての特徴マップに対し
-                for (var channel_idx = 0; channel_idx < this.channelSize; channel_idx++) {
+                for (var channel_idx = 0; channel_idx < this.numChannels; channel_idx++) {
 
                     // 出力の行に対し
-                    for (var r1 = 0; r1 < this.imgRows; r1++) {
+                    for (var r1 = 0; r1 < this.numRows; r1++) {
                         var r0 = r1 * this.filterSize;
 
                         // 出力の列に対し
-                        for (var c1 = 0; c1 < this.imgCols; c1++) {
+                        for (var c1 = 0; c1 < this.numCols; c1++) {
                             var c0 = c1 * this.filterSize;
 
                             if(inGradientCheck){
 
                                 var r2 = this.maxRow[output_idx];
                                 var c2 = this.maxCol[output_idx];
-                                var prev_activation_idx = batch_idx * prev_Layer.unitSize + (channel_idx * prev_Layer.imgRows + (r0 + r2)) * prev_Layer.imgCols + (c0 + c2);
+                                var prev_activation_idx = batch_idx * prev_layer.unitSize + (channel_idx * prev_layer.numRows + (r0 + r2)) * prev_layer.numCols + (c0 + c2);
                                 this.activation.dt[output_idx] = prev_activation_dt[prev_activation_idx];
                             }
                             else{
@@ -1016,7 +1008,7 @@ function CreateNeuralNetwork(gpgpu){
                                     // フィルターの列に対し
                                     for (var c2 = 0; c2 < this.filterSize; c2++) {
 
-                                        var prev_activation_idx = batch_idx * prev_Layer.unitSize + (channel_idx * prev_Layer.imgRows + (r0 + r2)) * prev_Layer.imgCols + (c0 + c2);
+                                        var prev_activation_idx = batch_idx * prev_layer.unitSize + (channel_idx * prev_layer.numRows + (r0 + r2)) * prev_layer.numCols + (c0 + c2);
                                         var val = prev_activation_dt[prev_activation_idx];
                                         if (max_val < val) {
 
@@ -1042,10 +1034,10 @@ function CreateNeuralNetwork(gpgpu){
             lap.Time();
         }
 
-        Backpropagation() {
+        backpropagation() {
             var lap = new Lap(this.bwTime);
 
-            var prev_Layer = this.prevLayer;
+            var prev_layer = this.prevLayer;
 
             Assert(this.activation.dt.length == this.nextLayer.deltaX.dt.length);
 
@@ -1061,15 +1053,15 @@ function CreateNeuralNetwork(gpgpu){
             for (var batch_idx = 0; batch_idx < miniBatchSize; batch_idx++) {
 
                 // すべての特徴マップに対し
-                for (var channel_idx = 0; channel_idx < this.channelSize; channel_idx++) {
-                    var offset = batch_idx * prev_Layer.unitSize + channel_idx * prev_Layer.imgRows * prev_Layer.imgCols;
+                for (var channel_idx = 0; channel_idx < this.numChannels; channel_idx++) {
+                    var offset = batch_idx * prev_layer.unitSize + channel_idx * prev_layer.numRows * prev_layer.numCols;
 
                     // 出力の行に対し
-                    for (var r1 = 0; r1 < this.imgRows; r1++) {
+                    for (var r1 = 0; r1 < this.numRows; r1++) {
                         var r0 = r1 * this.filterSize;
 
                         // 出力の列に対し
-                        for (var c1 = 0; c1 < this.imgCols; c1++) {
+                        for (var c1 = 0; c1 < this.numCols; c1++) {
                             var c0 = c1 * this.filterSize;
 
                             var delta = this.nextLayer.deltaX.dt[output_idx];
@@ -1077,7 +1069,7 @@ function CreateNeuralNetwork(gpgpu){
 
                                 var r2 = this.maxRow[output_idx] | 0;
                                 var c2 = this.maxCol[output_idx] | 0;
-                                var prev_activation_idx = offset + (r0 + r2) * prev_Layer.imgCols + (c0 + c2);
+                                var prev_activation_idx = offset + (r0 + r2) * prev_layer.numCols + (c0 + c2);
                                 this.deltaX.dt[prev_activation_idx] += delta;
                             }
 
@@ -1137,7 +1129,7 @@ function CreateNeuralNetwork(gpgpu){
             lap.Time();
         }
 
-        Backpropagation() {
+        backpropagation() {
             var lap = new Lap(this.bwTime);
             for(var i = 0; i < this.activation.dt.length; i++){
                 if(this.valid[i] == 1){
@@ -1229,7 +1221,7 @@ function CreateNeuralNetwork(gpgpu){
         }
 
         /*
-        最小二乗誤差の微分
+            最小二乗誤差の微分
         */
         LeastSquaresDelta(cost_derivative, last_y, batch_Y) {
             for(var i = 0; i < cost_derivative.length; i++){
@@ -1238,7 +1230,7 @@ function CreateNeuralNetwork(gpgpu){
         }
 
         /*
-        損失関数の微分
+            損失関数の微分
         */
         SoftMax(cost_derivative, last_y, batch_Y, exp_work, range_len, batch_idx) {
             var cost_sum = 0;
@@ -1359,7 +1351,7 @@ function CreateNeuralNetwork(gpgpu){
                 }
 
                 for (var i = this.layers.length - 1; 1 <= i; i--) {
-                    this.layers[i].Backpropagation();
+                    this.layers[i].backpropagation();
                 }
 
                 for(var layer_idx = 0; layer_idx < this.layers.length; layer_idx++){
@@ -1448,7 +1440,7 @@ function CreateNeuralNetwork(gpgpu){
                             else{
 
                                 for (var i = this.layers.length - 1; 1 <= i; i--) {
-                                    this.layers[i].Backpropagation();
+                                    this.layers[i].backpropagation();
                                 }
                             }
 
@@ -1512,13 +1504,12 @@ function CreateNeuralNetwork(gpgpu){
         }
     }
 
-    function sigmoid_primeF(z) {
-        var f = sigmoidF(z);
+    function sigmoid_prime(z) {
+        var f = sigmoid(z);
         return f * (1 - f);
     }
 
-    //??
-    function sigmoidF(z){
+    function sigmoid(z){
         return 1.0 / (1.0 + Math.exp(-z));
     }
 

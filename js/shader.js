@@ -129,10 +129,9 @@ const int ActivationFunction_ReLU       = 2;
 
 uniform int activationFunction;
 
-//uniform float weights[channelSize * prevChannelSize * filterSize * filterSize];
-uniform float biases[channelSize];
+uniform float bias[numChannels];
 
-uniform sampler3D weights;
+uniform sampler3D weight;
 uniform sampler3D prev_activation;
 
 in float zero;
@@ -147,20 +146,19 @@ float sigmoid(float x){
 void main() {
     uint idx = uint(gl_VertexID);
 
-    uint batch_idx = idx / (channelSize * rowCount * colCount);
-    idx     -= batch_idx * (channelSize * rowCount * colCount);
+    uint batch_idx = idx / (numChannels * numRows * numCols);
+    idx     -= batch_idx * (numChannels * numRows * numCols);
 
-    uint channel_idx  = idx / (rowCount * colCount);
-    idx      -= channel_idx * (rowCount * colCount);
+    uint channel_idx  = idx / (numRows * numCols);
+    idx      -= channel_idx * (numRows * numCols);
 
-    uint r1 = idx / colCount;
-    uint c1 = idx - r1 * colCount;
+    uint r1 = idx / numCols;
+    uint c1 = idx - r1 * numCols;
 
     uint batch_channel_idx = batch_idx * prevChannelSize;
 
     uint prev_channel_idx, r2, c2;
     float sum = 0.0f;
-//    uint weight_idx = channel_idx * prevChannelSize * filterSize * filterSize;
     uint weight_idx = channel_idx * prevChannelSize;
 
     for(prev_channel_idx = 0u; prev_channel_idx < prevChannelSize; prev_channel_idx++) {
@@ -174,18 +172,16 @@ void main() {
 
                 vec4  txl = texelFetch(prev_activation, ivec3(c3, r3, batch_channel_idx), 0);
 
-                vec4  w   = texelFetch(weights, ivec3(c2, r2, weight_idx), 0);
+                vec4  w   = texelFetch(weight, ivec3(c2, r2, weight_idx), 0);
 
                 sum += txl.r * w.r;
-//                sum += txl.r * weights[weight_idx];
-//                weight_idx++;
             }
         }
         batch_channel_idx++;
         weight_idx++;
     }
 
-    z = sum + biases[channel_idx] + zero;
+    z = sum + bias[channel_idx] + zero;
 
     switch(activationFunction) {
     case ActivationFunction_none:
@@ -228,15 +224,15 @@ void main() {
     uint r1, c1, batch_idx;
     float sum = 0.0f;
 
-    for (r1 = 0u; r1 < rowCount; r1++) {
+    for (r1 = 0u; r1 < numRows; r1++) {
         uint r3 = r1 + r2;
 
-        for (c1 = 0u; c1 < colCount; c1++) {
+        for (c1 = 0u; c1 < numCols; c1++) {
             uint c3 = c1 + c2;
 
             for(batch_idx = 0u; batch_idx < miniBatchSize; batch_idx++) {
 
-                uint this_batch_channel = batch_idx *     channelSize +      channel_idx;
+                uint this_batch_channel = batch_idx *     numChannels +      channel_idx;
                 uint prev_batch_channel = batch_idx * prevChannelSize + prev_channel_idx;
 
                 vec4  dz = texelFetch(delta_z, ivec3(c1, r1, this_batch_channel), 0);
@@ -256,7 +252,7 @@ ConvolutionalLayer_DeltaX : `
 precision highp sampler3D;
 
 uniform sampler3D delta_z;
-uniform sampler3D weights;
+uniform sampler3D weight;
 
 in float zero;
 
@@ -278,9 +274,9 @@ void main() {
     float sum = 0.0f;
 
     // 出力のチャネルに対し
-    for(channel_idx = 0u; channel_idx < channelSize; channel_idx++) {
+    for(channel_idx = 0u; channel_idx < numChannels; channel_idx++) {
 
-        uint this_batch_channel = batch_idx * channelSize + channel_idx;
+        uint this_batch_channel = batch_idx * numChannels + channel_idx;
         uint weight_idx = channel_idx * prevChannelSize + prev_channel_idx;
 
         // フィルターの行に対し
@@ -289,7 +285,7 @@ void main() {
             // 出力の行
             uint r1 = r3 - r2;
 
-            if(0u <= r1 && r1 < rowCount) {
+            if(0u <= r1 && r1 < numRows) {
 
                 // フィルターの列に対し
                 for (c2 = 0u; c2 < filterSize; c2++) {
@@ -297,11 +293,11 @@ void main() {
                     // 出力の列
                     uint c1 = c3 -c2;
 
-                    if(0u <= c1 && c1 < colCount) {
+                    if(0u <= c1 && c1 < numCols) {
 
                         vec4  dz = texelFetch(delta_z, ivec3(c1, r1, this_batch_channel), 0);
 
-                        vec4  w   = texelFetch(weights, ivec3(c2, r2, weight_idx), 0);
+                        vec4  w   = texelFetch(weight, ivec3(c2, r2, weight_idx), 0);
 
                         sum += dz.r * w.r;
                     }
