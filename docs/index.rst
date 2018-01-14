@@ -23,7 +23,7 @@ gpgpu.js
     speed_test
     call_graph
 
-    api/api
+    api/index
 
 .. 
     Indices and tables
