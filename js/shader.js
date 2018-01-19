@@ -155,13 +155,13 @@ void main() {
     uint r1 = idx / numCols;
     uint c1 = idx - r1 * numCols;
 
-    uint batch_channel_idx = batch_idx * prevChannelSize;
+    uint batch_channel_idx = batch_idx * prevNumChannels;
 
     uint prev_channel_idx, r2, c2;
     float sum = 0.0f;
-    uint weight_idx = channel_idx * prevChannelSize;
+    uint weight_idx = channel_idx * prevNumChannels;
 
-    for(prev_channel_idx = 0u; prev_channel_idx < prevChannelSize; prev_channel_idx++) {
+    for(prev_channel_idx = 0u; prev_channel_idx < prevNumChannels; prev_channel_idx++) {
 
         for (r2 = 0u; r2 < filterSize; r2++) {
 
@@ -212,8 +212,8 @@ out float nabla_w;
 void main() {
     uint idx = uint(gl_VertexID);
 
-    uint channel_idx = idx / (prevChannelSize * filterSize * filterSize);
-    idx     -= channel_idx * (prevChannelSize * filterSize * filterSize);
+    uint channel_idx = idx / (prevNumChannels * filterSize * filterSize);
+    idx     -= channel_idx * (prevNumChannels * filterSize * filterSize);
 
     uint prev_channel_idx = idx / (filterSize * filterSize);
     idx     -= prev_channel_idx * (filterSize * filterSize);
@@ -233,7 +233,7 @@ void main() {
             for(batch_idx = 0u; batch_idx < miniBatchSize; batch_idx++) {
 
                 uint this_batch_channel = batch_idx *     numChannels +      channel_idx;
-                uint prev_batch_channel = batch_idx * prevChannelSize + prev_channel_idx;
+                uint prev_batch_channel = batch_idx * prevNumChannels + prev_channel_idx;
 
                 vec4  dz = texelFetch(delta_z, ivec3(c1, r1, this_batch_channel), 0);
 
@@ -261,14 +261,14 @@ out float delta_x;
 void main() {
     uint idx = uint(gl_VertexID);
 
-    uint batch_idx = idx / (prevChannelSize * prevRowCount * prevColCount);
-    idx     -= batch_idx * (prevChannelSize * prevRowCount * prevColCount);
+    uint batch_idx = idx / (prevNumChannels * prevNumRows * prevNumCols);
+    idx     -= batch_idx * (prevNumChannels * prevNumRows * prevNumCols);
 
-    uint prev_channel_idx = idx / (prevRowCount * prevColCount);
-    idx     -= prev_channel_idx * (prevRowCount * prevColCount);
+    uint prev_channel_idx = idx / (prevNumRows * prevNumCols);
+    idx     -= prev_channel_idx * (prevNumRows * prevNumCols);
 
-    uint r3 = idx / prevColCount;
-    uint c3 = idx - r3 * prevColCount;
+    uint r3 = idx / prevNumCols;
+    uint c3 = idx - r3 * prevNumCols;
 
     uint channel_idx, r2, c2;
     float sum = 0.0f;
@@ -277,7 +277,7 @@ void main() {
     for(channel_idx = 0u; channel_idx < numChannels; channel_idx++) {
 
         uint this_batch_channel = batch_idx * numChannels + channel_idx;
-        uint weight_idx = channel_idx * prevChannelSize + prev_channel_idx;
+        uint weight_idx = channel_idx * prevNumChannels + prev_channel_idx;
 
         // フィルターの行に対し
         for (r2 = 0u; r2 < filterSize; r2++) {
