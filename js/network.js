@@ -29,6 +29,13 @@ function CreateNeuralNetwork(gpgpu){
         }
     }
 
+
+    function Stats2(tm, idx){
+        return tm.map(x => "<td>" + (x == null ? "" : Math.round(x / idx)) + "</td>").join("");
+    }
+
+
+
     class Lap {
         constructor(v){
             this.lastTime = new Date();
@@ -126,6 +133,10 @@ function CreateNeuralNetwork(gpgpu){
 
                 net.paramGradientCheck("weight", this.weight.dt, this.deltaWeight.dt, batch_Y, exp_work, cost, batch_idx, layer_idx, last_delta_y_dt);
             }
+        }
+
+        processedTime(idx){
+            return "<tr><td></td>" + Stats2([], idx) + "</tr>";
         }
     }
 
@@ -391,6 +402,10 @@ function CreateNeuralNetwork(gpgpu){
                 this.bias.dt[i] -= eta * this.deltaBias.dt[i];
             }
             lap.Time();
+        }
+
+        processedTime(idx){
+            return "<tr><td>全結合層</td>" + Stats2([ this.fwTime[0] ].concat(this.bwTime).concat(this.udTime[0]), idx) + "</tr>";
         }
     }
 
@@ -950,6 +965,10 @@ function CreateNeuralNetwork(gpgpu){
             }
             this.params = {};
         }
+
+        processedTime(idx){
+            return "<tr><td>畳み込み層</td>" + Stats2([ this.fwTime[0] ].concat(this.bwTime).concat(this.udTime[0]), idx) + "</tr>";
+        }
     }
 
     class MaxPoolingLayer extends Layer {
@@ -1097,6 +1116,10 @@ function CreateNeuralNetwork(gpgpu){
             Assert(output_idx == this.nextLayer.deltaX.dt.length);
             lap.Time();
         }
+
+        processedTime(idx){
+            return "<tr><td>Maxプーリング層</td>" + Stats2([ this.fwTime[0], null, null, null, this.bwTime[0], null ], idx) + "</tr>";
+        }
     }
 
 
@@ -1157,6 +1180,10 @@ function CreateNeuralNetwork(gpgpu){
                 }
             }
             lap.Time();
+        }
+
+        processedTime(idx){
+            return "<tr><td>ドロップアウト層</td>" + Stats2([ this.fwTime[0], null, null, null, this.bwTime[0], null ], idx) + "</tr>";
         }
     }
 
@@ -1386,6 +1413,8 @@ function CreateNeuralNetwork(gpgpu){
 
             for (this.EpochIdx = 0; this.EpochIdx < epochs; this.EpochIdx++) {
 
+                var start_epock_time = new Date();
+
                 for(var mode = 0; mode < 2; mode++){
                     var data;
                     var ok_cnt = 0;
@@ -1492,9 +1521,8 @@ function CreateNeuralNetwork(gpgpu){
                             this.processedTimeAll = Stats(mini_batch_time, idx);
 
                             // ミニバッチごとの処理時間 (レイヤー別)
-                            this.processedTimeLayer = this.layers.slice(1).map(layer => 
-                                "(" + Stats(layer.fwTime, idx) + " " + Stats(layer.bwTime, idx) + " " + Stats(layer.udTime, idx) + ")")
-                                .join("  ");
+//                            this.processedTimeLayer = this.layers.slice(1).map(layer => layer.processedTime(idx)).join("\n");
+
 
                             show_time = new Date();
 
@@ -1506,6 +1534,9 @@ function CreateNeuralNetwork(gpgpu){
 
                     if(! this.isTraining){
 
+                        var accuracy_rate     = (100 * ok_cnt / (this.miniBatchCnt * miniBatchSize)).toFixed(2);
+                        var epock_time_minute = Math.round( (new Date() - start_epock_time) / (60 * 1000) );
+                        console.log("Epoch %d %s% %dmin eta:%.02f", this.EpochIdx, accuracy_rate, epock_time_minute, this.learningRate);
                         console.log("Epoch %d  %d / %d eta:%.02f", this.EpochIdx, ok_cnt, this.miniBatchCnt * miniBatchSize, this.learningRate);
                     }
                 }

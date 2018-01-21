@@ -59,10 +59,35 @@
 ミニバッチごとの処理時間 ( 単位:ミリ秒 )<br />
 &nbsp;&nbsp;&nbsp;&nbsp;全体 ( データ準備, 順伝播, コスト計算, 誤差逆伝播, パラメータ更新 )  <br />
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span id="processed-time-all"></span><br />
-&nbsp;&nbsp;&nbsp;&nbsp;レイヤー別 ( 順伝播, 誤差逆伝播, パラメータ更新 )  <br />
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span id="processed-time-layer"></span><br />
 <br />
-    <input type="button" value="停止" id="stop-resume" onclick="StopResumeClick()" disabled="true"  />
+    <input type="button" value="停止" id="stop-resume" onclick="StopResumeClick()" disabled="true"  /><br />
+<br />
+
+    <table border="1">
+        <thead>
+            <tr>
+                <th></th>
+                <th>順伝播</th>
+                <th>δ z</th>
+                <th>δ bias</th>
+                <th>δ weight</th>
+                <th>δ x</th>
+                <th>パラメータの更新</th>
+            </tr>
+        </thead>
+        <tbody id="time-tbody">
+            <tr>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+            </tr>
+        </tbody>
+    </table>
+
 <!-- 画像データの表示 ( デバック用 ) -->
 <canvas id="digit-canvas" width="28" height="28" style="width:28px; height:28px; background-color:gainsboro"/>
 
@@ -204,7 +229,11 @@
                 showText("total-data-cnt", net.miniBatchCnt * net.miniBatchSize);
 
                 showText("processed-time-all", net.processedTimeAll);
-                showText("processed-time-layer", net.processedTimeLayer);
+
+                if (net.processedTimeLayer) {
+
+                    document.getElementById("time-tbody").innerHTML = net.processedTimeLayer;
+                }
             }
             
         }, 1)

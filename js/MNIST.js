@@ -11,7 +11,7 @@ class MNIST {
     onLoadFile(file_name, data) {
         var type, cnt, h, w;
 
-        if (file_name.indexOf("-images.") != -1) {
+        if (file_name.indexOf("-images") != -1) {
             // 画像の場合
 
             type = this.BytesToInt(data, 0);
@@ -27,7 +27,7 @@ class MNIST {
 
             Assert(16 + cnt * h * w == data.length);
 
-            if (file_name.startsWith("train-images.")) {
+            if (file_name.startsWith("train-images")) {
                 // トレーニングの画像の場合
 
                 this.trainingDataImage = data.slice(16);
@@ -48,7 +48,7 @@ class MNIST {
 
             console.log("画像 name:%s len:%d type:%d cnt:%d H:%d W:%d", file_name, data.length, type, cnt, h, w);
         }
-        else if (file_name.indexOf("-labels.") != -1) {
+        else if (file_name.indexOf("-labels") != -1) {
             // ラベルの場合
 
             type = this.BytesToInt(data, 0);
@@ -59,7 +59,7 @@ class MNIST {
             Assert(8 + cnt == data.length);
             console.log("ラベル name:%s len:%d type:%d cnt:%d", file_name, data.length, type, cnt);
 
-            if (file_name.startsWith("train-labels.")) {
+            if (file_name.startsWith("train-labels")) {
                 // トレーニングのラベルの場合
 
                 this.trainingDataLabel = data.slice(8);
