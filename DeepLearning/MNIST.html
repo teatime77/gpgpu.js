@@ -213,12 +213,12 @@
                 testAccuracyPlot.show(net.testAccuracy, "blue");
 
                 showText("training-cost", net.trainingCost[net.trainingCost.length - 1].toFixed(3));
-                showText("training-accuracy", net.trainingAccuracy[net.trainingAccuracy.length - 1].toFixed(3));
+                showText("training-accuracy", (100 * net.trainingAccuracy[net.trainingAccuracy.length - 1]).toFixed(2) + "%");
 
                 if (net.testCost.length != 0) {
 
                     showText("test-cost", net.testCost[net.testCost.length - 1].toFixed(3));
-                    showText("test-accuracy", net.testAccuracy[net.testAccuracy.length - 1].toFixed(3));
+                    showText("test-accuracy", (100 * net.testAccuracy[net.testAccuracy.length - 1]).toFixed(2) + "%");
                 }
 
                 showText("processed-data-cnt", net.processedDataCnt);

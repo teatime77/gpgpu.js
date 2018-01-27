@@ -1521,7 +1521,7 @@ function CreateNeuralNetwork(gpgpu){
                             this.processedTimeAll = Stats(mini_batch_time, idx);
 
                             // ミニバッチごとの処理時間 (レイヤー別)
-//                            this.processedTimeLayer = this.layers.slice(1).map(layer => layer.processedTime(idx)).join("\n");
+                            this.processedTimeLayer = this.layers.slice(1).map(layer => layer.processedTime(idx)).join("\n");
 
 
                             show_time = new Date();
@@ -1534,9 +1534,10 @@ function CreateNeuralNetwork(gpgpu){
 
                     if(! this.isTraining){
 
-                        var accuracy_rate     = (100 * ok_cnt / (this.miniBatchCnt * miniBatchSize)).toFixed(2);
-                        var epock_time_minute = Math.round( (new Date() - start_epock_time) / (60 * 1000) );
-                        console.log("Epoch %d %s% %dmin eta:%.02f", this.EpochIdx, accuracy_rate, epock_time_minute, this.learningRate);
+//                        var accuracy_rate     = (100 * ok_cnt / (this.miniBatchCnt * miniBatchSize)).toFixed(2);
+//                        var epock_time_minute = Math.round( (new Date() - start_epock_time) / (60 * 1000) );
+//                        console.log("Epoch %d %s% %dmin eta:%.02f", this.EpochIdx, accuracy_rate, epock_time_minute, this.learningRate);
+//                        console.log("Epoch %d  %d/%d %dmin eta:%.02f", this.EpochIdx, ok_cnt, this.miniBatchCnt * miniBatchSize, epock_time_minute, this.learningRate);
                         console.log("Epoch %d  %d / %d eta:%.02f", this.EpochIdx, ok_cnt, this.miniBatchCnt * miniBatchSize, this.learningRate);
                     }
                 }
