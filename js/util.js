@@ -154,8 +154,8 @@ class RandomHelper {
     NextDouble() {
         this.Flag = ! this.Flag;
         if (this.Flag) {
-            this.C = Math.sqrt(-2 * Math.log(Math.random()));
-            this.Theta = Math.random() * Math.PI * 2;
+            this.C = Math.sqrt(-2 * Math.log(Math_random()));
+            this.Theta = Math_random() * Math.PI * 2;
 
             return this.C * Math.sin(this.Theta);
         }
@@ -185,7 +185,7 @@ class RandomHelper {
         }
 
         m.dt = m.dt.map(x => this.NextDouble());
-//        m.dt = m.dt.map(x => Math.random());
+//        m.dt = m.dt.map(x => Math_random());
 
         return m;
     }
@@ -193,7 +193,7 @@ class RandomHelper {
     // min から max までの乱整数を返す関数
     // Math.round() を用いると、非一様分布になります!
     getRandomInt(min, max) {
-        return Math.floor(Math.random() * (max - min + 1)) + min;
+        return Math.floor(Math_random() * (max - min + 1)) + min;
     }
 
     RandomSampling(all_count, sample_count) {

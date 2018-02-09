@@ -80,7 +80,7 @@ class MNIST {
 
     makeXY(data_cnt, data_image, data_label) {
         // [0,255] -> [0,1) に変換
-        var X = new ArrayView(data_cnt, this.imgH, this.imgW, new Float32Array(data_image).map(a => a / 256.0));
+        var X = new ArrayView(data_cnt, this.imgH, this.imgW, new Float32Array(data_image).map(a =>(a == 0 ? 1/512.0 : a / 256.0)));
 
         var Y = new ArrayView(data_cnt, 10);
 
@@ -124,7 +124,7 @@ class MNIST {
 
         this.ctx.putImageData(image_data, 0, 0);
 
-        this.imgIdx += Math.floor( Math.random() * 200 );
+        this.imgIdx++;
         if (this.imgIdx < this.trainingImgCnt) {
 
             setTimeout(this.DrawImage.bind(this), 1);

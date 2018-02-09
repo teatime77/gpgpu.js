@@ -4,93 +4,13 @@
 <head>
     <meta charset="utf-8" />
     <title>MNISTのディープラーニング</title>
+    <script type="text/javascript" src="../js/MersenneTwister.js"></script>
     <script type="text/javascript" src="../js/util.js"></script>
     <script type="text/javascript" src="../js/gpgpu.js"></script>
     <script type="text/javascript" src="../js/shader.js"></script>
     <script type="text/javascript" src="../js/network.js"></script>
     <script type="text/javascript" src="../js/plot.js"></script>
     <script type="text/javascript" src="../js/MNIST.js"></script>
-</head>
-<body onload="BodyOnLoad()">
-    <h3>MNISTのディープラーニング</h3>
-
-以下のサイトから4つのファイルをダウンロード後に解凍して、このページにドロップしてください。<br />
-<br />
-&nbsp;&nbsp;&nbsp;&nbsp;<a href="http://yann.lecun.com/exdb/mnist/">http://yann.lecun.com/exdb/mnist/</a><br />
-&nbsp;&nbsp;&nbsp;&nbsp;t10k-images.idx3-ubyte , t10k-labels.idx1-ubyte , train-images.idx3-ubyte , train-labels.idx1-ubyte<br />
-<br />
-<table border="1">
-    <thead>
-        <tr>
-            <th ></th>
-            <th >トレーニング</th>
-            <th >テスト</th>
-        </tr>
-    </thead>
-    <tbody>
-        <tr>
-            <td><b>コスト</b></td>
-            <td>
-                <canvas id="training-costs-canvas" width="300" height="200"></canvas><br />
-                <b id="training-cost"></b>
-            </td>
-            <td>
-                <canvas id="test-costs-canvas" width="300" height="200"></canvas><br />
-                <b id="test-cost"></b>
-            </td>
-        </tr>
-        <tr>
-            <td><b>正解率</b></td>
-            <td>
-                <canvas id="training-accuracy-canvas" width="300" height="200"></canvas><br />
-                <b id="training-accuracy"></b>
-            </td>
-            <td>
-                <canvas id="test-accuracy-canvas" width="300" height="200"></canvas><br />
-                <b id="test-accuracy"></b>
-            </td>
-        </tr>
-    </tbody>
-</table>
-    
-<br />
-現在のエポック = <span id="epoch-idx"></span>&nbsp;&nbsp;&nbsp;&nbsp;処理済みデータ数 = <span id="processed-data-cnt"></span><br />
-データ数 = ミニバッチの個数(<span id="mini-batch-cnt"></span>) × ミニバッチの大きさ(<span id="mini-batch-size"></span>) = <span id="total-data-cnt"></span><br />
-ミニバッチごとの処理時間 ( 単位:ミリ秒 )<br />
-&nbsp;&nbsp;&nbsp;&nbsp;全体 ( データ準備, 順伝播, コスト計算, 誤差逆伝播, パラメータ更新 )  <br />
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span id="processed-time-all"></span><br />
-<br />
-    <input type="button" value="停止" id="stop-resume" onclick="StopResumeClick()" disabled="true"  /><br />
-<br />
-
-    <table border="1">
-        <thead>
-            <tr>
-                <th></th>
-                <th>順伝播</th>
-                <th>δ z</th>
-                <th>δ bias</th>
-                <th>δ weight</th>
-                <th>δ x</th>
-                <th>パラメータの更新</th>
-            </tr>
-        </thead>
-        <tbody id="time-tbody">
-            <tr>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-            </tr>
-        </tbody>
-    </table>
-
-<!-- 画像データの表示 ( デバック用 ) -->
-<canvas id="digit-canvas" width="28" height="28" style="width:28px; height:28px; background-color:gainsboro"/>
-
 <script type="text/javascript">
 
     var trainingCostsPlot, testCostsPlot, trainingAccuracyPlot, testAccuracyPlot;
@@ -120,6 +40,10 @@
 
         // MNISTのデータ読み込みのヘルパー オブジェクト
         mnist = new MNIST(document.getElementById('digit-canvas'));
+
+        // DragOverとDropのイベントを登録する。
+        document.body.addEventListener('dragover', DragOverHandler, false);
+        document.body.addEventListener('drop', DropHandler, false);
     }
 
     /*
@@ -149,6 +73,9 @@
         lastPlotTime = new Date();
 
         var net = CreateNeuralNetwork(theGPGPU);
+        
+        net.logPre = document.getElementById("log-pre");
+
         var learning_rate;          // 0.01;// 0.1;// 0.12;// 0.16;// 0.2;// 0.05;// 0.1;
 
         if (false) {
@@ -295,10 +222,90 @@
             reader.readAsArrayBuffer(f);
         }
     }
-
-    // DragOverとDropのイベントを登録する。
-    document.body.addEventListener('dragover', DragOverHandler, false);
-    document.body.addEventListener('drop', DropHandler, false);
 </script>
+</head>
+<body onload="BodyOnLoad()">
+    <h3>MNISTのディープラーニング</h3>
+
+以下のサイトから4つのファイルをダウンロード後に解凍して、このページにドロップしてください。<br />
+<br />
+&nbsp;&nbsp;&nbsp;&nbsp;<a href="http://yann.lecun.com/exdb/mnist/">http://yann.lecun.com/exdb/mnist/</a><br />
+&nbsp;&nbsp;&nbsp;&nbsp;t10k-images.idx3-ubyte , t10k-labels.idx1-ubyte , train-images.idx3-ubyte , train-labels.idx1-ubyte<br />
+<br />
+<table border="1">
+    <thead>
+        <tr>
+            <th ></th>
+            <th >トレーニング</th>
+            <th >テスト</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><b>コスト</b></td>
+            <td>
+                <canvas id="training-costs-canvas" width="300" height="200"></canvas><br />
+                <b id="training-cost"></b>
+            </td>
+            <td>
+                <canvas id="test-costs-canvas" width="300" height="200"></canvas><br />
+                <b id="test-cost"></b>
+            </td>
+        </tr>
+        <tr>
+            <td><b>正解率</b></td>
+            <td>
+                <canvas id="training-accuracy-canvas" width="300" height="200"></canvas><br />
+                <b id="training-accuracy"></b>
+            </td>
+            <td>
+                <canvas id="test-accuracy-canvas" width="300" height="200"></canvas><br />
+                <b id="test-accuracy"></b>
+            </td>
+        </tr>
+    </tbody>
+</table>
+    
+<br />
+現在のエポック = <span id="epoch-idx"></span>&nbsp;&nbsp;&nbsp;&nbsp;処理済みデータ数 = <span id="processed-data-cnt"></span><br />
+データ数 = ミニバッチの個数(<span id="mini-batch-cnt"></span>) × ミニバッチの大きさ(<span id="mini-batch-size"></span>) = <span id="total-data-cnt"></span><br />
+ミニバッチごとの処理時間 ( 単位:ミリ秒 )<br />
+&nbsp;&nbsp;&nbsp;&nbsp;全体 ( データ準備, 順伝播, コスト計算, 誤差逆伝播, パラメータ更新 )  <br />
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span id="processed-time-all"></span><br />
+<br />
+    <input type="button" value="停止" id="stop-resume" onclick="StopResumeClick()" disabled="true"  /><br />
+<br />
+
+    <table border="1">
+        <thead>
+            <tr>
+                <th></th>
+                <th>順伝播</th>
+                <th>δ z</th>
+                <th>δ bias</th>
+                <th>δ weight</th>
+                <th>δ x</th>
+                <th>パラメータの更新</th>
+            </tr>
+        </thead>
+        <tbody id="time-tbody">
+            <tr>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+            </tr>
+        </tbody>
+    </table>
+    <br />
+<pre id="log-pre" style="width:600px; height:300px; border:ridge; overflow:scroll"></pre>
+
+
+<!-- 画像データの表示 ( デバック用 ) -->
+<canvas id="digit-canvas" width="28" height="28" style="width:28px; height:28px; background-color:gainsboro"/>
+
 </body>
 </html>
