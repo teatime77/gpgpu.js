@@ -36,14 +36,22 @@ function CreateNeuralNetwork(gpgpu){
     }
 
 
-
+    /*
+        経過時間の計測のクラス
+    */
     class Lap {
-        constructor(v){
+        /*        
+            :param Array lap_times: 経過時間を格納する配列 
+        */
+        constructor(lap_times){
             this.lastTime = new Date();
             this.lapIdx = 0;
-            this.lapTimes = v;
+            this.lapTimes = lap_times;
         }
 
+        /*
+            経過時間を配列に追加する。
+        */
         Time(){
             var prev_last_time = this.lastTime;
             this.lastTime = new Date();
@@ -56,10 +64,18 @@ function CreateNeuralNetwork(gpgpu){
         }
     }
 
+    /*
+        ニューラルネットワークのレイヤーのクラス
+    */
     class Layer {
         constructor() {
         }
 
+        /*
+            初期処理
+
+            :param Layer prev_layer: 直前の層 
+        */
         init(prev_layer) {
             this.prevLayer = prev_layer;
             if (prev_layer) {
@@ -67,21 +83,36 @@ function CreateNeuralNetwork(gpgpu){
             }
         }
 
+        /*
+            ミニバッチのサイズが変わった時の処理
+        */
         miniBatchSizeChanged(){
             this.fwTime = [];
             this.bwTime = [];
             this.udTime = [];
         }
 
+        /*
+            順伝播
+        */
         forward() {
         }
 
+        /*
+            誤差逆伝播
+        */
         backpropagation() {
         }
 
+        /*
+            パラメータの更新
+        */
         updateParameter() {
         }
 
+        /*
+            WebGLのリソースのクリア
+        */
         clear(){
             if(this.params){
 
@@ -92,6 +123,9 @@ function CreateNeuralNetwork(gpgpu){
             }
         }
 
+        /*
+            勾配の計算のチェック
+        */
         gradientCheck(batch_Y, exp_work, cost, batch_idx, layer_idx){
             if(! this.prevLayer){
                 return;
@@ -136,12 +170,24 @@ function CreateNeuralNetwork(gpgpu){
             }
         }
 
+        /*
+            処理時間の計測値のHTML文字列を返す。
+        */
         processedTime(idx){
             return "<tr><td></td>" + Stats2([], idx) + "</tr>";
         }
     }
 
+    /*
+        入力層のクラス
+    */
     class InputLayer extends Layer {
+
+        /*
+            :param int channel_size: チャネル数
+            :param int rows: 行数
+            :param int cols: 列数
+        */
         constructor(channel_size, rows, cols) {
             super();
 
@@ -152,7 +198,14 @@ function CreateNeuralNetwork(gpgpu){
         }
     }
 
+    /*
+        アフィン変換層のクラス
+        全結合層と畳み込み層のスーパークラス
+    */
     class AffineTransformationLayer extends Layer{
+        /*
+            CPUによるδzの計算
+        */
         cpuDeltaZ(){
 
             // 活性化関数
@@ -178,7 +231,14 @@ function CreateNeuralNetwork(gpgpu){
         }
     }
 
+    /*
+        全結合層のクラス
+    */
     class FullyConnectedLayer extends AffineTransformationLayer {
+        /*
+            :param int size: 出力のニューロンの数
+            :param int activation_function: 活性化関数のid
+        */
         constructor(size, activation_function) {
             super();
 
@@ -187,6 +247,11 @@ function CreateNeuralNetwork(gpgpu){
             this.params = {};
         }
 
+        /*
+            初期処理
+
+            :param Layer prev_layer: 直前の層 
+        */
         init(prev_layer) {
             super.init(prev_layer);
 
@@ -203,6 +268,9 @@ function CreateNeuralNetwork(gpgpu){
             this.deltaWeight = new ArrayView(this.unitSize, this.prevLayer.unitSize);
         }
 
+        /*
+            ミニバッチのサイズが変わった時の処理
+        */
         miniBatchSizeChanged(){
             super.miniBatchSizeChanged();
 
@@ -221,12 +289,14 @@ function CreateNeuralNetwork(gpgpu){
         }
 
         /*
-        .. math::
+            GPUによる順伝播
+
+            .. math::
 
 
-            z_{i} = \displaystyle \sum_{j }^{ X } x_{j} \cdot weight_{i,j} + bias_{i}
+                z_{i} = \displaystyle \sum_{j }^{ X } x_{j} \cdot weight_{i,j} + bias_{i}
 
-            y_{i} = σ(z_{i})
+                y_{i} = σ(z_{i})
         */
         gpuForward(){
             var vertex_shader = Shaders.FullyConnectedLayer_Forward;
@@ -248,6 +318,9 @@ function CreateNeuralNetwork(gpgpu){
             WebGL2.compute(this.param);
         }
 
+        /*
+            順伝播
+        */
         forward() {
             var lap = new Lap(this.fwTime);
             this.gpuForward();
@@ -255,6 +328,9 @@ function CreateNeuralNetwork(gpgpu){
             lap.Time();
         }
 
+        /*
+            GPUによるδxの計算
+        */
         gpuDeltaX(){
             var vertex_shader = Shaders.FullyConnectedLayer_DeltaX;
 
@@ -280,9 +356,11 @@ function CreateNeuralNetwork(gpgpu){
         }
 
         /*
-        .. math::
+            CPUによるδxの計算
 
-            \delta x_{j} = \displaystyle \sum_i^y \delta z_i \cdot weight_{i,j}
+            .. math::
+
+                \delta x_{j} = \displaystyle \sum_i^y \delta z_i \cdot weight_{i,j}
         */
         cpuDeltaX(){
 
@@ -311,9 +389,11 @@ function CreateNeuralNetwork(gpgpu){
         }
 
         /*
-        .. math::
+            GPUによるδweightの計算
 
-            \delta weight_{i,j} = \delta z_{i} \cdot x_{j}
+            .. math::
+
+                \delta weight_{i,j} = \delta z_{i} \cdot x_{j}
         */
         gpuDeltaWeight(){
             var vertex_shader = Shaders.FullyConnectedLayer_DeltaWeight;
@@ -348,6 +428,9 @@ function CreateNeuralNetwork(gpgpu){
             WebGL2.compute(param);
         }
 
+        /*
+            誤差逆伝播
+        */
         backpropagation() {
             var lap = new Lap(this.bwTime);
 
@@ -385,6 +468,9 @@ function CreateNeuralNetwork(gpgpu){
             lap.Time();
         }
 
+        /*
+            パラメータの更新
+        */
         updateParameter() {
             var lap = new Lap(this.udTime);
             var eta = net.learningRate / miniBatchSize;
@@ -408,12 +494,24 @@ function CreateNeuralNetwork(gpgpu){
             lap.Time();
         }
 
+        /*
+            処理時間の計測値のHTML文字列を返す。
+        */
         processedTime(idx){
             return "<tr><td>全結合層</td>" + Stats2([ this.fwTime[0] ].concat(this.bwTime).concat(this.udTime[0]), idx) + "</tr>";
         }
     }
 
+    /*
+        畳み込み層のクラス
+    */
     class ConvolutionalLayer extends AffineTransformationLayer {
+        
+        /*        
+            :param int filter_size: フィルターのサイズ
+            :param int channel_size: チャネル数
+            :param int activation_function: 活性化関数のid
+        */
         constructor(filter_size, channel_size, activation_function) {
             super();
 
@@ -424,6 +522,11 @@ function CreateNeuralNetwork(gpgpu){
             this.params = {};
         }
 
+        /*
+            初期処理
+        
+            :param Layer prev_layer: 直前の層 
+        */
         init(prev_layer) {
             super.init(prev_layer);
 
@@ -452,6 +555,9 @@ function CreateNeuralNetwork(gpgpu){
             this.deltaWeight   = new ArrayView(this.numChannels, prev_layer.numChannels, this.filterSize, this.filterSize);
         }
 
+        /*
+            ミニバッチのサイズが変わった時の処理
+        */
         miniBatchSizeChanged(){
             super.miniBatchSizeChanged();
 
@@ -472,6 +578,9 @@ function CreateNeuralNetwork(gpgpu){
 
         }
 
+        /*
+            GPUによる順伝播
+        */
         gpuForward() {
             var prev_layer = this.prevLayer;
 
@@ -508,6 +617,9 @@ function CreateNeuralNetwork(gpgpu){
             WebGL2.compute(param);
         }
 
+        /*
+            CPUによる順伝播
+        */
         cpuForward() {
             var prev_layer = this.prevLayer;
 
@@ -577,6 +689,9 @@ function CreateNeuralNetwork(gpgpu){
             }
         }
 
+        /*
+            順伝播
+        */
         forward() {
             var lap = new Lap(this.fwTime);
 
@@ -615,6 +730,9 @@ function CreateNeuralNetwork(gpgpu){
             lap.Time();
         }
 
+        /*
+            GPUによるδweightの計算
+        */
         gpuDeltaWeight() {
             var prev_layer = this.prevLayer;
 
@@ -649,7 +767,9 @@ function CreateNeuralNetwork(gpgpu){
             WebGL2.compute(param);
         }
 
-
+        /*
+            GPUによるδxの計算
+        */
         gpuDeltaX() {
             var prev_layer = this.prevLayer;
 
@@ -686,6 +806,9 @@ function CreateNeuralNetwork(gpgpu){
             WebGL2.compute(param);
         }
 
+        /*
+            CPUによるδweightの計算
+        */
         cpuDeltaWeight() {
             var prev_layer = this.prevLayer;
             var num_rows_cols = this.numRows * this.numCols;
@@ -739,6 +862,9 @@ function CreateNeuralNetwork(gpgpu){
             Assert(weight_idx == this.deltaWeight.dt.length);
         }
 
+        /*
+            CPUによるδbiasの計算
+        */
         cpuDeltaBias(){
             var num_rows_cols = this.numRows * this.numCols;
 
@@ -767,7 +893,9 @@ function CreateNeuralNetwork(gpgpu){
             }
         }
 
-
+        /*
+            CPUによるδxの計算
+        */
         cpuDeltaX2() {
             var prev_layer = this.prevLayer;
             var delta_x = new Float32Array(miniBatchSize * prev_layer.unitSize);
@@ -821,6 +949,9 @@ function CreateNeuralNetwork(gpgpu){
             return delta_x;
         }
 
+        /*
+            CPUによるδxの計算
+        */
         cpuDeltaX() {
             var prev_layer = this.prevLayer;
             var num_rows_cols = this.numRows * this.numCols;
@@ -880,7 +1011,9 @@ function CreateNeuralNetwork(gpgpu){
             Assert(prev_y_idx == miniBatchSize * prev_layer.unitSize);
         }
 
-
+        /*
+            誤差逆伝播
+        */
         backpropagation() {
             var lap = new Lap(this.bwTime);
 
@@ -932,6 +1065,9 @@ function CreateNeuralNetwork(gpgpu){
             lap.Time();
         }
 
+        /*
+            パラメータの更新
+        */
         updateParameter() {
             var lap = new Lap(this.udTime);
 
@@ -971,17 +1107,31 @@ function CreateNeuralNetwork(gpgpu){
             this.params = {};
         }
 
+        /*
+            処理時間の計測値のHTML文字列を返す。
+        */
         processedTime(idx){
             return "<tr><td>畳み込み層</td>" + Stats2([ this.fwTime[0] ].concat(this.bwTime).concat(this.udTime[0]), idx) + "</tr>";
         }
     }
 
+    /*
+        Maxプーリング層のクラス
+    */
     class MaxPoolingLayer extends Layer {
+        /*        
+            :param int filter_size: フィルターのサイズ
+        */
         constructor(filter_size) {
             super();
             this.filterSize = filter_size;
         }
 
+        /*
+            初期処理
+    
+            :param Layer prev_layer: 直前の層 
+        */
         init(prev_layer) {
             super.init(prev_layer);
 
@@ -996,6 +1146,9 @@ function CreateNeuralNetwork(gpgpu){
             this.unitSize = this.numChannels * this.numRows * this.numCols;
         }
 
+        /*
+            ミニバッチのサイズが変わった時の処理
+        */
         miniBatchSizeChanged(){
             super.miniBatchSizeChanged();
 
@@ -1005,6 +1158,9 @@ function CreateNeuralNetwork(gpgpu){
             this.deltaX     = new ArrayView(miniBatchSize, this.prevLayer.unitSize);
         }
 
+        /*
+            順伝播
+        */
         forward() {
             var lap = new Lap(this.fwTime);
 
@@ -1073,6 +1229,9 @@ function CreateNeuralNetwork(gpgpu){
             lap.Time();
         }
 
+        /*
+            誤差逆伝播
+        */
         backpropagation() {
             var lap = new Lap(this.bwTime);
 
@@ -1122,24 +1281,40 @@ function CreateNeuralNetwork(gpgpu){
             lap.Time();
         }
 
+        /*
+            処理時間の計測値のHTML文字列を返す。
+        */
         processedTime(idx){
             return "<tr><td>Maxプーリング層</td>" + Stats2([ this.fwTime[0], null, null, null, this.bwTime[0], null ], idx) + "</tr>";
         }
     }
 
 
+    /*
+        ドロップアウト層のクラス
+    */
     class DropoutLayer extends Layer {
+        /*        
+            :param double : ドロップアウトをする確率
+        */
         constructor(drop_ratio) {
             super();
             this.dropRatio = drop_ratio;
         }
 
+        /*
+            初期処理
+    
+            :param Layer prev_layer: 直前の層 
+        */
         init(prev_layer) {
             super.init(prev_layer);
             this.unitSize = prev_layer.unitSize;
         }
 
-
+        /*
+            ミニバッチのサイズが変わった時の処理
+        */
         miniBatchSizeChanged(){
             super.miniBatchSizeChanged();
 
@@ -1148,6 +1323,9 @@ function CreateNeuralNetwork(gpgpu){
             this.valid      = new Int8Array(miniBatchSize * this.unitSize);
         }
 
+        /*
+            順伝播
+        */
         forward() {
             var lap = new Lap(this.fwTime);
             for(var i = 0; i < this.y_.dt.length; i++){
@@ -1172,6 +1350,9 @@ function CreateNeuralNetwork(gpgpu){
             lap.Time();
         }
 
+        /*
+            誤差逆伝播
+        */
         backpropagation() {
             var lap = new Lap(this.bwTime);
             for(var i = 0; i < this.y_.dt.length; i++){
@@ -1187,12 +1368,21 @@ function CreateNeuralNetwork(gpgpu){
             lap.Time();
         }
 
+        /*
+            処理時間の計測値のHTML文字列を返す。
+        */
         processedTime(idx){
             return "<tr><td>ドロップアウト層</td>" + Stats2([ this.fwTime[0], null, null, null, this.bwTime[0], null ], idx) + "</tr>";
         }
     }
 
+    /*
+        ニューラルネットワークのクラス
+    */
     class NeuralNetwork {
+        /*        
+            :param  :  
+        */
         constructor(gpgpu) {
             net = this;
             WebGL2 = gpgpu;
@@ -1202,6 +1392,9 @@ function CreateNeuralNetwork(gpgpu){
             this.testAccuracy = [];
         }
 
+        /*        
+            :param Layer[] layers: レイヤーの配列
+        */
         setLayers(layers){
             this.layers = layers;
             this.lastLayer = layers[layers.length - 1];
@@ -1213,26 +1406,61 @@ function CreateNeuralNetwork(gpgpu){
             }
         }
 
+        /*        
+            入力層を作って返す。
+
+            :param int channel_size: チャネル数
+            :param int rows: 行数
+            :param int cols: 列数
+        */
         InputLayer(channel_size, rows, cols){
             return new InputLayer(channel_size, rows, cols);
         }
 
+        /*        
+            全結合層を作って返す。
+
+            :param int size: 出力のニューロンの数
+            :param int activation_function: 活性化関数のid
+        */
         FullyConnectedLayer(size, activation_function){
             return new FullyConnectedLayer(size, activation_function);
         }
 
+        /*        
+            畳み込み層を作って返す。
+
+            :param int filter_size: フィルターのサイズ
+            :param int channel_size: チャネル数
+            :param int activation_function: 活性化関数のid
+        */
         ConvolutionalLayer(filter_size, channel_size, activation_function){
             return new ConvolutionalLayer(filter_size, channel_size, activation_function);
         }
 
+        /*        
+            Maxプーリング層を作って返す。
+
+            :param int filter_size: フィルターのサイズ
+        */
         MaxPoolingLayer(filter_size){
             return new MaxPoolingLayer(filter_size);
         }
 
+        /*        
+            ドロップアウト層を作って返す。
+
+            :param double : ドロップアウトをする確率
+        */
         DropoutLayer(drop_ratio){
             return new DropoutLayer(drop_ratio);
         }
 
+        /*        
+            :param  :  
+            :param int : 
+            :param int : 
+        */
         Laminate(data, idx_list, idx_start, idx_cnt) {
             var element_size = data.shape.slice(1).reduce((x, y) => x * y);
 
@@ -1252,6 +1480,9 @@ function CreateNeuralNetwork(gpgpu){
             return X;
         }
 
+        /*        
+            :param  :  
+        */
         CorrectCount(Y){
             var result = this.lastLayer.y_;
 
@@ -1324,6 +1555,10 @@ function CreateNeuralNetwork(gpgpu){
             return - cost_sum;
         }
 
+        /*        
+            :param  :  
+            :param int : 
+        */
         TestSoftMax(last_delta_y_dt, last_y, batch_Y, exp_work, range_len){
             var costs = this.SoftMax(last_delta_y_dt, last_y, batch_Y, exp_work, range_len);
 
@@ -1348,6 +1583,11 @@ function CreateNeuralNetwork(gpgpu){
             }
         }
 
+        /*        
+            :param  :  
+            :param int : 
+            :param int : 
+        */
         forwardCost(batch_Y, exp_work, batch_idx, layer_idx, last_delta_y_dt) {
             var last_layer = this.layers[this.layers.length - 1];
 
@@ -1358,6 +1598,11 @@ function CreateNeuralNetwork(gpgpu){
             return this.SoftMax(last_delta_y_dt, last_layer.y_.dt, batch_Y, exp_work, last_layer.unitSize, batch_idx);
         }
 
+        /*        
+            :param  :  
+            :param int : 
+            :param int : 
+        */
         paramGradientCheck(name, params, delta_params, batch_Y, exp_work, cost, batch_idx, layer_idx, last_delta_y_dt){
             Assert(params.length == delta_params.length);
             // delta bias
@@ -1381,6 +1626,9 @@ function CreateNeuralNetwork(gpgpu){
             }
         }
 
+        /*        
+            :param  :  
+        */
         netGradientCheck(batch_Y, exp_work, costs){
             inGradientCheck = true;
 
@@ -1409,6 +1657,9 @@ function CreateNeuralNetwork(gpgpu){
             inGradientCheck = false;
         }
 
+        /*        
+            :param  :  
+        */
         countZero(name, v){
             var cnt = 0;
             var neg = 0;
@@ -1424,6 +1675,13 @@ function CreateNeuralNetwork(gpgpu){
             return " " + name + " " + (100.0 * cnt / v.dt.length).toFixed(1) + "/" + (100.0 * neg / v.dt.length).toFixed(1) + " " + v.dt.length;
         }
 
+        /*        
+            SGD(Stochastic Gradient Descent) 確率的勾配降下法
+
+            :param int epochs: エポック数
+            :param int mini_batch_size: ミニバッチのサイズ
+            :param double learning_rate: 学習率
+        */
         * SGD(training_data, test_data, epochs, mini_batch_size, learning_rate) {
             this.learningRate = learning_rate;
             var last_layer = this.layers[this.layers.length - 1];
@@ -1551,7 +1809,8 @@ function CreateNeuralNetwork(gpgpu){
                         }
                     }
 
-                    console.log("" + MersenneTwisterIdx);
+                    var sum_last_layer_y = last_layer.y_.dt.reduce((x,y) => x + y);
+                    console.log("ミニバッチ終了 %d %f", MersenneTwisterIdx, sum_last_layer_y);
                     for(let l of this.layers){
                         var s = l.constructor.name;
                         for(var i = l.y_.dt.length - 10; i < l.y_.dt.length; i++){
@@ -1594,11 +1853,21 @@ function CreateNeuralNetwork(gpgpu){
         }
     }
 
+    /*        
+        シグモイド関数の微分
+
+        :param double z:  
+    */
     function sigmoid_prime(z) {
         var f = sigmoid(z);
         return f * (1 - f);
     }
 
+    /*        
+        シグモイド関数
+
+        :param double z:  
+    */
     function sigmoid(z){
         return 1.0 / (1.0 + Math.exp(-z));
     }

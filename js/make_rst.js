@@ -1,6 +1,9 @@
 ﻿Classes = [];
 SourceFiles = [];
 
+/*
+    空白の終わりを探す。
+*/
 function SkipSpace(str, start) {
     var pos;
     for (pos = start; pos < str.length && str[pos] == ' '; pos++);
@@ -8,6 +11,9 @@ function SkipSpace(str, start) {
     return pos;
 }
 
+/*
+    名前の終わりを探す。
+*/
 function SkipName(str, start) {
     var pos;
     for (pos = start; pos < str.length && " =;\n({".indexOf(str[pos]) == -1; pos++);
@@ -15,6 +21,9 @@ function SkipName(str, start) {
     return [ pos, str.substring(start, pos) ];
 }
 
+/*
+    ソースファイルのクラス
+*/
 class SourceFile{
     constructor(file_name) {
         this.comment = null;
@@ -70,6 +79,9 @@ class SourceFile{
     }
 }
 
+/*
+    クラス定義のクラス
+*/
 class Class {
     constructor(source_file, comment, indent, class_name, super_class_name) {
         this.sourceFile = source_file;
@@ -114,7 +126,15 @@ class Class {
     }
 }
 
+/*
+    関数定義のクラス
+*/
 class Function {
+    /*
+        コンストラクタ
+
+        関数定義の開始行の情報を保存する。
+    */
     constructor(comment, start_line_idx, line, indent, is_generator, fnc_name, parent_class) {
         this.comment = comment;
         this.startLineIdx = start_line_idx;
@@ -125,23 +145,30 @@ class Function {
 
         this.head = line.trim();
         if (this.head.endsWith("{")) {
+            // 関数定義の開始行の末尾が"{"の場合
+
+            // 末尾の"{"を取り除く。
             this.head = this.head.substring(0, this.head.length - 1);
         }
 
         console.log("メソッド " + this.fncName);
     }
 
+    /*
+        関数のヘッダーと説明とソースのドキュメントを作る。
+    */
     makeRst(fs, dir_path) {
 
         var rst = "";
         rst += this.fncName + "\n";
         rst += "=".repeat(2 * this.fncName.length) + "\n\n";
-        rst += "構文\n^^^^^^\n\n";
-        rst += this.head + "\n\n";
+//        rst += "構文\n^^^^^^\n\n";
+        var class_name = (this.parentClass ? this.parentClass.className + "." : "");
+        rst += ".. js:function:: " + class_name + this.head + "\n\n";
 
         if (this.comment != null) {
 
-            rst += "説明\n^^^^^^\n\n";
+//            rst += "説明\n^^^^^^\n\n";
             rst += this.comment + "\n\n";
         }
 
@@ -152,6 +179,9 @@ class Function {
     }
 }
 
+/*
+    ソースファイルの構文解析
+*/
 function parseSource(fs, file_name) {
     var source_file = new SourceFile(file_name);
     SourceFiles.push(source_file);
@@ -209,6 +239,7 @@ function parseSource(fs, file_name) {
         }
 
         if (line.startsWith("class", indent)) {
+            // クラスの場合
 
             var pos = SkipSpace(line, indent + 5);
             [pos, class_name] = SkipName(line, pos);
@@ -228,6 +259,8 @@ function parseSource(fs, file_name) {
             Classes.push(current_class);
         }
         else if (line.startsWith("/**", indent) || line.startsWith("/*", indent)) {
+            // ブロックコメントの場合
+
             var s = line.trim();
             if (s.endsWith("*/")) {
                 
@@ -241,9 +274,12 @@ function parseSource(fs, file_name) {
             }
         }
         else if (line.startsWith("//", indent)) {
+            // 行コメントの場合
+
             prev_comment = line.substring(indent + 2).trim();
         }
         else if (line.startsWith("function", indent)) {
+            // 関数の場合
 
             var pos = SkipSpace(line, indent + 8);
             var fnc_name;
@@ -254,14 +290,17 @@ function parseSource(fs, file_name) {
             source_file.functions.push(current_fnc);
         }
         else if (line.startsWith("constructor", indent)) {
+            // コンストラクタの場合
 
             current_fnc = new Function(comment, line_idx, line, indent, false, "constructor", current_class);
             current_class.methods.push(current_fnc);
         }
         else if (line.startsWith("var", indent)) {
+            // 変数の場合
 
         }
         else if (line.startsWith("}", indent)) {
+            // ブロックの終わりの場合
 
             if (current_class != null && current_class.indent == indent) {
 
@@ -275,22 +314,22 @@ function parseSource(fs, file_name) {
             }
 
         }
-        else if (line.startsWith("var", indent)) {
-
-
-        }
         else {
 
             if (current_class != null && current_class.indent + 4 == indent && current_fnc == null) {
+                // クラス定義の中で、クラス定義の直下のインデントで、関数定義の中でない場合
 
                 var pos, fnc_name, is_generator = false;
 
                 if (line[indent] == "*") {
+                    // ジェネレーターの場合
+
                     is_generator = true;
 
                     pos = SkipSpace(line, indent + 1);
                 }
                 else {
+                    // ジェネレーターでない場合
 
                     pos = indent;
                 }
@@ -309,7 +348,7 @@ function parseSource(fs, file_name) {
 // JavaScript source code
 var fs = require('fs-extra');//"fs");
 
-for(let file_name of["gpgpu", "util", "shader", "network", "plot", "MNIST"]) {
+for(let file_name of["gpgpu", "util", "shader", "network", "plot", "MNIST", "make_rst"]) {
     parseSource(fs, file_name);
 
     var rst = `
