@@ -1661,6 +1661,10 @@ function CreateNeuralNetwork(gpgpu){
             :param  :  
         */
         countZero(name, v){
+            if(!v){
+                return "";
+            }
+
             var cnt = 0;
             var neg = 0;
             for(var i = 0; i < v.dt.length; i++){
@@ -1687,6 +1691,7 @@ function CreateNeuralNetwork(gpgpu){
             var last_layer = this.layers[this.layers.length - 1];
             last_layer.deltaY = new ArrayView(mini_batch_size, last_layer.unitSize);
             var exp_work = new Float32Array(last_layer.unitSize);
+            var change_mini_batch_size = false;
 
             for (this.EpochIdx = 0; this.EpochIdx < epochs; this.EpochIdx++) {
 
@@ -1706,13 +1711,16 @@ function CreateNeuralNetwork(gpgpu){
                     else{
 
                         data = test_data;
-                        miniBatchSize = 10 * mini_batch_size;
+                        miniBatchSize = (change_mini_batch_size ? 10 : 1) * mini_batch_size;
                     }
                     this.miniBatchSize = miniBatchSize;
 
                     var costs = new Float32Array(miniBatchSize);
 
-                    this.layers.forEach(x => x.miniBatchSizeChanged());
+                    if(change_mini_batch_size || this.EpochIdx == 0 && mode == 0){
+
+                        this.layers.forEach(x => x.miniBatchSizeChanged());
+                    }
 
                     var idx_list = random.RandomSampling(data.X.shape[0]);
 
@@ -1811,38 +1819,30 @@ function CreateNeuralNetwork(gpgpu){
 
                     var sum_last_layer_y = last_layer.y_.dt.reduce((x,y) => x + y);
                     console.log("ミニバッチ終了 %d %f", MersenneTwisterIdx, sum_last_layer_y);
-                    for(let l of this.layers){
-                        var s = l.constructor.name;
-                        for(var i = l.y_.dt.length - 10; i < l.y_.dt.length; i++){
-                            s += " " + l.y_.dt[i];
+
+                    if(false){
+                        for (let l of this.layers) {
+                            var ss = l.constructor.name;
+                            ss += this.countZero("z"  , l.z_);
+                            ss += this.countZero("y"  , l.y_);
+                            ss += this.countZero("B"  , l.bias);
+                            ss += this.countZero("W"  , l.weight);
+                            ss += this.countZero("δy", l.deltaY);
+                            ss += this.countZero("δz", l.deltaZ);
+                            ss += this.countZero("δB", l.deltaBias);
+                            ss += this.countZero("δW", l.deltaWeight);
+                            console.log(ss);
                         }
-                        console.log(s);
                     }
 
-                    console.log("");
-                    for (var i = 0; i < this.layers.length; i++) {
-                        var ss = "" + i;
-                        var l = this.layers[i];
-                        if(l.z_         ){ ss += this.countZero("z"  , l.z_); }
-                        if(l.y_         ){ ss += this.countZero("y"  , l.y_); }
-                        if(l.bias       ){ ss += this.countZero("B"  , l.bias); }
-                        if(l.weight     ){ ss += this.countZero("W"  , l.weight); }
-                        if(l.deltaY     ){ ss += this.countZero("δy", l.deltaY); }
-                        if(l.deltaZ     ){ ss += this.countZero("δz", l.deltaZ);}
-                        if(l.deltaBias  ){ ss += this.countZero("δB", l.deltaBias); }
-                        if(l.deltaWeight){ ss += this.countZero("δW", l.deltaWeight); }
-                        console.log(ss);
+                    if(change_mini_batch_size){
+                        this.layers.forEach(x => x.clear());
                     }
-
-                    this.layers.forEach(x => x.clear());
 
                     if(! this.isTraining){
 
-//                        var accuracy_rate     = (100 * ok_cnt / (this.miniBatchCnt * miniBatchSize)).toFixed(2);
-//                        var epock_time_minute = Math.round( (new Date() - start_epock_time) / (60 * 1000) );
-//                        console.log("Epoch %d %s% %dmin eta:%.02f", this.EpochIdx, accuracy_rate, epock_time_minute, this.learningRate);
-//                        console.log("Epoch %d  %d/%d %dmin eta:%.02f", this.EpochIdx, ok_cnt, this.miniBatchCnt * miniBatchSize, epock_time_minute, this.learningRate);
-                        console.log("Epoch %d  %d / %d eta:%.02f", this.EpochIdx, ok_cnt, this.miniBatchCnt * miniBatchSize, this.learningRate);
+                        var epock_time_minute = Math.round( (new Date() - start_epock_time) / (60 * 1000) );
+                        console.log("Epoch %d  %d / %d eta:%.02f time:%dmin", this.EpochIdx, ok_cnt, this.miniBatchCnt * miniBatchSize, this.learningRate, epock_time_minute);
                     }
                 }
 
