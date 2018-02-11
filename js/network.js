@@ -1,9 +1,15 @@
-﻿var ActivationFunction = {
+﻿/*
+    活性化関数のid
+*/
+var ActivationFunction = {
     none : 0,
     sigmoid: 1,
     ReLU : 2,
 };
 
+/*
+    NeuralNetworkのインスタンスを作って返す。
+*/
 function CreateNeuralNetwork(gpgpu){
     var miniBatchSize;
     var miniBatchIdx;
@@ -18,18 +24,6 @@ function CreateNeuralNetwork(gpgpu){
     var Shaders = CreateNeuralNetworkShaders();
     var random = new RandomHelper();
     var net;
-
-    function Stats(tm, idx){
-        switch(tm.length){
-        case 0:
-            return "-"
-        case 1:
-            return "" + Math.round(tm[0] / idx)
-        default:
-            return "[" + tm.map(x => Math.round(x / idx)).reduce((x,y) => x + "," + y) + "]";
-        }
-    }
-
 
     function Stats2(tm, idx){
         return tm.map(x => "<td>" + (x == null ? "" : Math.round(x / idx)) + "</td>").join("");
@@ -74,11 +68,15 @@ function CreateNeuralNetwork(gpgpu){
         /*
             初期処理
 
-            :param Layer prev_layer: 直前の層 
+            :param Layer prev_layer: 直前のレイヤー 
         */
         init(prev_layer) {
             this.prevLayer = prev_layer;
+
             if (prev_layer) {
+                // 直前のレイヤーがある場合
+
+                // 直前のレイヤーの直後のレイヤーをthisにする。
                 prev_layer.nextLayer = this;
             }
         }
@@ -87,9 +85,14 @@ function CreateNeuralNetwork(gpgpu){
             ミニバッチのサイズが変わった時の処理
         */
         miniBatchSizeChanged(){
-            this.fwTime = [];
-            this.bwTime = [];
-            this.udTime = [];
+            // 順伝播の処理時間の配列
+            this.forwardTime = [];
+
+            // 誤差逆伝播の処理時間の配列
+            this.backwardTime = [];
+
+            // パラメータの更新の処理時間の配列
+            this.updateTime = [];
         }
 
         /*
@@ -256,7 +259,7 @@ function CreateNeuralNetwork(gpgpu){
         /*
             初期処理
 
-            :param Layer prev_layer: 直前の層 
+            :param Layer prev_layer: 直前のレイヤー 
         */
         init(prev_layer) {
             super.init(prev_layer);
@@ -328,7 +331,7 @@ function CreateNeuralNetwork(gpgpu){
             順伝播
         */
         forward() {
-            var lap = new Lap(this.fwTime);
+            var lap = new Lap(this.forwardTime);
             this.gpuForward();
 
             lap.Time();
@@ -438,7 +441,7 @@ function CreateNeuralNetwork(gpgpu){
             誤差逆伝播
         */
         backpropagation() {
-            var lap = new Lap(this.bwTime);
+            var lap = new Lap(this.backwardTime);
 
             if (this.nextLayer) {
                 // 最後のレイヤーでない場合
@@ -478,7 +481,7 @@ function CreateNeuralNetwork(gpgpu){
             パラメータの更新
         */
         updateParameter() {
-            var lap = new Lap(this.udTime);
+            var lap = new Lap(this.updateTime);
             var eta = net.learningRate / miniBatchSize;
             var c = 1.0 - net.learningRate * WeightDecay / TrainingDataCnt;
 
@@ -504,7 +507,7 @@ function CreateNeuralNetwork(gpgpu){
             処理時間の計測値のHTML文字列を返す。
         */
         processedTime(idx){
-            return "<tr><td>全結合層</td>" + Stats2([ this.fwTime[0] ].concat(this.bwTime).concat(this.udTime[0]), idx) + "</tr>";
+            return "<tr><td>全結合層</td>" + Stats2([ this.forwardTime[0] ].concat(this.backwardTime).concat(this.updateTime[0]), idx) + "</tr>";
         }
     }
 
@@ -531,7 +534,7 @@ function CreateNeuralNetwork(gpgpu){
         /*
             初期処理
         
-            :param Layer prev_layer: 直前の層 
+            :param Layer prev_layer: 直前のレイヤー 
         */
         init(prev_layer) {
             super.init(prev_layer);
@@ -699,7 +702,7 @@ function CreateNeuralNetwork(gpgpu){
             順伝播
         */
         forward() {
-            var lap = new Lap(this.fwTime);
+            var lap = new Lap(this.forwardTime);
 
             this.gpuForward();
 
@@ -1021,7 +1024,7 @@ function CreateNeuralNetwork(gpgpu){
             誤差逆伝播
         */
         backpropagation() {
-            var lap = new Lap(this.bwTime);
+            var lap = new Lap(this.backwardTime);
 
             if (this.nextLayer) {
                 // 最後のレイヤーでない場合
@@ -1076,7 +1079,7 @@ function CreateNeuralNetwork(gpgpu){
             パラメータの更新
         */
         updateParameter() {
-            var lap = new Lap(this.udTime);
+            var lap = new Lap(this.updateTime);
 
             var prev_layer = this.prevLayer;
             var eta = net.learningRate / miniBatchSize;
@@ -1107,18 +1110,11 @@ function CreateNeuralNetwork(gpgpu){
             lap.Time();
         }
 
-        clear(){
-            for(var key in this.params){
-                WebGL2.clear(this.params[key].id);
-            }
-            this.params = {};
-        }
-
         /*
             処理時間の計測値のHTML文字列を返す。
         */
         processedTime(idx){
-            return "<tr><td>畳み込み層</td>" + Stats2([ this.fwTime[0] ].concat(this.bwTime).concat(this.udTime[0]), idx) + "</tr>";
+            return "<tr><td>畳み込み層</td>" + Stats2([ this.forwardTime[0] ].concat(this.backwardTime).concat(this.updateTime[0]), idx) + "</tr>";
         }
     }
 
@@ -1137,7 +1133,7 @@ function CreateNeuralNetwork(gpgpu){
         /*
             初期処理
     
-            :param Layer prev_layer: 直前の層 
+            :param Layer prev_layer: 直前のレイヤー 
         */
         init(prev_layer) {
             super.init(prev_layer);
@@ -1169,7 +1165,7 @@ function CreateNeuralNetwork(gpgpu){
             順伝播
         */
         forward() {
-            var lap = new Lap(this.fwTime);
+            var lap = new Lap(this.forwardTime);
 
             var prev_layer = this.prevLayer;
 
@@ -1240,7 +1236,7 @@ function CreateNeuralNetwork(gpgpu){
             誤差逆伝播
         */
         backpropagation() {
-            var lap = new Lap(this.bwTime);
+            var lap = new Lap(this.backwardTime);
 
             var prev_layer = this.prevLayer;
 
@@ -1292,7 +1288,7 @@ function CreateNeuralNetwork(gpgpu){
             処理時間の計測値のHTML文字列を返す。
         */
         processedTime(idx){
-            return "<tr><td>Maxプーリング層</td>" + Stats2([ this.fwTime[0], null, null, null, this.bwTime[0], null ], idx) + "</tr>";
+            return "<tr><td>Maxプーリング層</td>" + Stats2([ this.forwardTime[0], null, null, null, this.backwardTime[0], null ], idx) + "</tr>";
         }
     }
 
@@ -1312,7 +1308,7 @@ function CreateNeuralNetwork(gpgpu){
         /*
             初期処理
     
-            :param Layer prev_layer: 直前の層 
+            :param Layer prev_layer: 直前のレイヤー 
         */
         init(prev_layer) {
             super.init(prev_layer);
@@ -1334,7 +1330,7 @@ function CreateNeuralNetwork(gpgpu){
             順伝播
         */
         forward() {
-            var lap = new Lap(this.fwTime);
+            var lap = new Lap(this.forwardTime);
 
             for(var i = 0; i < this.y_.dt.length; i++){
                 if(net.isTraining){
@@ -1367,7 +1363,7 @@ function CreateNeuralNetwork(gpgpu){
             誤差逆伝播
         */
         backpropagation() {
-            var lap = new Lap(this.bwTime);
+            var lap = new Lap(this.backwardTime);
 
             for(var i = 0; i < this.y_.dt.length; i++){
                 if(this.valid[i] == 1){
@@ -1389,7 +1385,7 @@ function CreateNeuralNetwork(gpgpu){
             処理時間の計測値のHTML文字列を返す。
         */
         processedTime(idx){
-            return "<tr><td>ドロップアウト層</td>" + Stats2([ this.fwTime[0], null, null, null, this.bwTime[0], null ], idx) + "</tr>";
+            return "<tr><td>ドロップアウト層</td>" + Stats2([ this.forwardTime[0], null, null, null, this.backwardTime[0], null ], idx) + "</tr>";
         }
     }
 
@@ -1707,10 +1703,11 @@ function CreateNeuralNetwork(gpgpu){
             last_layer.deltaY = new ArrayView(mini_batch_size, last_layer.unitSize);
             var exp_work = new Float32Array(last_layer.unitSize);
             var change_mini_batch_size = false;
+            var show_time = undefined;
 
-            for (this.EpochIdx = 0; this.EpochIdx < epochs; this.EpochIdx++) {
+            for (this.epochIdx = 0; this.epochIdx < epochs; this.epochIdx++) {
 
-                var start_epock_time = new Date();
+                var start_epoch_time = new Date();
 
                 for(var mode = 0; mode < 2; mode++){
                     var data;
@@ -1732,14 +1729,13 @@ function CreateNeuralNetwork(gpgpu){
 
                     var costs = new Float32Array(miniBatchSize);
 
-                    if(change_mini_batch_size || this.EpochIdx == 0 && mode == 0){
+                    if(change_mini_batch_size || this.epochIdx == 0 && mode == 0){
 
                         this.layers.forEach(x => x.miniBatchSizeChanged());
                     }
 
                     var idx_list = random.RandomSampling(data.X.shape[0]);
 
-                    var show_time = new Date();
 
                     var data_cnt = data.X.shape[0];
                     TrainingDataCnt = data_cnt;
@@ -1806,24 +1802,20 @@ function CreateNeuralNetwork(gpgpu){
 
                         if(this.isTraining){
 
-                            this.trainingCost[this.EpochIdx] = avg_cost;
-                            this.trainingAccuracy[this.EpochIdx] = accuracy;
+                            this.trainingCost[this.epochIdx] = avg_cost;
+                            this.trainingAccuracy[this.epochIdx] = accuracy;
                         }
                         else{
 
-                            this.testCost[this.EpochIdx] = avg_cost;
-                            this.testAccuracy[this.EpochIdx] = accuracy;
+                            this.testCost[this.epochIdx] = avg_cost;
+                            this.testAccuracy[this.epochIdx] = accuracy;
                         }
 
-                        if (10 * 1000 < new Date() - show_time) {
-
-                            this.logPre.innerText = this.logPre.innerText + this.processedDataCnt + "\n";
-
-                            // ミニバッチごとの処理時間 (全体)
-                            this.processedTimeAll = Stats(mini_batch_time, idx);
+                        if (show_time == undefined || 10 * 1000 < new Date() - show_time) {
+                            // 最初か、10秒経過した場合
 
                             // ミニバッチごとの処理時間 (レイヤー別)
-                            this.processedTimeLayer = this.layers.slice(1).map(layer => layer.processedTime(idx)).join("\n");
+                            this.processedTimeLayer = this.layers.slice(1).map(layer => layer.processedTime(idx + 1)).join("\n");
 
 
                             show_time = new Date();
@@ -1856,8 +1848,8 @@ function CreateNeuralNetwork(gpgpu){
 
                     if(! this.isTraining){
 
-                        var epock_time_minute = Math.round( (new Date() - start_epock_time) / (60 * 1000) );
-                        console.log("Epoch %d  %d / %d eta:%.02f time:%dmin", this.EpochIdx, ok_cnt, this.miniBatchCnt * miniBatchSize, this.learningRate, epock_time_minute);
+                        this.epochTime = Math.round( (new Date() - start_epoch_time) / (60 * 1000) );
+                        console.log("Epoch %d  %d / %d eta:%.02f time:%dmin", this.epochIdx, ok_cnt, this.miniBatchCnt * miniBatchSize, this.learningRate, this.epochTime);
                     }
                 }
 

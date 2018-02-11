@@ -2,24 +2,25 @@
 
 <html lang="en" xmlns="http://www.w3.org/1999/xhtml">
 <head>
-    <meta charset="utf-8" />
-    <title>MNISTのディープラーニング</title>
-    <script type="text/javascript" src="../js/MersenneTwister.js"></script>
-    <script type="text/javascript" src="../js/util.js"></script>
-    <script type="text/javascript" src="../js/gpgpu.js"></script>
-    <script type="text/javascript" src="../js/shader.js"></script>
-    <script type="text/javascript" src="../js/network.js"></script>
-    <script type="text/javascript" src="../js/plot.js"></script>
-    <script type="text/javascript" src="../js/MNIST.js"></script>
+
+<meta charset="utf-8" />
+<title>MNISTのディープラーニング</title>
+
+<script type="text/javascript" src="../js/MersenneTwister.js"></script>
+<script type="text/javascript" src="../js/util.js"></script>
+<script type="text/javascript" src="../js/gpgpu.js"></script>
+<script type="text/javascript" src="../js/shader.js"></script>
+<script type="text/javascript" src="../js/network.js"></script>
+<script type="text/javascript" src="../js/plot.js"></script>
+<script type="text/javascript" src="../js/MNIST.js"></script>
+
 <script type="text/javascript">
 
+    // トレーニング/テストのコスト/正解率のプロットオブジェクト
     var trainingCostsPlot, testCostsPlot, trainingAccuracyPlot, testAccuracyPlot;
-    var theGPGPU;
-    var NeuralNetworkTimer;
-    var StopResumeButton;
 
-    // 前回のプロット表示の時刻
-    var lastPlotTime;
+    // GPGPUのオブジェクト
+    var theGPGPU;
 
     // MNISTのデータ読み込みのヘルパー オブジェクト
     var mnist;
@@ -28,14 +29,13 @@
         ページロード時の初期処理
     */
     function BodyOnLoad() {
+        // トレーニング/テストのコスト/正解率のプロットオブジェクトを作る。
         trainingCostsPlot    = CreatePlot(document.getElementById('training-costs-canvas'));
         testCostsPlot        = CreatePlot(document.getElementById('test-costs-canvas'));
         trainingAccuracyPlot = CreatePlot(document.getElementById('training-accuracy-canvas'));
         testAccuracyPlot     = CreatePlot(document.getElementById('test-accuracy-canvas'));
 
-        // 停止/再開ボタン
-        StopResumeButton = document.getElementById('stop-resume');
-
+        // GPGPUのオブジェクトを作る。
         theGPGPU = CreateGPGPU();
 
         // MNISTのデータ読み込みのヘルパー オブジェクト
@@ -43,39 +43,15 @@
 
         // DragOverとDropのイベントを登録する。
         document.body.addEventListener('dragover', DragOverHandler, false);
-        document.body.addEventListener('drop', DropHandler, false);
+        document.body.addEventListener('drop'    , DropHandler    , false);
     }
 
     /*
-        停止/再開ボタン クリック
+        ニューラルネットワークを実行する。
     */
-    function StopResumeClick() {
-        if (NeuralNetworkTimer) {
-            // 実行中の場合
-
-            clearInterval(NeuralNetworkTimer);
-            NeuralNetworkTimer = undefined;
-
-            theGPGPU.clearAll();
-
-            StopResumeButton.value = "再開";
-        }
-        else {
-            // 停止中の場合
-
-            StopResumeButton.value = "停止";
-            RunNeuralNetwork();
-        }
-    }
-
     function RunNeuralNetwork() {
-
-        lastPlotTime = new Date();
-
         var net = CreateNeuralNetwork(theGPGPU);
         
-        net.logPre = document.getElementById("log-pre");
-
         var learning_rate;          // 0.01;// 0.1;// 0.12;// 0.16;// 0.2;// 0.05;// 0.1;
 
         if (false) {
@@ -110,59 +86,60 @@
             learning_rate = 0.03;
         }
 
-        var epochs = 60;
-        var mini_batch_size = 10;
+        // SGD(確率的勾配降下法)のジェネレータを作る。
+        var sgd_generator = net.SGD(mnist.trainingData, mnist.testData, 30, 10, learning_rate);
 
-        var sgd_generator = net.SGD(mnist.trainingData, mnist.testData, epochs, mini_batch_size, learning_rate);
+        var epoch_idx = 0;
 
-        NeuralNetworkTimer = setInterval(function () {
+        var timer_id = setInterval(function () {
+            // SGDのジェネレータの処理を1つ進める。
             var ret = sgd_generator.next().value;
-            if (ret == 0) {
 
-                clearInterval(NeuralNetworkTimer);
-                NeuralNetworkTimer = undefined;
+            if (ret == 0) {
+                // SGDが終了した場合
+
+                clearInterval(timer_id);
 
                 theGPGPU.clearAll();
+
                 console.log("学習が終わりました。");
-
-                RunNeuralNetwork();
             }
 
-            
-            if (10 * 1000 < new Date() - lastPlotTime) {
-                // 前回のプロット表示から10秒が経過した場合
+            // トレーニング/テストのコスト/正解率のプロットの描画
+            trainingCostsPlot.show(net.trainingCost, "red");
+            testCostsPlot.show(net.testCost, "blue");
+            trainingAccuracyPlot.show(net.trainingAccuracy, "blue");
+            testAccuracyPlot.show(net.testAccuracy, "blue");
 
-                lastPlotTime = new Date();
+            // トレーニングのコスト/正解率の表示
+            showText("training-cost"    , net.trainingCost[net.trainingCost.length - 1].toFixed(3));
+            showText("training-accuracy", (100 * net.trainingAccuracy[net.trainingAccuracy.length - 1]).toFixed(2) + "%");
 
-                trainingCostsPlot.show(net.trainingCost, "red");
-                testCostsPlot.show(net.testCost, "blue");
-                trainingAccuracyPlot.show(net.trainingAccuracy, "blue");
-                testAccuracyPlot.show(net.testAccuracy, "blue");
+            if (net.testCost.length != 0 && epoch_idx != net.epochIdx) {
 
-                showText("training-cost", net.trainingCost[net.trainingCost.length - 1].toFixed(3));
-                showText("training-accuracy", (100 * net.trainingAccuracy[net.trainingAccuracy.length - 1]).toFixed(2) + "%");
+                epoch_idx = net.epochIdx;
 
-                if (net.testCost.length != 0) {
-
-                    showText("test-cost", net.testCost[net.testCost.length - 1].toFixed(3));
-                    showText("test-accuracy", (100 * net.testAccuracy[net.testAccuracy.length - 1]).toFixed(2) + "%");
-                }
-
-                showText("processed-data-cnt", net.processedDataCnt);
-                showText("epoch-idx", net.EpochIdx);
-
-                showText("mini-batch-cnt", net.miniBatchCnt);
-                showText("mini-batch-size", net.miniBatchSize);
-                showText("total-data-cnt", net.miniBatchCnt * net.miniBatchSize);
-
-                showText("processed-time-all", net.processedTimeAll);
-
-                if (net.processedTimeLayer) {
-
-                    document.getElementById("time-tbody").innerHTML = net.processedTimeLayer;
-                }
+                // テストのコスト/正解率/正解率履歴の表示
+                showText("test-cost"      , net.testCost[net.testCost.length - 1].toFixed(3));
+                showText("test-accuracy"  , (100 * net.testAccuracy[net.testAccuracy.length - 1]).toFixed(2) + "%");
+                showText("test-accuracies", net.testAccuracy.map(x => (100 * x).toFixed(2)).join("\n"));
             }
-            
+
+            // 現在のエポック/処理済みデータ数/1エポックの処理時間の表示
+            showText("epoch-idx"         , net.epochIdx);
+            showText("processed-data-cnt", net.processedDataCnt);
+            showText("epoch-time"        , net.epochTime);
+
+            // ミニバッチの個数/ミニバッチの大きさ/データ数の表示
+            showText("mini-batch-cnt" , net.miniBatchCnt);
+            showText("mini-batch-size", net.miniBatchSize);
+            showText("total-data-cnt" , net.miniBatchCnt * net.miniBatchSize);
+
+            if (net.processedTimeLayer) {
+
+                // レイヤー別の処理時間の表の表示
+                document.getElementById("time-tbody").innerHTML = net.processedTimeLayer;
+            }            
         }, 1)
     }
 
@@ -170,7 +147,10 @@
         テキストを表示する。
     */
     function showText(id, text) {
-        document.getElementById(id).innerText = text;
+        if (text != undefined) {
+
+            document.getElementById(id).innerText = text;
+        }
     }
 
     /*
@@ -179,7 +159,7 @@
     function DragOverHandler(evt) {
         evt.stopPropagation();
         evt.preventDefault();
-        evt.dataTransfer.dropEffect = 'copy'; // Explicitly show this is a copy.
+        evt.dataTransfer.dropEffect = 'copy';
     }
 
 
@@ -193,33 +173,31 @@
         evt.stopPropagation();
         evt.preventDefault();
 
-        var files = evt.dataTransfer.files; // FileList object.
-
-        // files is a FileList of File objects. List some properties.
-        for (var i = 0, f; f = files[i]; i++) {
+        // ドロップされたファイルに対し
+        for (let file of evt.dataTransfer.files) {
 
             var reader = new FileReader();
                 
-            // Closure to capture the file information.
-            reader.onload = (function (file_inf) {
+            // ファイル読み込み完了時の処理。fileを関数のクロージャに渡す。
+            reader.onload = (function (file_arg) {
                 return function (e) {
-                    // Render thumbnail.
-                    var data = new Uint8Array(e.target.result);
-                    var file_name = escape(file_inf.name);
+                    var file_contents = new Uint8Array(e.target.result);
+                    var file_name     = escape(file_arg.name);
 
-                    mnist.onLoadFile(file_name, data);
+                    // MNISTのファイル読み込み完了時の処理
+                    mnist.onLoadFile(file_name, file_contents);
 
                     if (mnist.trainingData && mnist.testData) {
-                        // トレーニング データとテスト データを読み込んだ場合
+                        // トレーニング データとテスト データの読み込みが完了した場合
 
-                        StopResumeButton.disabled = false;
+                        // ニューラルネットワークを実行する。
                         RunNeuralNetwork();
                     }
                 };
-            })(f);
+            })(file);
                 
-            // Read in the image file as a data URL.
-            reader.readAsArrayBuffer(f);
+            // ファイルの内容をArrayBufferとして読む。
+            reader.readAsArrayBuffer(file);
         }
     }
 </script>
@@ -227,11 +205,13 @@
 <body onload="BodyOnLoad()">
     <h3>MNISTのディープラーニング</h3>
 
-以下のサイトから4つのファイルをダウンロード後に解凍して、このページにドロップしてください。<br />
-<br />
-&nbsp;&nbsp;&nbsp;&nbsp;<a href="http://yann.lecun.com/exdb/mnist/">http://yann.lecun.com/exdb/mnist/</a><br />
-&nbsp;&nbsp;&nbsp;&nbsp;t10k-images.idx3-ubyte , t10k-labels.idx1-ubyte , train-images.idx3-ubyte , train-labels.idx1-ubyte<br />
-<br />
+以下のサイトから4つのファイルをダウンロード後に解凍して、このページにドロップしてください。
+<p style="padding-left: 2em">
+    <a href="http://yann.lecun.com/exdb/mnist/">http://yann.lecun.com/exdb/mnist/</a><br />
+    <span>t10k-images.idx3-ubyte , t10k-labels.idx1-ubyte , train-images.idx3-ubyte , train-labels.idx1-ubyte</span>
+</p>
+
+<!-- トレーニング/テストのコスト/正解率の表 -->
 <table border="1">
     <thead>
         <tr>
@@ -244,68 +224,70 @@
         <tr>
             <td><b>コスト</b></td>
             <td>
-                <canvas id="training-costs-canvas" width="300" height="200"></canvas><br />
+                <canvas id="training-costs-canvas" width="300" height="150"></canvas><br />
                 <b id="training-cost"></b>
             </td>
             <td>
-                <canvas id="test-costs-canvas" width="300" height="200"></canvas><br />
+                <canvas id="test-costs-canvas" width="300" height="150"></canvas><br />
                 <b id="test-cost"></b>
             </td>
         </tr>
         <tr>
             <td><b>正解率</b></td>
             <td>
-                <canvas id="training-accuracy-canvas" width="300" height="200"></canvas><br />
+                <canvas id="training-accuracy-canvas" width="300" height="150"></canvas><br />
                 <b id="training-accuracy"></b>
             </td>
-            <td>
-                <canvas id="test-accuracy-canvas" width="300" height="200"></canvas><br />
-                <b id="test-accuracy"></b>
+            <td style="width:410px">
+                <canvas id="test-accuracy-canvas" width="300" height="150" style="float:left"></canvas>
+
+                <pre id="test-accuracies" style="width:100px; height:150px; border:ridge; overflow:scroll; float:right"></pre>
+
+                <b id="test-accuracy" style="float:left">&nbsp;</b>
             </td>
         </tr>
     </tbody>
 </table>
     
 <br />
-現在のエポック = <span id="epoch-idx"></span>&nbsp;&nbsp;&nbsp;&nbsp;処理済みデータ数 = <span id="processed-data-cnt"></span><br />
-データ数 = ミニバッチの個数(<span id="mini-batch-cnt"></span>) × ミニバッチの大きさ(<span id="mini-batch-size"></span>) = <span id="total-data-cnt"></span><br />
-ミニバッチごとの処理時間 ( 単位:ミリ秒 )<br />
-&nbsp;&nbsp;&nbsp;&nbsp;全体 ( データ準備, 順伝播, コスト計算, 誤差逆伝播, パラメータ更新 )  <br />
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span id="processed-time-all"></span><br />
+現在のエポック      = <span id="epoch-idx"          style="margin-right: 3em"></span> 
+処理済みデータ数    = <span id="processed-data-cnt" style="margin-right: 3em"></span>
+1エポックの処理時間 = <span id="epoch-time"></span>分 
 <br />
-    <input type="button" value="停止" id="stop-resume" onclick="StopResumeClick()" disabled="true"  /><br />
+データ数 = ミニバッチの個数(<span id="mini-batch-cnt" ></span>) ×
+ミニバッチの大きさ         (<span id="mini-batch-size"></span>)
+=                           <span id="total-data-cnt" ></span><br />
 <br />
 
-    <table border="1">
-        <thead>
-            <tr>
-                <th></th>
-                <th>順伝播</th>
-                <th>δ z</th>
-                <th>δ bias</th>
-                <th>δ weight</th>
-                <th>δ x</th>
-                <th>パラメータの更新</th>
-            </tr>
-        </thead>
-        <tbody id="time-tbody">
-            <tr>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-            </tr>
-        </tbody>
-    </table>
-    <br />
-<pre id="log-pre" style="width:600px; height:300px; border:ridge; overflow:scroll"></pre>
-
+レイヤー別の処理時間の表 ( 単位:ミリ秒 )
+<table border="1">
+    <thead>
+        <tr>
+            <th></th>
+            <th>順伝播</th>
+            <th>δ z</th>
+            <th>δ bias</th>
+            <th>δ weight</th>
+            <th>δ x</th>
+            <th>パラメータの更新</th>
+        </tr>
+    </thead>
+    <tbody id="time-tbody">
+        <tr>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+        </tr>
+    </tbody>
+</table>
+<br />
 
 <!-- 画像データの表示 ( デバック用 ) -->
-<canvas id="digit-canvas" width="28" height="28" style="width:28px; height:28px; background-color:gainsboro"/>
+<canvas id="digit-canvas" width="28" height="28" style="width:28px; height:28px; background-color:gainsboro; float:none"/>
 
 </body>
 </html>

@@ -8,6 +8,9 @@ class MNIST {
         this.ctx = this.canvas.getContext('2d');
     }
 
+    /*
+        ファイル読み込み完了時の処理
+    */
     onLoadFile(file_name, data) {
         var type, cnt, h, w;
 
