@@ -104,8 +104,7 @@
 
                 console.log("学習が終わりました。");
             }
-            /*
-            */
+
             // トレーニング/テストのコスト/正解率のプロットの描画
             trainingCostsPlot.show(net.trainingCost, "red");
             testCostsPlot.show(net.testCost, "blue");
@@ -129,6 +128,7 @@
             // 現在のエポック/処理済みデータ数/1エポックの処理時間の表示
             showText("epoch-idx"         , net.epochIdx);
             showText("processed-data-cnt", net.processedDataCnt);
+            showText("epoch-time"        , net.epochTime);
 
             // ミニバッチの個数/ミニバッチの大きさ/データ数の表示
             showText("mini-batch-cnt" , net.miniBatchCnt);
@@ -140,10 +140,6 @@
                 // レイヤー別の処理時間の表の表示
                 document.getElementById("time-tbody").innerHTML = net.processedTimeLayer;
             }
-
-            showText("epoch-time"        , net.epochTime);
-
-
         }, 1)
     }
 

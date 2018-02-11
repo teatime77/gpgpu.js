@@ -30,7 +30,7 @@ function CreateNeuralNetwork(gpgpu){
         平均の処理時間のHTML文字列を返す。
 
         :param Array lap_times: 処理時間の累積の配列
-        :param int cnt: 処理の回数
+        :param int   cnt:       処理の回数
     */
     function meanProcessedTime(lap_times, cnt){
         return lap_times.map(x => "<td>" + (x == null ? "" : Math.round(x / cnt)) + "</td>").join("");
@@ -136,11 +136,11 @@ function CreateNeuralNetwork(gpgpu){
         /*
             勾配の計算のチェック
 
-            :param int : 
-            :param int : 
-            :param int : 
-            :param int batch_idx: ミニバッチ内のインデックス
-            :param int layer_idx: レイヤーのインデックス
+            :param float[] batch_Y: 正解の出力
+            :param float[] exp_work: 作業用データ
+            :param double  cost: コスト
+            :param int     batch_idx: ミニバッチ内のインデックス
+            :param int     layer_idx: レイヤーのインデックス
         */
         gradientCheck(batch_Y, exp_work, cost, batch_idx, layer_idx){
             if(! this.prevLayer){
@@ -188,6 +188,8 @@ function CreateNeuralNetwork(gpgpu){
 
         /*
             処理時間の計測値のHTML文字列を返す。
+
+            :param int cnt: 処理の回数
         */
         processedTime(cnt){
             return "<tr><td></td>" + meanProcessedTime([], cnt) + "</tr>";
@@ -512,6 +514,8 @@ function CreateNeuralNetwork(gpgpu){
 
         /*
             処理時間の計測値のHTML文字列を返す。
+
+            :param int cnt: 処理の回数
         */
         processedTime(cnt){
             return "<tr><td>全結合層</td>" + meanProcessedTime([ this.forwardTime[0] ].concat(this.backwardTime).concat(this.updateTime[0]), cnt) + "</tr>";
@@ -1119,6 +1123,8 @@ function CreateNeuralNetwork(gpgpu){
 
         /*
             処理時間の計測値のHTML文字列を返す。
+
+            :param int cnt: 処理の回数
         */
         processedTime(cnt){
             return "<tr><td>畳み込み層</td>" + meanProcessedTime([ this.forwardTime[0] ].concat(this.backwardTime).concat(this.updateTime[0]), cnt) + "</tr>";
@@ -1293,6 +1299,8 @@ function CreateNeuralNetwork(gpgpu){
 
         /*
             処理時間の計測値のHTML文字列を返す。
+
+            :param int cnt: 処理の回数
         */
         processedTime(cnt){
             return "<tr><td>Maxプーリング層</td>" + meanProcessedTime([ this.forwardTime[0], null, null, null, this.backwardTime[0], null ], cnt) + "</tr>";
@@ -1305,7 +1313,7 @@ function CreateNeuralNetwork(gpgpu){
     */
     class DropoutLayer extends Layer {
         /*        
-            :param double : ドロップアウトをする確率
+            :param double: ドロップアウトをする確率
         */
         constructor(drop_ratio) {
             super();
@@ -1390,6 +1398,8 @@ function CreateNeuralNetwork(gpgpu){
 
         /*
             処理時間の計測値のHTML文字列を返す。
+
+            :param int cnt: 処理の回数
         */
         processedTime(cnt){
             return "<tr><td>ドロップアウト層</td>" + meanProcessedTime([ this.forwardTime[0], null, null, null, this.backwardTime[0], null ], cnt) + "</tr>";
@@ -1401,7 +1411,7 @@ function CreateNeuralNetwork(gpgpu){
     */
     class NeuralNetwork {
         /*        
-            :param  :  
+            :param GPGPU gpgpu: GPGPUのオブジェクト
         */
         constructor(gpgpu) {
             net = this;
@@ -1430,8 +1440,8 @@ function CreateNeuralNetwork(gpgpu){
             入力層を作って返す。
 
             :param int channel_size: チャネル数
-            :param int rows: 行数
-            :param int cols: 列数
+            :param int rows:         行数
+            :param int cols:         列数
         */
         InputLayer(channel_size, rows, cols){
             return new InputLayer(channel_size, rows, cols);
@@ -1470,7 +1480,7 @@ function CreateNeuralNetwork(gpgpu){
         /*        
             ドロップアウト層を作って返す。
 
-            :param double : ドロップアウトをする確率
+            :param double: ドロップアウトをする確率
         */
         DropoutLayer(drop_ratio){
             return new DropoutLayer(drop_ratio);
@@ -1480,9 +1490,9 @@ function CreateNeuralNetwork(gpgpu){
             ArrayViewから指定されたインデックスのデータを抜き出して返す。
 
             :param ArrayView data: 抽出元
-            :param int[] idx_list: インデックスの配列
-            :param int idx_start: 抽出するデータの開始位置
-            :param int idx_cnt: 抽出するデータの数
+            :param int[]     idx_list: インデックスの配列
+            :param int       idx_start: 抽出するデータの開始位置
+            :param int       idx_cnt: 抽出するデータの数
         */
         ExtractArrayView(data, idx_list, idx_start, idx_cnt) {
             // 1個分のデータのサイズ
@@ -1519,7 +1529,7 @@ function CreateNeuralNetwork(gpgpu){
         /*
             正解数を返す。
 
-            :param number[] Y: 正解
+            :param ArrayView Y: 正解
             :returns: 正解数
         */
         CorrectCount(Y){
@@ -1539,6 +1549,10 @@ function CreateNeuralNetwork(gpgpu){
 
         /*
             最小二乗誤差の微分
+
+            :param float[] last_delta_y_dt: 最後のレイヤーのδy
+            :param float[] last_y:          最後のレイヤーのy
+            :param float[] batch_Y:         正解の出力
         */
         LeastSquaresDelta(last_delta_y_dt, last_y, batch_Y) {
             for(var i = 0; i < last_delta_y_dt.length; i++){
@@ -1549,7 +1563,12 @@ function CreateNeuralNetwork(gpgpu){
         /*
             損失関数の微分
 
-            :param int batch_idx: ミニバッチ内のインデックス
+            :param float[] last_delta_y_dt: 最後のレイヤーのδy
+            :param float[] last_y:          最後のレイヤーのy
+            :param float[] batch_Y:         正解の出力
+            :param float[] exp_work:        作業用データ
+            :param int     range_len:       出力の次元
+            :param int     batch_idx:       ミニバッチ内のインデックス
         */
         SoftMax(last_delta_y_dt, last_y, batch_Y, exp_work, range_len, batch_idx) {
             var cost_sum = 0;
@@ -1600,9 +1619,11 @@ function CreateNeuralNetwork(gpgpu){
         /*        
             順伝播と損失関数の計算
 
-            :param  :  
-            :param int batch_idx: ミニバッチ内のインデックス
-            :param int layer_idx: レイヤーのインデックス
+            :param float[] batch_Y: 正解の出力
+            :param float[] exp_work: 作業用データ
+            :param int     batch_idx: ミニバッチ内のインデックス
+            :param int     layer_idx: レイヤーのインデックス
+            :param float[] last_delta_y_dt: 最後のレイヤーのδy
         */
         forwardCost(batch_Y, exp_work, batch_idx, layer_idx, last_delta_y_dt) {
             var last_layer = this.layers[this.layers.length - 1];
@@ -1617,9 +1638,15 @@ function CreateNeuralNetwork(gpgpu){
         /*
             パラメータごとの勾配の計算のチェック
 
-            :param  :  
-            :param int : 
-            :param int : 
+            :param string  name: パラメータ名
+            :param float[] params: パラメータの配列
+            :param float[] delta_params: パラメータのδの配列 
+            :param float[] batch_Y: 正解の出力
+            :param float[] exp_work: 作業用データ
+            :param double  cost: コスト
+            :param int     batch_idx: ミニバッチ内のインデックス
+            :param int     layer_idx: レイヤーのインデックス
+            :param float[] last_delta_y_dt: 最後のレイヤーのδy
         */
         paramGradientCheck(name, params, delta_params, batch_Y, exp_work, cost, batch_idx, layer_idx, last_delta_y_dt){
             Assert(params.length == delta_params.length);
@@ -1647,7 +1674,9 @@ function CreateNeuralNetwork(gpgpu){
         /*        
             勾配の計算のチェック
 
-            :param  :  
+            :param float[] batch_Y: 正解の出力
+            :param float[] exp_work: 作業用データ
+            :param float[] costs: ミニバッチ内のコストの配列
         */
         netGradientCheck(batch_Y, exp_work, costs){
             inGradientCheck = true;
@@ -1677,8 +1706,11 @@ function CreateNeuralNetwork(gpgpu){
             inGradientCheck = false;
         }
 
-        /*        
-            :param  :  
+        /*
+            値が0の比率と負の比率の文字列を返す。
+
+            :param string    name: 変数名 
+            :param ArrayView v:    値
         */
         countZero(name, v){
             if(!v){
@@ -1699,6 +1731,9 @@ function CreateNeuralNetwork(gpgpu){
             return " " + name + " " + (100.0 * cnt / v.dt.length).toFixed(1) + "/" + (100.0 * neg / v.dt.length).toFixed(1) + " " + v.dt.length;
         }
 
+        /*
+            値が0の比率と負の比率をログ出力する。
+        */
         logZero(){
             for (let l of this.layers) {
                 console.log(
@@ -1874,6 +1909,8 @@ function CreateNeuralNetwork(gpgpu){
                         this.layers.forEach(x => x.clear());
                     }
                 }
+
+                console.log("Epoch %d  %.02f% %dmin", this.epochIdx, 100 * this.testAccuracy[this.epochIdx], this.epochTime);
 
                 yield 2;
             }
