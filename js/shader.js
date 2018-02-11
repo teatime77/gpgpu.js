@@ -207,7 +207,7 @@ uniform sampler3D prev_y;
 
 in float zero;
 
-out float nabla_w;
+out float delta_w;
 
 void main() {
     uint idx = uint(gl_VertexID);
@@ -244,7 +244,7 @@ void main() {
         }
     }
 
-    nabla_w = sum + zero;
+    delta_w = sum + zero;
 }`
 ,
 

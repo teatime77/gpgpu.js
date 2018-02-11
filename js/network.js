@@ -125,6 +125,12 @@ function CreateNeuralNetwork(gpgpu){
 
         /*
             勾配の計算のチェック
+
+            :param int : 
+            :param int : 
+            :param int : 
+            :param int batch_idx: ミニバッチ内のインデックス
+            :param int layer_idx: レイヤーのインデックス
         */
         gradientCheck(batch_Y, exp_work, cost, batch_idx, layer_idx){
             if(! this.prevLayer){
@@ -755,7 +761,7 @@ function CreateNeuralNetwork(gpgpu){
                         "zero": new Float32Array(this.weight.dt.length),
                         "prev_y": makeTextureInfo(WebGL2, "float", new ArrayView(miniBatchSize * prev_layer.numChannels, prev_layer.numRows, prev_layer.numCols)),
                         "delta_z": makeTextureInfo(WebGL2, "float", new ArrayView(miniBatchSize * this.numChannels, this.numRows, this.numCols)),
-                        "nabla_w": this.deltaWeight.dt
+                        "delta_w": this.deltaWeight.dt
                     }
                 };
             }
@@ -827,7 +833,7 @@ function CreateNeuralNetwork(gpgpu){
                         // フィルターの列に対し
                         for (var c2 = 0; c2 < this.filterSize; c2++) {
 
-                            var nabla_w = 0.0;
+                            var delta_w = 0.0;
 
                             // 出力の行に対し
                             for (var r1 = 0; r1 < this.numRows; r1++) {
@@ -844,7 +850,7 @@ function CreateNeuralNetwork(gpgpu){
                                         var delta = this.deltaZ.dt[delta_z_idx];
                                         if (delta != 0) {
 
-                                            nabla_w += delta * prev_layer.y_.dt[prev_y_idx];
+                                            delta_w += delta * prev_layer.y_.dt[prev_y_idx];
                                         }
 
                                         delta_z_idx += this.unitSize;
@@ -853,7 +859,7 @@ function CreateNeuralNetwork(gpgpu){
                                 }
                             }
 
-                            this.deltaWeight.dt[weight_idx] = nabla_w;
+                            this.deltaWeight.dt[weight_idx] = delta_w;
                             weight_idx++;
                         }
                     }
@@ -1045,6 +1051,7 @@ function CreateNeuralNetwork(gpgpu){
             lap.Time();
 
             if(! (this.prevLayer instanceof InputLayer)){
+                // 直前が入力層でない場合
 
                 this.gpuDeltaX();
 
@@ -1328,25 +1335,31 @@ function CreateNeuralNetwork(gpgpu){
         */
         forward() {
             var lap = new Lap(this.fwTime);
+
             for(var i = 0; i < this.y_.dt.length; i++){
                 if(net.isTraining){
+                    // トレーニング データの場合
 
                     if(this.dropRatio <= Math_random()){
+                        // ドロップアウトしない場合
 
                         this.valid[i]   = 1;
                         this.y_.dt[i] = this.prevLayer.y_.dt[i];
                     }
                     else{
+                        // ドロップアウトする場合
 
                         this.valid[i]   = 0;
                         this.y_.dt[i] = 0;
                     }
                 }
                 else{
+                    // テストデータの場合
 
                     this.y_.dt[i] = (1 - this.dropRatio) *  this.prevLayer.y_.dt[i];
                 }
             }
+
             lap.Time();
         }
 
@@ -1355,16 +1368,20 @@ function CreateNeuralNetwork(gpgpu){
         */
         backpropagation() {
             var lap = new Lap(this.bwTime);
+
             for(var i = 0; i < this.y_.dt.length; i++){
                 if(this.valid[i] == 1){
+                    // ドロップアウトしなかった場合
 
                     this.deltaX.dt[i] = this.nextLayer.deltaX.dt[i];
                 }
                 else{
+                    // ドロップアウトした場合
 
                     this.deltaX.dt[i] = 0;
                 }
             }
+
             lap.Time();
         }
 
@@ -1456,20 +1473,36 @@ function CreateNeuralNetwork(gpgpu){
             return new DropoutLayer(drop_ratio);
         }
 
-        /*        
-            :param  :  
-            :param int : 
-            :param int : 
+        /*
+            ArrayViewから指定されたインデックスのデータを抜き出して返す。
+
+            :param ArrayView data: 抽出元
+            :param int[] idx_list: インデックスの配列
+            :param int idx_start: 抽出するデータの開始位置
+            :param int idx_cnt: 抽出するデータの数
         */
-        Laminate(data, idx_list, idx_start, idx_cnt) {
+        ExtractArrayView(data, idx_list, idx_start, idx_cnt) {
+            // 1個分のデータのサイズ
             var element_size = data.shape.slice(1).reduce((x, y) => x * y);
 
+            // 抽出元のArrayViewの各次元の要素数
             var shape = data.shape.slice();
+
+            // 戻り値のArrayViewの最初の次元の要素数をidx_cntにする。
             shape[0] = idx_cnt;
+
+            // 戻り値のArrayViewを作る。
             var X = new ArrayView(shape);
+
+            // コピー先の位置
             var dst = 0;
+
+            // idx_startの位置からidx_cnt個のデータをコピーする。
             for (var idx = idx_start; idx < idx_start + idx_cnt; idx++) {
+                // 抽出元の位置
                 var src = idx_list[idx] * element_size;
+
+                // 1個分のデータをコピーする。
                 for (var i = 0; i < element_size; i++) {
                     X.dt[dst] = data.dt[src];
                     src++;
@@ -1480,8 +1513,11 @@ function CreateNeuralNetwork(gpgpu){
             return X;
         }
 
-        /*        
-            :param  :  
+        /*
+            正解数を返す。
+
+            :param number[] Y: 正解
+            :returns: 正解数
         */
         CorrectCount(Y){
             var result = this.lastLayer.y_;
@@ -1509,10 +1545,13 @@ function CreateNeuralNetwork(gpgpu){
 
         /*
             損失関数の微分
+
+            :param int batch_idx: ミニバッチ内のインデックス
         */
         SoftMax(last_delta_y_dt, last_y, batch_Y, exp_work, range_len, batch_idx) {
             var cost_sum = 0;
 
+            // last_yの最大値を探す。
             var max_val = -10000;
             for (var i = 0; i < range_len; i++) {
                 var k = batch_idx * range_len + i;
@@ -1556,37 +1595,11 @@ function CreateNeuralNetwork(gpgpu){
         }
 
         /*        
+            順伝播と損失関数の計算
+
             :param  :  
-            :param int : 
-        */
-        TestSoftMax(last_delta_y_dt, last_y, batch_Y, exp_work, range_len){
-            var costs = this.SoftMax(last_delta_y_dt, last_y, batch_Y, exp_work, range_len);
-
-            var last_delta_y_work = new Float32Array(last_delta_y_dt.length);
-
-            for (var batch_idx = 0; batch_idx < miniBatchSize; batch_idx++){
-                for (var i = 0; i < range_len; i++) {
-                    var k = batch_idx * range_len + i;
-
-                    var y = last_y[k];
-                    var eps = y * 0.01;
-
-                    last_y[k] = y - eps;
-                    var cost1 = this.SoftMax(last_delta_y_work, last_y, batch_Y, exp_work, range_len, batch_idx);
-
-                    last_y[k] = y + eps;
-                    var cost2 = this.SoftMax(last_delta_y_work, last_y, batch_Y, exp_work, range_len, batch_idx);
-
-                    var diff = last_delta_y_dt[k] * 2 * eps - (cost2 - cost1);
-                    console.log("diff:%f dC:%f eps:%f cost1,2:%f,%f", diff, last_delta_y_dt[k], eps, cost2, cost1);
-                }
-            }
-        }
-
-        /*        
-            :param  :  
-            :param int : 
-            :param int : 
+            :param int batch_idx: ミニバッチ内のインデックス
+            :param int layer_idx: レイヤーのインデックス
         */
         forwardCost(batch_Y, exp_work, batch_idx, layer_idx, last_delta_y_dt) {
             var last_layer = this.layers[this.layers.length - 1];
@@ -1598,7 +1611,9 @@ function CreateNeuralNetwork(gpgpu){
             return this.SoftMax(last_delta_y_dt, last_layer.y_.dt, batch_Y, exp_work, last_layer.unitSize, batch_idx);
         }
 
-        /*        
+        /*
+            パラメータごとの勾配の計算のチェック
+
             :param  :  
             :param int : 
             :param int : 
@@ -1735,8 +1750,8 @@ function CreateNeuralNetwork(gpgpu){
                         miniBatchIdx = idx;
 
                         var lap = new Lap(mini_batch_time);
-                        var X = this.Laminate(data.X, idx_list, idx * miniBatchSize, miniBatchSize);
-                        var Y = this.Laminate(data.Y, idx_list, idx * miniBatchSize, miniBatchSize);
+                        var X = this.ExtractArrayView(data.X, idx_list, idx * miniBatchSize, miniBatchSize);
+                        var Y = this.ExtractArrayView(data.Y, idx_list, idx * miniBatchSize, miniBatchSize);
                         lap.Time();
 
                         this.layers[0].y_ = X;
@@ -1847,6 +1862,10 @@ function CreateNeuralNetwork(gpgpu){
                 }
 
                 yield 2;
+            }
+
+            if(! change_mini_batch_size){
+                this.layers.forEach(x => x.clear());
             }
 
             yield 0;
