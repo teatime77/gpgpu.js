@@ -15,9 +15,7 @@ function CreateNeuralNetwork(gpgpu){
     var miniBatchIdx;
     var useSoftMax = true;
     var WebGL2;
-    var TrainingDataCnt;
-    var WeightDecay = 5.0;
-    var Momentum = 0.9;
+    var DataCnt;
     var L2lambda = 0.001;
     var useGradientCheck = false;
     var inGradientCheck = false;
@@ -25,8 +23,17 @@ function CreateNeuralNetwork(gpgpu){
     var random = new RandomHelper();
     var net;
 
-    function Stats2(tm, idx){
-        return tm.map(x => "<td>" + (x == null ? "" : Math.round(x / idx)) + "</td>").join("");
+//  var WeightDecay = 5.0;
+//  var Momentum = 0.9;
+
+    /*
+        平均の処理時間のHTML文字列を返す。
+
+        :param Array lap_times: 処理時間の累積の配列
+        :param int cnt: 処理の回数
+    */
+    function meanProcessedTime(lap_times, cnt){
+        return lap_times.map(x => "<td>" + (x == null ? "" : Math.round(x / cnt)) + "</td>").join("");
     }
 
 
@@ -182,8 +189,8 @@ function CreateNeuralNetwork(gpgpu){
         /*
             処理時間の計測値のHTML文字列を返す。
         */
-        processedTime(idx){
-            return "<tr><td></td>" + Stats2([], idx) + "</tr>";
+        processedTime(cnt){
+            return "<tr><td></td>" + meanProcessedTime([], cnt) + "</tr>";
         }
     }
 
@@ -483,8 +490,8 @@ function CreateNeuralNetwork(gpgpu){
         updateParameter() {
             var lap = new Lap(this.updateTime);
             var eta = net.learningRate / miniBatchSize;
-            var c = 1.0 - net.learningRate * WeightDecay / TrainingDataCnt;
 
+//          var c = 1.0 - net.learningRate * WeightDecay / DataCnt;
 
             for(var i = 0; i < this.weight.dt.length; i++){
                 this.weight.dt[i] -= (eta * this.deltaWeight.dt[i]  + net.learningRate * L2lambda * this.weight.dt[i]);
@@ -506,8 +513,8 @@ function CreateNeuralNetwork(gpgpu){
         /*
             処理時間の計測値のHTML文字列を返す。
         */
-        processedTime(idx){
-            return "<tr><td>全結合層</td>" + Stats2([ this.forwardTime[0] ].concat(this.backwardTime).concat(this.updateTime[0]), idx) + "</tr>";
+        processedTime(cnt){
+            return "<tr><td>全結合層</td>" + meanProcessedTime([ this.forwardTime[0] ].concat(this.backwardTime).concat(this.updateTime[0]), cnt) + "</tr>";
         }
     }
 
@@ -1113,8 +1120,8 @@ function CreateNeuralNetwork(gpgpu){
         /*
             処理時間の計測値のHTML文字列を返す。
         */
-        processedTime(idx){
-            return "<tr><td>畳み込み層</td>" + Stats2([ this.forwardTime[0] ].concat(this.backwardTime).concat(this.updateTime[0]), idx) + "</tr>";
+        processedTime(cnt){
+            return "<tr><td>畳み込み層</td>" + meanProcessedTime([ this.forwardTime[0] ].concat(this.backwardTime).concat(this.updateTime[0]), cnt) + "</tr>";
         }
     }
 
@@ -1287,8 +1294,8 @@ function CreateNeuralNetwork(gpgpu){
         /*
             処理時間の計測値のHTML文字列を返す。
         */
-        processedTime(idx){
-            return "<tr><td>Maxプーリング層</td>" + Stats2([ this.forwardTime[0], null, null, null, this.backwardTime[0], null ], idx) + "</tr>";
+        processedTime(cnt){
+            return "<tr><td>Maxプーリング層</td>" + meanProcessedTime([ this.forwardTime[0], null, null, null, this.backwardTime[0], null ], cnt) + "</tr>";
         }
     }
 
@@ -1384,8 +1391,8 @@ function CreateNeuralNetwork(gpgpu){
         /*
             処理時間の計測値のHTML文字列を返す。
         */
-        processedTime(idx){
-            return "<tr><td>ドロップアウト層</td>" + Stats2([ this.forwardTime[0], null, null, null, this.backwardTime[0], null ], idx) + "</tr>";
+        processedTime(cnt){
+            return "<tr><td>ドロップアウト層</td>" + meanProcessedTime([ this.forwardTime[0], null, null, null, this.backwardTime[0], null ], cnt) + "</tr>";
         }
     }
 
@@ -1638,6 +1645,8 @@ function CreateNeuralNetwork(gpgpu){
         }
 
         /*        
+            勾配の計算のチェック
+
             :param  :  
         */
         netGradientCheck(batch_Y, exp_work, costs){
@@ -1690,6 +1699,22 @@ function CreateNeuralNetwork(gpgpu){
             return " " + name + " " + (100.0 * cnt / v.dt.length).toFixed(1) + "/" + (100.0 * neg / v.dt.length).toFixed(1) + " " + v.dt.length;
         }
 
+        logZero(){
+            for (let l of this.layers) {
+                console.log(
+                    l.constructor.name
+                    + this.countZero("z"  , l.z_)
+                    + this.countZero("y"  , l.y_)
+                    + this.countZero("B"  , l.bias)
+                    + this.countZero("W"  , l.weight)
+                    + this.countZero("δy", l.deltaY)
+                    + this.countZero("δz", l.deltaZ)
+                    + this.countZero("δB", l.deltaBias)
+                    + this.countZero("δW", l.deltaWeight)
+                );
+            }
+        }
+
         /*        
             SGD(Stochastic Gradient Descent) 確率的勾配降下法
 
@@ -1703,56 +1728,69 @@ function CreateNeuralNetwork(gpgpu){
             last_layer.deltaY = new ArrayView(mini_batch_size, last_layer.unitSize);
             var exp_work = new Float32Array(last_layer.unitSize);
             var change_mini_batch_size = false;
-            var show_time = undefined;
+
+            // 前回yieldでブラウザに制御を戻した時間
+            var last_yield_time = undefined;
 
             for (this.epochIdx = 0; this.epochIdx < epochs; this.epochIdx++) {
 
                 var start_epoch_time = new Date();
+                var total_data_cnt = training_data.X.shape[0] + test_data.X.shape[0];
+                var total_processed_data_cnt = 0
 
+                // トレーニングとテストの処理
                 for(var mode = 0; mode < 2; mode++){
-                    var data;
+                    this.isTraining = (mode == 0);
+
+                    // 入力(X)と出力(Y)のペア
+                    var XY_data;
+
+                    // 正解数
                     var ok_cnt = 0;
+
                     var cost_sum = 0;
 
-                    this.isTraining = (mode == 0);
                     if(this.isTraining){
 
-                        data = training_data;
+                        XY_data = training_data;
                         miniBatchSize = mini_batch_size;
                     }
                     else{
 
-                        data = test_data;
+                        XY_data = test_data;
                         miniBatchSize = (change_mini_batch_size ? 10 : 1) * mini_batch_size;
                     }
                     this.miniBatchSize = miniBatchSize;
 
+                    // ミニバッチ内のコスト
                     var costs = new Float32Array(miniBatchSize);
 
-                    if(change_mini_batch_size || this.epochIdx == 0 && mode == 0){
+                    if(change_mini_batch_size || this.epochIdx == 0 && this.isTraining){
 
                         this.layers.forEach(x => x.miniBatchSizeChanged());
                     }
 
-                    var idx_list = random.RandomSampling(data.X.shape[0]);
+                    var data_cnt = XY_data.X.shape[0];
 
+                    // 0からdata_cnt-1までの数をシャッフルした配列
+                    var idx_list = random.RandomSampling(data_cnt);
 
-                    var data_cnt = data.X.shape[0];
-                    TrainingDataCnt = data_cnt;
+                    DataCnt = data_cnt;
                     this.miniBatchCnt = Math.floor(data_cnt / miniBatchSize);
-                    var mini_batch_time = [];
 
-                    for (var idx = 0; idx < this.miniBatchCnt; idx++) {
-                        miniBatchIdx = idx;
+                    for (miniBatchIdx = 0; miniBatchIdx < this.miniBatchCnt; miniBatchIdx++) {
 
-                        var lap = new Lap(mini_batch_time);
-                        var X = this.ExtractArrayView(data.X, idx_list, idx * miniBatchSize, miniBatchSize);
-                        var Y = this.ExtractArrayView(data.Y, idx_list, idx * miniBatchSize, miniBatchSize);
-                        lap.Time();
+                        var start_pos = miniBatchIdx * miniBatchSize;
 
+                        // idx_listのstart_posからminiBatchSize個のインデックスを使って、XY_dataから入力(X)と出力(Y)のデータを抜き出す。
+                        var X = this.ExtractArrayView(XY_data.X, idx_list, start_pos, miniBatchSize);
+                        var Y = this.ExtractArrayView(XY_data.Y, idx_list, start_pos, miniBatchSize);
+
+                        // 最初のレイヤー(入力層)の出力にXをセットする。
                         this.layers[0].y_ = X;
+
+                        // 順伝播
                         this.layers.forEach(x => x.forward());
-                        lap.Time();
 
                         if(useSoftMax){
 
@@ -1767,37 +1805,36 @@ function CreateNeuralNetwork(gpgpu){
 
                             this.LeastSquaresDelta(last_layer.deltaY.dt, last_layer.y_.dt, Y.dt);
                         }
-                        lap.Time();
 
                         if(this.isTraining){
 
                             if(useGradientCheck){
 
+                                // 勾配の計算のチェック
                                 this.netGradientCheck(Y.dt, exp_work, costs);
                             }
                             else{
 
+                                // 誤差逆伝播
                                 for (var i = this.layers.length - 1; 1 <= i; i--) {
                                     this.layers[i].backpropagation();
                                 }
                             }
 
-                            lap.Time();
-
+                            // パラメータの更新
                             this.layers.forEach(x => x.updateParameter());
-                            lap.Time();
                         }
 
                         // 処理データ数
-                        this.processedDataCnt = (idx + 1) * miniBatchSize;
+                        this.processedDataCnt = (miniBatchIdx + 1) * miniBatchSize;
 
                         // 正解数
                         ok_cnt += this.CorrectCount(Y);
 
                         // 正解率
-                        var accuracy = ok_cnt / this.processedDataCnt;
+                        var accuracy = ok_cnt   / this.processedDataCnt;
 
-                        // コスト
+                        // コストの平均
                         var avg_cost = cost_sum / this.processedDataCnt;
 
                         if(this.isTraining){
@@ -1811,45 +1848,30 @@ function CreateNeuralNetwork(gpgpu){
                             this.testAccuracy[this.epochIdx] = accuracy;
                         }
 
-                        if (show_time == undefined || 10 * 1000 < new Date() - show_time) {
+                        total_processed_data_cnt += miniBatchSize;
+
+                        if (last_yield_time == undefined || 10 * 1000 < new Date() - last_yield_time) {
                             // 最初か、10秒経過した場合
 
+                            if(last_yield_time != undefined){
+
+                                this.epochTime = Math.round( (new Date() - start_epoch_time) * total_data_cnt / (60 * 1000 * total_processed_data_cnt) );
+                            }
+
                             // ミニバッチごとの処理時間 (レイヤー別)
-                            this.processedTimeLayer = this.layers.slice(1).map(layer => layer.processedTime(idx + 1)).join("\n");
+                            this.processedTimeLayer = this.layers.slice(1).map(layer => layer.processedTime(miniBatchIdx + 1)).join("\n");
 
-
-                            show_time = new Date();
+                            last_yield_time = new Date();
 
                             yield 1;
                         }
                     }
 
                     var sum_last_layer_y = last_layer.y_.dt.reduce((x,y) => x + y);
-                    console.log("ミニバッチ終了 %d %f", MersenneTwisterIdx, sum_last_layer_y);
-
-                    if(false){
-                        for (let l of this.layers) {
-                            var ss = l.constructor.name;
-                            ss += this.countZero("z"  , l.z_);
-                            ss += this.countZero("y"  , l.y_);
-                            ss += this.countZero("B"  , l.bias);
-                            ss += this.countZero("W"  , l.weight);
-                            ss += this.countZero("δy", l.deltaY);
-                            ss += this.countZero("δz", l.deltaZ);
-                            ss += this.countZero("δB", l.deltaBias);
-                            ss += this.countZero("δW", l.deltaWeight);
-                            console.log(ss);
-                        }
-                    }
+                    console.log("乱数の数:%d 出力の和:%f", MersenneTwisterIdx, sum_last_layer_y);
 
                     if(change_mini_batch_size){
                         this.layers.forEach(x => x.clear());
-                    }
-
-                    if(! this.isTraining){
-
-                        this.epochTime = Math.round( (new Date() - start_epoch_time) / (60 * 1000) );
-                        console.log("Epoch %d  %d / %d eta:%.02f time:%dmin", this.epochIdx, ok_cnt, this.miniBatchCnt * miniBatchSize, this.learningRate, this.epochTime);
                     }
                 }
 
