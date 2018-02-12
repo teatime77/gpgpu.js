@@ -91,6 +91,8 @@
 
         var epoch_idx = 0;
 
+        var start_time = new Date();
+
         var timer_id = setInterval(function () {
             // SGDのジェネレータの処理を1つ進める。
             var ret = sgd_generator.next().value;
@@ -130,10 +132,11 @@
             showText("processed-data-cnt", net.processedDataCnt);
             showText("epoch-time"        , net.epochTime);
 
-            // ミニバッチの個数/ミニバッチの大きさ/データ数の表示
+            // ミニバッチの個数/ミニバッチの大きさ/データ数/経過時間の表示
             showText("mini-batch-cnt" , net.miniBatchCnt);
             showText("mini-batch-size", net.miniBatchSize);
             showText("total-data-cnt" , net.miniBatchCnt * net.miniBatchSize);
+            showText("elapsed-time"      , elapsedTime(start_time));
 
             if (net.processedTimeLayer) {
 
@@ -151,6 +154,17 @@
 
             document.getElementById(id).innerText = text;
         }
+    }
+
+    /*
+        経過時間の文字列を返す。
+    */
+    function elapsedTime(start_time) {
+        var total_min = Math.floor((new Date() - start_time) / (60 * 1000));
+        var HH = Math.floor(total_min / 60);
+        var MM = total_min - 60 * HH;
+
+        return (HH == 0 ? "" : "" + HH + "時間") + MM + "分";
     }
 
     /*
@@ -210,7 +224,8 @@
     <a href="http://yann.lecun.com/exdb/mnist/">http://yann.lecun.com/exdb/mnist/</a><br />
     <span>t10k-images.idx3-ubyte , t10k-labels.idx1-ubyte , train-images.idx3-ubyte , train-labels.idx1-ubyte</span>
 </p>
-
+最初に<a href="#usage">使用上の注意</a>をお読みください。<br />
+<br />
 <!-- トレーニング/テストのコスト/正解率の表 -->
 <table border="1">
     <thead>
@@ -250,13 +265,15 @@
 </table>
     
 <br />
-現在のエポック      = <span id="epoch-idx"          style="margin-right: 3em"></span> 
-処理済みデータ数    = <span id="processed-data-cnt" style="margin-right: 3em"></span>
-1エポックの処理時間 = <span id="epoch-time"></span>分 
+現在のエポック      = <span id="epoch-idx"          style="margin-right: 2em"></span> 
+処理済みデータ数    = <span id="processed-data-cnt" style="margin-right: 2em"></span>
+1エポックの処理時間 = <span id="epoch-time"        ></span>分
+
 <br />
 データ数 = ミニバッチの個数(<span id="mini-batch-cnt" ></span>) ×
 ミニバッチの大きさ         (<span id="mini-batch-size"></span>)
-=                           <span id="total-data-cnt" ></span><br />
+=                           <span id="total-data-cnt" style="margin-right: 2em" ></span>
+経過時間 =                  <span id="elapsed-time"></span><br />
 <br />
 
 レイヤー別の処理時間の表 ( 単位:ミリ秒 )
@@ -285,6 +302,41 @@
     </tbody>
 </table>
 <br />
+
+    <h3><a name="usage" >使用上の注意</a></h3>
+
+<ul>
+    <li>
+        Chrome以外ではテストしていませんので、Chromeをお使いください。<br />&nbsp;
+    </li>
+    <li>
+        4つのファイルをドロップして数秒すると画面の表示が変わります。<br />
+        以降は10秒おきに画面が更新されます。<br />&nbsp;
+    </li>
+    <li>
+        10秒おきに計算を中断してブラウザに制御を戻しています<br />
+        このためスクロールなどの画面操作の反応が非常に遅くなります。<br />&nbsp;
+    </li>
+
+    <li>
+        ときどき処理速度が遅くなることがありますが、このような場合はPCを再起動すると元に戻ります。<br />&nbsp;
+    </li>
+
+    <li>
+        一定時間後にディスプレイの電源を切る設定にしていると、GPUがリセットされて正しく動作しないことがあります。<br />
+        またスクリーンセーバーが動くとGPUのリソースが使われ、学習の計算が遅くなる可能性があります。<br />&nbsp;
+    </li>
+    <li>
+        ブラウザを最小化するとJavascriptの実行が休止することがあります。<br />&nbsp;
+    </li>
+    <li>
+        事前にOSの更新をしておいてください。<br />
+        夜寝る前に学習を走らせておいて、朝起きてみたらOSの更新でPCが再起動していてガックリすることがあります。(org)
+    </li>
+</ul>
+
+
+
 
 <!-- 画像データの表示 ( デバック用 ) -->
 <canvas id="digit-canvas" width="28" height="28" style="width:28px; height:28px; background-color:gainsboro; float:none"/>
