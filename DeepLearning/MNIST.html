@@ -87,7 +87,7 @@
         }
 
         // SGD(確率的勾配降下法)のジェネレータを作る。
-        var sgd_generator = net.SGD(mnist.trainingData, mnist.testData, 30, 10, learning_rate);
+        var sgd_generator = net.SGD(mnist.trainingData, mnist.testData, 60, 10, learning_rate);
 
         var epoch_idx = 0;
 
@@ -104,7 +104,7 @@
 
                 theGPGPU.clearAll();
 
-                console.log("学習が終わりました。");
+                showText("msg", "学習が終わりました。");
             }
 
             // トレーニング/テストのコスト/正解率のプロットの描画
@@ -198,6 +198,8 @@
                     var file_contents = new Uint8Array(e.target.result);
                     var file_name     = escape(file_arg.name);
 
+                    showText("msg", file_name);
+
                     // MNISTのファイル読み込み完了時の処理
                     mnist.onLoadFile(file_name, file_contents);
 
@@ -205,6 +207,7 @@
                         // トレーニング データとテスト データの読み込みが完了した場合
 
                         // ニューラルネットワークを実行する。
+                        showText("msg", "学習を開始しました。");
                         RunNeuralNetwork();
                     }
                 };
@@ -225,7 +228,7 @@
     <span>t10k-images.idx3-ubyte , t10k-labels.idx1-ubyte , train-images.idx3-ubyte , train-labels.idx1-ubyte</span>
 </p>
 最初に<a href="#usage">使用上の注意</a>をお読みください。<br />
-<br />
+<span id="msg" style="color:red"></span> <br />
 <!-- トレーニング/テストのコスト/正解率の表 -->
 <table border="1">
     <thead>
@@ -311,7 +314,8 @@
     </li>
     <li>
         4つのファイルをドロップして数秒すると画面の表示が変わります。<br />
-        以降は10秒おきに画面が更新されます。<br />&nbsp;
+        以降は10秒おきに画面が更新されます。<br />
+        グラフは1エポックの終了時に更新されます。<br />&nbsp;
     </li>
     <li>
         10秒おきに計算を中断してブラウザに制御を戻しています<br />
